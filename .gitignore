@@ -1,0 +1,29 @@
+# Bảo mật: Tuyệt đối KHÔNG đẩy file .env chứa API Keys lên GitHub
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Thư mục đầu ra Video, Audio & Database tạm
+workspace/
+output_audio/
+assets/continuity_state/
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.ass
+*.sqlite
+*.sqlite3
+*.db
+
+# Python cache & môi trường ảo
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+.idea/
+.vscode/
