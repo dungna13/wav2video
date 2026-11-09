@@ -14,3 +14,4 @@ cp .env.example .env
 ```bash
 python -X utf8 -u main.py "Hiệu ứng cánh bướm và lý thuyết hỗn loạn trong cuộc sống"
 ```
+
