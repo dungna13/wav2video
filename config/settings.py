@@ -41,14 +41,19 @@ GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
 GEMINI_THINKING_BUDGET: int = int(os.getenv("GEMINI_THINKING_BUDGET", "1024"))
 FREE_LLM_ENDPOINT: str = os.getenv("FREE_LLM_ENDPOINT", "https://text.pollinations.ai/openai").strip()
 FREE_LLM_MODEL: str = os.getenv("FREE_LLM_MODEL", "openai-fast").strip()
+FREE_LLM_TIMEOUT: int = int(os.getenv("FREE_LLM_TIMEOUT", "150"))
 
 # =====================================================================
 # 3. CẤU HÌNH API TẠO ẢNH 9:16 (ĐỌC TỪ `.env`)
 # =====================================================================
 IMAGE_PROVIDER: str = os.getenv("IMAGE_PROVIDER", "pollinations").strip().lower()
-POLLINATIONS_MODEL: str = os.getenv("POLLINATIONS_MODEL", "flux").strip()
-IMAGE_WIDTH: int = int(os.getenv("IMAGE_WIDTH", "540"))
-IMAGE_HEIGHT: int = int(os.getenv("IMAGE_HEIGHT", "960"))
+POLLINATIONS_MODEL: str = os.getenv("POLLINATIONS_MODEL", "turbo").strip()
+IMAGE_WIDTH: int = int(os.getenv("IMAGE_WIDTH", "720"))
+IMAGE_HEIGHT: int = int(os.getenv("IMAGE_HEIGHT", "1280"))
+# Video stock thật (tuỳ chọn, miễn phí tại https://www.pexels.com/api/): có key thì ưu tiên footage thật cho từng cảnh
+PEXELS_API_KEY: str = os.getenv("PEXELS_API_KEY", "").strip()
+# Thay thế khi Pexels tạm ngừng cấp key: https://pixabay.com/api/docs/ (key hiện ngay sau khi đăng ký)
+PIXABAY_API_KEY: str = os.getenv("PIXABAY_API_KEY", "").strip()
 DOWNLOAD_GENERATED_IMAGE: bool = os.getenv("DOWNLOAD_GENERATED_IMAGE", "true").strip().lower() == "true"
 
 # =====================================================================

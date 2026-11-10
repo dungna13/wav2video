@@ -1,36 +1,59 @@
 """
-Prompt Template cho Node `prompt_scorer_node`:
-Chấm điểm khắt khe Kịch bản, Hồ sơ Nhân vật (Character Bible), Bối cảnh 3D và Storyboard 4 Phân cảnh của LLM.
+Prompt cho Node `prompt_scorer_node` — GIÁM KHẢO BIÊN TẬP (LLM critic).
+
+Chạy SAU các kiểm tra tất định (đếm cảnh, số từ, từ cấm, chữ số...) trong `prompt_scorer_node`.
+LLM chỉ chấm những thứ code không đo được: hook, độ cụ thể của hình, mạch kể, độ "người lớn".
+Phản hồi phải CỤ THỂ theo từng cảnh (đánh số cảnh) để Architect sửa đúng chỗ.
 """
 
-PROMPT_SCORER_TEMPLATE = """Bạn là Giám khảo Kiểm định Chất lượng Phim Hoạt hình 3D & Kịch bản Short Video (Senior Script & Visual QA Critic).
-Hãy chấm điểm bản thiết kế kịch bản và phân cảnh hoạt hình 3D vừa được tạo cho chủ đề: "{user_request}".
+PROMPT_SCORER_TEMPLATE = """Bạn là **Biên tập viên trưởng** của kênh phim tài liệu ngắn 9:16. Nhiệm vụ: chặn video "trẻ con / lan man / hình không khớp lời" trước khi tốn tiền render.
+Chấm KHẮT KHE, không nể. Điểm 8.0 = đạt đăng được ngay; chỉ cho ≥ 9.0 khi thật sự xuất sắc.
 
-### DỮ LIỆU ĐỐI CHIẾU:
-- Chủ đề gốc: "{user_request}"
-- Tiêu đề kịch bản: "{topic_title}"
-- Thực thể chuyển động 3D Tiền cảnh (`visual_archetype`): "{visual_archetype}"
-- 4 Phân cảnh Storyboard (`visual_labels`): {visual_labels}
-- Prompt vẽ 4 Phân cảnh 2x2 Grid (`scene_action_prompt`): "{scene_action_prompt}"
-- Lời bình 3 phần:
-  1. Mở đầu (Hook): "{hook_and_context_vn}"
-  2. Giải thích sâu: "{deep_explanation_vn}"
-  3. Đúc kết cuối: "{outro_takeaway_vn}"
+Chủ đề gốc: "{user_request}"   |   Chế độ hình: {intent_mode}   |   Thể loại: {genre}
+Tiêu đề: "{topic_title}"
+Phong cách chung (style_anchor): "{style_anchor_en}"
 
-### TIÊU CHÍ CHẤM ĐIỂM KHẮT KHE (Thang 1.0 - 10.0):
-1. **rag_faithfulness_score (Độ sâu sắc, logic suy luận & bám sát chủ đề - Trọng số 40%):**
-   - Lời bình 3 phần có giải thích sâu sắc, giàu hình tượng ẩn dụ và đúng trọng tâm chủ đề "{user_request}" không?
-2. **cinematic_quality_score (Chất lượng Storyboard 4 cảnh, Nhân vật & Chuyển động 3D - Trọng số 30%):**
-   - `scene_action_prompt` đã mô tả rõ 4 khung cảnh 2x2 Grid (`Top-Left`, `Top-Right`, `Bottom-Left`, `Bottom-Right`) có nhân vật chính, bối cảnh 3D và hành động biến đổi rõ rệt qua từng cảnh chưa? (Trừ điểm nặng nếu chỉ mô tả 1 cảnh tĩnh hoặc biểu đồ toán học).
-3. **theological_moral_score (Sức hút Hook 3 giây đầu & Thông điệp đọng lại - Trọng số 30%):**
-   - Câu mở đầu có giữ chân người xem ngay lập tức và câu kết có truyền cảm hứng mạnh mẽ không?
+DANH SÁCH CẢNH (đánh số):
+{scenes_block}
 
-### ĐỊNH DẠNG ĐẦU RA (JSON SCHEMA):
-{{
-  "rag_faithfulness_score": <float>,
-  "cinematic_quality_score": <float>,
-  "theological_moral_score": <float>,
+═══ TIÊU CHÍ (thang 1.0–10.0) ═══
+1. **hook_score** (30%): Cảnh 1 có làm người lướt phải dừng lại trong 3 giây không? Có phải pattern interrupt cụ thể, hay chỉ là câu mở đầu chung chung/định nghĩa?
+2. **visual_match_score** (35%): Với TỪNG cảnh, `image_prompt_en` có mô tả thứ nhìn thấy được của ĐÚNG câu `narration_vn` không? Trừ nặng nếu ảnh chung chung ("dramatic war scene"), ẩn dụ trừu tượng, hoặc có biểu đồ/slide/hoạt hình. Có vi phạm `intent_mode` không?
+3. **story_score** (35%): Có leo thang rõ ràng và mỗi cảnh thêm thông tin mới không? Kết có callback sắc hay rao giảng sáo rỗng? Văn nói có tự nhiên khi nghe TTS không? Có sự kiện/số liệu nào nghe bịa hoặc đáng ngờ không?
+
+═══ QUY TẮC PHẢN HỒI ═══
+- `feedback_for_rewrite` PHẢI chỉ đích danh cảnh lỗi: "Cảnh 3: ảnh chỉ nói 'battlefield', cần mô tả pháo đang được kéo qua sườn đèo lầy..." — tối đa 5 điểm, mỗi điểm 1 câu, nêu CÁCH SỬA.
+- ⛔ Không khen chung chung. Nếu đạt thì để chuỗi rỗng.
+- `pass_validation` = true chỉ khi average_score ≥ 8.0 VÀ visual_match_score ≥ 8.0.
+
+═══ ĐỊNH DẠNG ĐẦU RA — CHỈ MỘT JSON OBJECT ═══
+{
+  "hook_score": <float>,
+  "visual_match_score": <float>,
+  "story_score": <float>,
   "average_score": <float>,
-  "pass_validation": <boolean (True nếu average_score >= 8.0 và cinematic_quality_score >= 8.0)>,
-  "feedback_for_rewrite": "Nếu pass_validation = False, chỉ rõ cần bổ sung nhân vật, bối cảnh 4 ô 2x2 hay sửa lời bình chỗ nào. Nếu True, để chuỗi rỗng."
-}}"""
+  "pass_validation": <boolean>,
+  "feedback_for_rewrite": "..."
+}"""
+
+
+def render_scorer_prompt(
+    user_request: str,
+    intent_mode: str,
+    genre: str,
+    topic_title: str,
+    style_anchor_en: str,
+    scenes_block: str,
+) -> str:
+    values = {
+        "user_request": user_request,
+        "intent_mode": intent_mode,
+        "genre": genre,
+        "topic_title": topic_title,
+        "style_anchor_en": style_anchor_en,
+        "scenes_block": scenes_block,
+    }
+    out = PROMPT_SCORER_TEMPLATE
+    for k, v in values.items():
+        out = out.replace("{" + k + "}", str(v))
+    return out

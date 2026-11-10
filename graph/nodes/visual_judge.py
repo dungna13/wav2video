@@ -1,124 +1,89 @@
 """
-NODE 6: `visual_judge_node` & `update_registry_node` (Tích hợp Chốt chặn 2 `OutputScoreEvaluator` & TikTok Queue từ `wav2vid.md`):
-1. Đánh giá điểm đồng nhất khuôn mặt (`face_similarity_score >= 8.5`).
-2. Chấm điểm chất lượng đầu ra sau đồng bộ khẩu hình (`OutputScoreMetrics`):
-   - `lse_c` (SyncNet Confidence >= 5.0), `lse_d` (SyncNet Distance <= 7.5), `av_offset_frames` (|offset| <= 2)
-   - `mouth_sharp_ratio` (>= 0.70), `bbox_jitter_px` (<= 1.8 px)
-   - `output_total_score` >= `MIN_OUTPUT_TOTAL_SCORE` (0.80)
-3. Nếu đạt cả 2 ngưỡng:
-   - Dùng hàm Reducer (`character_registry_reducer`) cộng dồn nhân vật mới vào `state["characters"]`.
-   - Đẩy vào TikTok Content Posting API v2 / SQLite Persistent Retry Queue (`enqueue_or_publish_tiktok`).
+NODE 5: `visual_judge_and_update_registry_node` — Kiểm định đầu ra THẬT.
+
+Trước đây node này trả về các điểm SyncNet/FaceSim gán cứng (9.2, LSE-C ~6.2...) cho cả video không có khuôn mặt,
+nên "đạt" 100% bất kể video ra sao. Nay chỉ báo những gì đo được:
+  - file video tồn tại, đúng độ dài giọng đọc (|chênh| <= 0.35s), có cả hình lẫn tiếng;
+  - tỉ lệ cảnh dùng ảnh dự phòng (không khớp lời) và điểm hình ảnh thật từ `media_generator_node`;
+  - chế độ HUMAN_WITH_LIPSYNC: ghi rõ CHƯA có nhép môi (không chấm điểm giả).
+Không đăng TikTok tự động; chỉ tạo caption từ `story_moral` để người dùng duyệt thủ công.
 """
 
 import json
+import re
+import subprocess
 from pathlib import Path
 from typing import Dict, Any
-from config.settings import (
-    MIN_FACE_SIMILARITY_SCORE,
-    MIN_OUTPUT_TOTAL_SCORE,
-    WAV2LIP_PADS,
-)
-from graph.wav2vid_metrics import (
-    evaluate_wav2lip_output_scores,
-    enqueue_or_publish_tiktok,
-)
-from graph.state import ChristianVideoState, CharacterProfile
+
+from config.settings import MIN_OUTPUT_TOTAL_SCORE
+from graph.state import ChristianVideoState
+
+
+def _probe_duration(video_path: str) -> float:
+    import imageio_ffmpeg
+
+    res = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", video_path], capture_output=True, text=True)
+    m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", res.stderr)
+    if not m:
+        return 0.0
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
 
 
 def visual_judge_and_update_registry_node(state: ChristianVideoState) -> Dict[str, Any]:
-    media_url = state.get("generated_media_url", "")
-    new_chars = state.get("new_characters", {}) or {}
-    audio_sync_features = state.get("audio_sync_features", {})
-    scripture_reference = state.get("scripture_reference", "Kinh Thánh Tân Ước")
-    story_moral = state.get("story_moral", "")
-    wav_path = state.get("voiceover_wav_path", "")
+    video_path = state.get("final_master_video_path", "")
+    audio_sec = float(state.get("audio_duration_sec", 0.0))
+    asset_report = state.get("asset_report", {}) or {}
+    visual = state.get("visual_scores", {}) or {}
+    intent = state.get("intent_mode", "NO_HUMAN_BROLL")
 
-    # 1. Điểm đồng nhất khuôn mặt nhân vật
-    face_similarity_score = 9.2
+    exists = bool(video_path) and Path(video_path).exists() and Path(video_path).stat().st_size > 100_000
+    video_sec = _probe_duration(video_path) if exists else 0.0
+    offset_sec = round(video_sec - audio_sec, 3)
+    fps = int(state.get("audio_sync_features", {}).get("video_fps", 30))
 
-    # 2. Chốt chặn 2 (`OutputScoreEvaluator` trong `wav2vid.md`)
-    output_scores = evaluate_wav2lip_output_scores(
-        audio_sync_features=audio_sync_features,
-        face_restored_applied=True,
-    )
+    problems = []
+    if not exists:
+        problems.append("không có file video hợp lệ")
+    if exists and abs(offset_sec) > 0.35:
+        problems.append(f"video lệch giọng đọc {offset_sec}s")
+    if asset_report.get("fallback_scenes"):
+        problems.append(f"{asset_report['fallback_scenes']} cảnh dùng ảnh dự phòng")
+    if intent == "HUMAN_WITH_LIPSYNC":
+        problems.append("nhép môi chưa được cài đặt (đã render như HUMAN_NO_LIPSYNC)")
 
-    if wav_path:
-        run_dir = Path(wav_path).parent
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "output_score_report.json").write_text(
-            json.dumps(output_scores, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+    sync_score = 1.0 if exists and abs(offset_sec) <= 0.35 else 0.0
+    total = round(0.4 * sync_score + 0.6 * float(visual.get("visual_total_score", 0.0)), 3)
+
+    output_scores = {
+        "lse_c": None,
+        "lse_d": None,
+        "av_offset_frames": int(round(offset_sec * fps)),
+        "mouth_sharp_ratio": None,
+        "bbox_jitter_px": None,
+        "output_total_score": total,
+        "failure_reason": "; ".join(problems) or None,
+    }
+    if video_path:
+        (Path(video_path).parent / "output_score_report.json").write_text(
+            json.dumps(output_scores, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
-    print(
-        f"[Node 6: visual_judge & output_evaluator] FaceSim={face_similarity_score}/10 | "
-        f"OutputScore={output_scores['output_total_score']} "
-        f"(LSE-C={output_scores['lse_c']}, LSE-D={output_scores['lse_d']}, "
-        f"MouthSharp={output_scores['mouth_sharp_ratio']}, Jitter={output_scores['bbox_jitter_px']}px)"
-    )
-
-    verified_new_chars: Dict[str, CharacterProfile] = {}
-    visual_retry = state.get("visual_retry_count", 0)
-    if (
-        face_similarity_score >= MIN_FACE_SIMILARITY_SCORE
-        and output_scores["output_total_score"] >= MIN_OUTPUT_TOTAL_SCORE
-    ):
-        for char_key, profile in new_chars.items():
-            verified_new_chars[char_key] = {
-                "key_name": profile["key_name"],
-                "name": profile["name"],
-                "aliases": profile["aliases"],
-                "visual_traits": profile["visual_traits"],
-                "reference_image_url": media_url,
-                "seed": profile["seed"],
-            }
-
-        # 3. Tầng 4 (`wav2vid.md`): Đăng tải TikTok hoặc lưu vào Persistent Retry Queue SQLite
-        publish_status, tiktok_caption = enqueue_or_publish_tiktok(
-            scripture_reference=scripture_reference,
-            story_moral=story_moral,
-            media_url=media_url,
-            wav_path=wav_path,
-            output_score=output_scores["output_total_score"],
-        )
-
-        print(
-            f" -> Đạt chuẩn Release Gate! Cộng dồn {list(verified_new_chars.keys())} vào Registry | "
-            f"TikTok Status: {publish_status}"
-        )
-
-        return {
-            "face_similarity_score": face_similarity_score,
-            "wav2lip_pads": WAV2LIP_PADS,
-            "face_restored_applied": True,
-            "output_scores": output_scores,
-            "tiktok_publish_status": publish_status,
-            "tiktok_caption": tiktok_caption,
-            "characters": verified_new_chars,
-            "visual_retry_count": visual_retry,
-        }
+    caption = state.get("story_moral", "").strip()
+    status = "READY_FOR_MANUAL_REVIEW" if total >= MIN_OUTPUT_TOTAL_SCORE else "NEEDS_ATTENTION"
+    print(f"[Node 5: visual_judge] OutputScore={total} | video={video_sec:.2f}s vs audio={audio_sec:.2f}s | {status} | {problems or 'không có vấn đề'}")
 
     return {
-        "face_similarity_score": face_similarity_score,
-        "wav2lip_pads": WAV2LIP_PADS,
-        "face_restored_applied": True,
+        "face_similarity_score": 0.0,
+        "wav2lip_pads": [],
+        "face_restored_applied": False,
         "output_scores": output_scores,
-        "tiktok_publish_status": "RETRYING_REFINEMENT",
-        "tiktok_caption": "",
+        "tiktok_publish_status": status,
+        "tiktok_caption": caption,
         "characters": {},
-        "visual_retry_count": visual_retry + 1,
+        "visual_retry_count": state.get("visual_retry_count", 0),
     }
 
 
 def should_retry_output_gate(state: ChristianVideoState) -> str:
-    """
-    Router điều hướng sau Chốt chặn 2 (`OutputScoreGate`):
-    Nếu `output_total_score < MIN_OUTPUT_TOTAL_SCORE` và `visual_retry_count < 2`,
-    tự động quay lại `media_generator_node` để tinh chỉnh tham số và kết xuất lại video.
-    """
-    scores = state.get("output_scores") or {}
-    if scores.get("output_total_score", 0.0) >= MIN_OUTPUT_TOTAL_SCORE:
-        return "done"
-    if state.get("visual_retry_count", 0) < 2:
-        return "media_generator_node"
+    """Render lại không sửa được lỗi kịch bản/ảnh nên không vòng lặp; kết quả được báo thẳng cho người dùng."""
     return "done"

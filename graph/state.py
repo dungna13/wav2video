@@ -26,25 +26,31 @@ class NewCharacterItemSchema(BaseModel):
     visual_traits: str = Field(default="")
 
 
+class SceneSchema(BaseModel):
+    narration_vn: str = Field(default="")
+    image_prompt_en: str = Field(default="")
+    stock_query_en: str = Field(default="")
+    camera: str = Field(default="zoom_in")
+    overlay_keyword_vn: str = Field(default="")
+
+
 class PromptArchitectOutput(BaseModel):
     topic_title: str = Field(default="")
+    genre: str = Field(default="")
     thinking_process: str = Field(default="")
-    visual_archetype: str = Field(default="probability_trajectory")
-    visual_labels: List[str] = Field(default_factory=list)
-    scene_action_prompt: str = Field(default="")
-    hook_and_context_vn: str = Field(default="")
-    deep_explanation_vn: str = Field(default="")
-    outro_takeaway_vn: str = Field(default="")
+    style_anchor_en: str = Field(default="")
+    music_mood: str = Field(default="")
+    scenes: List[SceneSchema] = Field(default_factory=list)
     story_moral: str = Field(default="")
-    new_characters: List[NewCharacterItemSchema] = Field(default_factory=list)
+    claims_to_verify: List[str] = Field(default_factory=list)
 
 
 class JudgeScoreOutput(BaseModel):
-    rag_faithfulness_score: float = Field(default=9.0)
-    cinematic_quality_score: float = Field(default=9.0)
-    theological_moral_score: float = Field(default=9.0)
-    average_score: float = Field(default=9.0)
-    pass_validation: bool = Field(default=True)
+    hook_score: float = Field(default=0.0)
+    visual_match_score: float = Field(default=0.0)
+    story_score: float = Field(default=0.0)
+    average_score: float = Field(default=0.0)
+    pass_validation: bool = Field(default=False)
     feedback_for_rewrite: str = Field(default="")
 
 
@@ -93,6 +99,9 @@ def character_registry_reducer(
 
 class ChristianVideoState(TypedDict):
     user_request: str
+    intent_mode: str  # NO_HUMAN_BROLL | HUMAN_NO_LIPSYNC | HUMAN_WITH_LIPSYNC (người dùng chọn hoặc router tự suy ra)
+    effective_intent_mode: str  # chế độ thực sự được render (LIPSYNC chưa hỗ trợ -> HUMAN_NO_LIPSYNC)
+    intent_notes: str
     characters: Annotated[Dict[str, CharacterProfile], character_registry_reducer]
 
     # Node 1 (`filter_context_node`)
@@ -114,6 +123,11 @@ class ChristianVideoState(TypedDict):
     outro_takeaway_vn: str
     story_moral: str
     new_characters: Dict[str, CharacterProfile]
+    genre: str
+    style_anchor_en: str
+    music_mood: str
+    scenes: List[Dict[str, Any]]
+    claims_to_verify: List[str]
 
     # Node 3 (`prompt_scorer_node`)
     rendered_scorer_prompt: str
@@ -142,6 +156,7 @@ class ChristianVideoState(TypedDict):
     prev_scene_frame_path: str
     continuity_harmonized: bool
     visual_scores: VisualScoreMetrics
+    asset_report: Dict[str, Any]
 
     # Node 5 (`visual_judge_and_update_registry_node`)
     face_similarity_score: float

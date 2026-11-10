@@ -1,24 +1,26 @@
 """
-NODE 4: `media_generator_node`
-Nhận kịch bản 3 phần (`hook_and_context_vn`, `deep_explanation_vn`, `outro_takeaway_vn`) và `visual_archetype`
-do LLM thiết kế ở `prompt_architect_node`, sau đó:
-  1. Sinh giọng đọc Neural tiếng Việt truyền cảm (`vi-VN-NamMinhNeural` qua `edge-tts`) ra chuẩn `audio_16k_mono.wav`.
-  2. Trích xuất đặc trưng sóng âm (`rms_envelope_per_frame`, `timeline_phases`) ở tốc độ 30fps.
-  3. Chấm điểm Visual Feature Gate 1 (`evaluate_visual_feature_scores`).
-  4. Kết xuất Video Motion Graphics / Manim 30fps (`final_master.mp4`) khớp trực tiếp với `visual_archetype`,
-     `visual_labels` và lời bình 3 phần của chủ đề.
+NODE 4: `media_generator_node` — Từ danh sách cảnh tới video hoàn chỉnh.
+  1. Giọng đọc VITS theo TỪNG CẢNH -> nhận mốc thời gian thật (start/end) của mỗi cảnh.
+  2. Lấy hình cho từng cảnh (`graph/asset_fetcher.py`: Pexels video -> ảnh AI -> dự phòng) và ghi rõ nguồn.
+  3. Đo chất lượng hình THẬT (độ nét Laplacian, liên tục màu giữa các cảnh, tỉ lệ cảnh dùng dự phòng) — không còn
+     chấm trên khung hình giả lập như trước.
+  4. Dựng phim tài liệu (`graph/video_renderer.py`): camera zoom/pan, xfade, chỉnh màu, grain, phụ đề karaoke.
 """
 
 import json
 import re
-import urllib.parse
+import time
 import unicodedata
-from typing import Dict, Any
+from pathlib import Path
+from typing import Dict, Any, List
 
-from config.settings import POLLINATIONS_MODEL, IMAGE_WIDTH, IMAGE_HEIGHT, WORKSPACE_DIR
-from graph.audio_sync import synthesize_voiceover_waveform, extract_waveform_sync_features
-from graph.wav2vid_metrics import evaluate_visual_feature_scores
-from graph.video_renderer import render_complete_scenery_video_with_audio
+import numpy as np
+from PIL import Image
+
+from config.settings import IMAGE_WIDTH, IMAGE_HEIGHT, WORKSPACE_DIR, VIDEO_FPS
+from graph.audio_sync import synthesize_scene_voiceover, extract_waveform_sync_features
+from graph.asset_fetcher import fetch_scene_assets
+from graph.video_renderer import render_documentary_video
 from graph.state import ChristianVideoState
 
 
@@ -28,96 +30,118 @@ def _slugify_vn(text: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "_", norm).strip("_")[:36] or "topic"
 
 
+def _laplacian_var(gray: np.ndarray) -> float:
+    lap = (
+        -4.0 * gray[1:-1, 1:-1] + gray[:-2, 1:-1] + gray[2:, 1:-1] + gray[1:-1, :-2] + gray[1:-1, 2:]
+    )
+    return float(lap.var())
+
+
+def evaluate_real_visual_quality(scenes: List[Dict[str, Any]], asset_report: Dict[str, Any]) -> Dict[str, Any]:
+    """Đo trên ảnh thật của từng cảnh (cảnh video stock bị bỏ qua vì chưa có khung hình tĩnh)."""
+    sharp, means = [], []
+    for sc in scenes:
+        if sc.get("media_type") != "image":
+            continue
+        im = Image.open(sc["media_path"]).convert("RGB").resize((270, 480))
+        arr = np.asarray(im, dtype=np.float32)
+        sharp.append(_laplacian_var(arr.mean(axis=2)))
+        means.append(arr.reshape(-1, 3).mean(axis=0) / 255.0)
+
+    sharpness = float(np.clip(np.mean(sharp) / 120.0, 0.0, 1.0)) if sharp else 1.0
+    if len(means) > 1:
+        diffs = [float(np.abs(means[i] - means[i - 1]).mean()) for i in range(1, len(means))]
+        continuity = float(np.clip(1.0 - np.mean(diffs) * 2.0, 0.0, 1.0))
+    else:
+        continuity = 1.0
+    total_scenes = max(1, len(scenes))
+    real_ratio = asset_report.get("real_scenes", total_scenes) / total_scenes
+    total = round(0.5 * real_ratio + 0.3 * sharpness + 0.2 * continuity, 3)
+
+    reasons = []
+    if asset_report.get("fallback_scenes"):
+        reasons.append(f"{asset_report['fallback_scenes']}/{total_scenes} cảnh dùng ảnh dự phòng (không khớp lời)")
+    if sharpness < 0.35:
+        reasons.append("ảnh thiếu nét")
+    return {
+        "clip_prompt_score": None,  # chưa có mô hình CLIP thật -> không bịa số
+        "continuity_score": round(continuity, 3),
+        "identity_pose_score": None,
+        "sharpness_score": round(sharpness, 3),
+        "real_scene_ratio": round(real_ratio, 3),
+        "visual_total_score": total,
+        "failure_reason": "; ".join(reasons) or None,
+    }
+
+
 def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
     topic_title = state.get("topic_title") or state.get("user_request", "Topic")[:40]
-    visual_archetype = state.get("visual_archetype", "probability_trajectory")
-    visual_labels = state.get("visual_labels") or ["Phần 1: Đặt vấn đề", "Phần 2: Cơ chế Cốt lõi", "Phần 3: Đúc kết"]
-    scene_action = state.get("scene_action_prompt", "")
-
-    # Lấy trực tiếp kịch bản 3 phần mà LLM đã viết ở Node 2
-    scene_narration_vn = state.get("hook_and_context_vn", "").strip()
-    outro_reflection_vn = state.get("deep_explanation_vn", "").strip()
-    closing_prayer_vn = state.get("outro_takeaway_vn", "").strip()
+    scenes: List[Dict[str, Any]] = [dict(s) for s in (state.get("scenes") or [])]
+    if not scenes:
+        raise RuntimeError("media_generator_node: state không có `scenes` — prompt_architect_node chưa chạy hoặc thất bại.")
+    style_anchor = state.get("style_anchor_en", "")
+    genre = state.get("genre", "")
 
     seed = abs(hash(topic_title)) % 800000 + 100000
-    encoded_prompt = urllib.parse.quote(scene_action)
-    generated_media_url = (
-        f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-        f"?model={POLLINATIONS_MODEL}&width={IMAGE_WIDTH}&height={IMAGE_HEIGHT}&seed={seed}&nologo=true"
-    )
-
-    # -----------------------------------------------------------------
-    # BƯỚC 1: TẠO FILE DẠNG SÓNG `.WAV` TRONG `workspace/<run_id>/` & TRÍCH XUẤT FEATURE 30FPS
-    # -----------------------------------------------------------------
-    full_voiceover_script = f"{scene_narration_vn} ... {outro_reflection_vn} ... {closing_prayer_vn}"
-    safe_slug = _slugify_vn(topic_title)
-    run_id = f"run_{safe_slug}_{seed}"
+    run_id = f"run_{_slugify_vn(topic_title)}_{time.strftime('%m%d_%H%M%S')}"
     run_dir = WORKSPACE_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    wav_filename = f"{run_id}/audio_16k_mono.wav"
 
-    wav_path = synthesize_voiceover_waveform(
-        full_voiceover_text=full_voiceover_script,
-        output_filename=wav_filename,
+    # 1. Giọng đọc theo cảnh + mốc thời gian thật
+    wav_path, timings = synthesize_scene_voiceover(
+        [s["narration_vn"] for s in scenes], output_filename=run_dir / "audio_16k_mono.wav"
     )
-
+    hook = state.get("hook_and_context_vn", "") or scenes[0]["narration_vn"]
+    deep = state.get("deep_explanation_vn", "") or " ".join(s["narration_vn"] for s in scenes[1:-1])
+    outro = state.get("outro_takeaway_vn", "") or scenes[-1]["narration_vn"]
     audio_sync_features = extract_waveform_sync_features(
-        wav_path=wav_path,
-        scene_narration=scene_narration_vn,
-        outro_reflection=outro_reflection_vn,
-        closing_prayer=closing_prayer_vn,
+        wav_path=wav_path, scene_narration=hook, outro_reflection=deep, closing_prayer=outro, fps=VIDEO_FPS
     )
+    total_audio_sec = float(audio_sync_features["duration_sec"])
 
-    # -----------------------------------------------------------------
-    # BƯỚC 2: CHỐT CHẶN 1 (`VisualFeatureScorer` + `ContinuityHarmonizer`)
-    # -----------------------------------------------------------------
-    visual_scores, last_frame_path, harmonized = evaluate_visual_feature_scores(
-        scene_action_prompt=scene_action,
-        seed=seed,
-    )
+    # 2. Hình cho từng cảnh
+    print(f"[Node 4: media_generator_node] Lấy hình cho {len(scenes)} cảnh (mode={state.get('effective_intent_mode')})...")
+    asset_report = fetch_scene_assets(scenes, style_anchor, run_dir, seed, IMAGE_WIDTH, IMAGE_HEIGHT)
 
+    # 3. Đo chất lượng hình thật
+    visual_scores = evaluate_real_visual_quality(scenes, asset_report)
     (run_dir / "visual_score_report.json").write_text(
-        json.dumps(visual_scores, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+        json.dumps({**visual_scores, "asset_report": asset_report}, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    # -----------------------------------------------------------------
-    # BƯỚC 3: KẾT XUẤT VIDEO MOTION GRAPHICS 30FPS THEO `visual_archetype` CỦA LLM
-    # -----------------------------------------------------------------
-    video_mode = state.get("video_generation_mode") or "cinematic_3d_animation"
-    rendered_files = render_complete_scenery_video_with_audio(
+    # 4. Dựng phim
+    rendered = render_documentary_video(
         run_dir=run_dir,
         wav_path=wav_path,
-        audio_sync_features=audio_sync_features,
-        scripture_reference=topic_title,
-        retrieved_scripture=full_voiceover_script,
-        visual_archetype=visual_archetype,
-        visual_labels=visual_labels,
-        scene_action_prompt=scene_action,
-        seed=seed,
+        scenes=scenes,
+        timings=timings,
+        total_audio_sec=total_audio_sec,
+        topic_title=topic_title,
+        genre=genre,
     )
 
     print(
-        f"[Node 4: media_generator_node] Archetype={visual_archetype} | VisualScore={visual_scores['visual_total_score']} "
-        f"| MasterClock={audio_sync_features['duration_sec']}s ({audio_sync_features['total_video_frames']} frames @ 30fps) "
-        f"| Video={rendered_files['final_master_video_path']}"
+        f"[Node 4: media_generator_node] {len(scenes)} cảnh | thật={asset_report['real_scenes']} dự phòng={asset_report['fallback_scenes']} "
+        f"| VisualScore={visual_scores['visual_total_score']} | {total_audio_sec}s | Video={rendered['final_master_video_path']}"
     )
 
     return {
-        "video_generation_mode": video_mode,
-        "final_prompt": scene_action,
-        "generated_media_url": generated_media_url,
+        "video_generation_mode": state.get("effective_intent_mode") or "NO_HUMAN_BROLL",
+        "final_prompt": scenes[0]["image_prompt_en"],
+        "generated_media_url": scenes[0]["media_path"],
         "active_seed": seed,
-        "scene_narration_vn": scene_narration_vn,
-        "outro_reflection_vn": outro_reflection_vn,
-        "closing_prayer_vn": closing_prayer_vn,
+        "scenes": scenes,
+        "scene_narration_vn": hook,
+        "outro_reflection_vn": deep,
+        "closing_prayer_vn": outro,
         "voiceover_wav_path": str(wav_path),
-        "subtitles_ass_path": rendered_files["subtitles_ass_path"],
-        "prepped_visual_path": rendered_files["prepped_visual_path"],
-        "final_master_video_path": rendered_files["final_master_video_path"],
-        "audio_duration_sec": audio_sync_features["duration_sec"],
+        "subtitles_ass_path": rendered["subtitles_ass_path"],
+        "prepped_visual_path": rendered["prepped_visual_path"],
+        "final_master_video_path": rendered["final_master_video_path"],
+        "audio_duration_sec": total_audio_sec,
         "audio_sync_features": audio_sync_features,
-        "prev_scene_frame_path": last_frame_path,
-        "continuity_harmonized": harmonized,
+        "prev_scene_frame_path": scenes[-1]["media_path"],
+        "continuity_harmonized": False,
         "visual_scores": visual_scores,
+        "asset_report": {**asset_report, "contact_sheet": rendered["contact_sheet_path"], "timeline": rendered["scene_timeline_path"]},
     }

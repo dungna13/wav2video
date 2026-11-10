@@ -11,7 +11,7 @@ import os
 import re
 import warnings
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 import scipy.io.wavfile as wavfile
 import scipy.signal as signal
@@ -47,40 +47,61 @@ def _get_local_vits_vietnamese_model():
 
 def _generate_cinematic_ambient_bgm(num_samples: int, sample_rate: int, voice_env: np.ndarray) -> np.ndarray:
     """
-    Tạo nhạc nền Ambient Điện ảnh (Hans Zimmer / Makoto Shinkai Ethereal Warm Pad)
-    tự động hạ nhỏ (Auto-Ducking) khi giọng đọc vang lên và ngân nhẹ ở các nhịp nghỉ câu.
+    Sử dụng file nhạc nền Piano / Lofi Ambient phòng thu thực tế (`assets/bgm/cinematic_piano_ambient.mp3`)
+    và áp dụng Auto-Ducking tự động hạ âm lượng khi có giọng đọc vang lên.
     """
+    import subprocess
+    import imageio_ffmpeg
+
+    bgm_path = Path(__file__).resolve().parent.parent / "assets" / "bgm" / "cinematic_piano_ambient.mp3"
+    pad = None
+
+    if bgm_path.exists():
+        try:
+            ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
+            cmd = [
+                ffmpeg_bin, "-i", str(bgm_path),
+                "-f", "s16le", "-ar", str(sample_rate), "-ac", "1", "-"
+            ]
+            res = subprocess.run(cmd, capture_output=True, check=True)
+            bgm_arr = np.frombuffer(res.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+            if len(bgm_arr) > 1000:
+                # Lặp vòng lặp bài nhạc cho đủ độ dài num_samples
+                repeats = (num_samples // len(bgm_arr)) + 1
+                tiled = np.tile(bgm_arr, repeats)[:num_samples]
+                pad = tiled
+        except Exception as e:
+            print(f" [BGM Info] Không đọc được file nhạc ({e}) -> Dùng bộ hòa âm dự phòng.")
+
     t = np.arange(num_samples, dtype=np.float32) / float(sample_rate)
-    # Vòng hòa âm Am9 - Fmaj7 - Cmaj7 - G6 ấm áp, sâu lắng
-    chords = [
-        (110.0, 164.81, 220.0, 261.63, 329.63),   # Am9
-        (87.31, 130.81, 174.61, 220.0, 261.63),   # Fmaj7
-        (130.81, 196.00, 246.94, 293.66, 392.00), # Cmaj9
-        (98.00, 146.83, 196.00, 246.94, 329.63),  # G6
-    ]
-    pad = np.zeros(num_samples, dtype=np.float32)
-    chord_dur = 6.0
-    for idx, freqs in enumerate(chords):
-        # Trọng số chuyển mượt giữa các hợp âm theo chu kỳ 24s
-        phase = (t % (chord_dur * len(chords))) / chord_dur
-        weight = np.clip(1.0 - np.abs(phase - (idx + 0.5)), 0.0, 1.0)
-        # Làm mượt đường bao chuyển hợp âm
-        weight = 0.5 - 0.5 * np.cos(np.pi * weight)
-        layer = np.zeros(num_samples, dtype=np.float32)
-        for h_idx, f in enumerate(freqs):
-            detune = 1.0 + 0.0015 * np.sin(2 * np.pi * (0.18 + 0.05 * h_idx) * t)
-            amp = 0.35 / (1.0 + 0.45 * h_idx)
-            layer += amp * np.sin(2 * np.pi * f * detune * t)
-        pad += weight * layer
 
-    # Lọc thông thấp (Low-pass filter ở 950Hz) để nhạc nền ấm, sâu, không bao giờ lấn tần số giọng nói (1kHz-4kHz)
-    sos_lp = signal.butter(3, 950.0 / (sample_rate * 0.5), btype="low", output="sos")
-    pad = signal.sosfilt(sos_lp, pad).astype(np.float32)
-    pad = pad / (np.max(np.abs(pad)) + 1e-6)
+    if pad is None:
+        # Bộ hòa âm ấm áp dự phòng
+        chords = [
+            (110.0, 164.81, 220.0, 261.63, 329.63),
+            (87.31, 130.81, 174.61, 220.0, 261.63),
+            (130.81, 196.00, 246.94, 293.66, 392.00),
+            (98.00, 146.83, 196.00, 246.94, 329.63),
+        ]
+        pad = np.zeros(num_samples, dtype=np.float32)
+        chord_dur = 6.0
+        for idx, freqs in enumerate(chords):
+            phase = (t % (chord_dur * len(chords))) / chord_dur
+            weight = np.clip(1.0 - np.abs(phase - (idx + 0.5)), 0.0, 1.0)
+            weight = 0.5 - 0.5 * np.cos(np.pi * weight)
+            layer = np.zeros(num_samples, dtype=np.float32)
+            for h_idx, f in enumerate(freqs):
+                detune = 1.0 + 0.0015 * np.sin(2 * np.pi * (0.18 + 0.05 * h_idx) * t)
+                amp = 0.35 / (1.0 + 0.45 * h_idx)
+                layer += amp * np.sin(2 * np.pi * f * detune * t)
+            pad += weight * layer
 
-    # Auto-Ducking: Khi có tiếng đọc (voice_env cao), nhạc nền hạ xuống 7%; khi nghỉ lấy hơi, nhạc nền dâng nhẹ lên 14%
-    ducking_gain = 0.14 - 0.075 * np.clip(voice_env * 2.2, 0.0, 1.0)
-    # Fade-in 1.0s đầu và Fade-out 1.5s cuối
+        sos_lp = signal.butter(3, 950.0 / (sample_rate * 0.5), btype="low", output="sos")
+        pad = signal.sosfilt(sos_lp, pad).astype(np.float32)
+        pad = pad / (np.max(np.abs(pad)) + 1e-6)
+
+    # Auto-Ducking chuẩn Studio: khi có giọng đọc thì hạ xuống 9%; khi nghỉ câu thì ngân lên 18%
+    ducking_gain = 0.18 - 0.09 * np.clip(voice_env * 2.5, 0.0, 1.0)
     fade_in = np.minimum(1.0, t / 1.0)
     fade_out = np.minimum(1.0, (t[-1] - t) / 1.5) if len(t) > 1 else 1.0
     return (pad * ducking_gain * fade_in * fade_out).astype(np.float32)
@@ -124,94 +145,187 @@ def _apply_studio_broadcast_dsp(voice_wav: np.ndarray, sample_rate: int) -> np.n
     return y.astype(np.float32)
 
 
+_DIGITS_VI = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"]
+
+
+def _vn_below_1000(n: int, full: bool) -> str:
+    h, rest = divmod(n, 100)
+    t, u = divmod(rest, 10)
+    words: List[str] = []
+    if h or full:
+        words += [_DIGITS_VI[h], "trăm"]
+    if t > 1:
+        words += [_DIGITS_VI[t], "mươi"]
+        if u == 1:
+            words.append("mốt")
+        elif u == 5:
+            words.append("lăm")
+        elif u:
+            words.append(_DIGITS_VI[u])
+    elif t == 1:
+        words.append("mười")
+        if u == 5:
+            words.append("lăm")
+        elif u:
+            words.append(_DIGITS_VI[u])
+    else:
+        if u:
+            if h or full:
+                words.append("linh")
+            words.append(_DIGITS_VI[u])
+    return " ".join(words)
+
+
+def vn_number_to_words(n: int) -> str:
+    """Đọc số nguyên không âm bằng chữ tiếng Việt (VITS không đọc được chữ số)."""
+    if n == 0:
+        return "không"
+    units = ["", "nghìn", "triệu", "tỷ"]
+    groups: List[int] = []
+    while n > 0:
+        n, g = divmod(n, 1000)
+        groups.append(g)
+    parts: List[str] = []
+    for idx in range(len(groups) - 1, -1, -1):
+        g = groups[idx]
+        if g == 0:
+            continue
+        full = idx != len(groups) - 1
+        parts.append(f"{_vn_below_1000(g, full)} {units[idx] if idx < len(units) else ''}".strip())
+    return " ".join(parts)
+
+
+def normalize_vi_text_for_tts(text: str) -> str:
+    """Chuẩn hoá văn bản cho VITS: số -> chữ, % -> phần trăm, bỏ ký hiệu lạ."""
+
+    def _num(m: "re.Match[str]") -> str:
+        raw = m.group(0).replace(".", "").replace(" ", "")
+        try:
+            return vn_number_to_words(int(raw))
+        except ValueError:
+            return m.group(0)
+
+    t = re.sub(r"(\d+(?:[.,]\d+)?)\s*%", lambda m: m.group(1) + " phần trăm", text)
+    t = re.sub(r"(?<=\d),(?=\d)", " phẩy ", t)
+    t = re.sub(r"\d{1,3}(?:\.\d{3})+|\d+", _num, t)
+    t = t.replace("&", " và ").replace("/", " trên ")
+    t = re.sub(r"[\"“”()\[\]*#_~^<>|\\]", "", t)
+    t = re.sub(r"[-–—]+", ", ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _vits_clause_audio(text: str, model, tokenizer, vits_sr: int, torch_mod) -> np.ndarray:
+    """Sinh giọng cho 1 đoạn văn (nhiều mệnh đề), có ngắt nghỉ theo dấu câu. Không kèm đệm đầu/cuối."""
+    parts = [p.strip() for p in re.split(r"([,.;:?!]+)", text) if p.strip()]
+    chunks: List[np.ndarray] = []
+    with torch_mod.no_grad():
+        for part in parts:
+            if re.match(r"^[,.;:?!]+$", part):
+                pause_sec = 0.46 if any(ch in part for ch in ".?!") else 0.20
+                chunks.append(np.zeros(int(pause_sec * vits_sr), dtype=np.float32))
+                continue
+            clause_clean = part.lower().strip()
+            if not clause_clean:
+                continue
+            inputs = tokenizer(clause_clean, return_tensors="pt")
+            if inputs["input_ids"].shape[1] == 0:
+                continue
+            out_wav = model(**inputs).waveform[0].cpu().numpy().astype(np.float32)
+
+            non_silent = np.where(np.abs(out_wav) > 0.008)[0]
+            if len(non_silent) > 10:
+                s_idx = max(0, int(non_silent[0]) - int(0.015 * vits_sr))
+                e_idx = min(len(out_wav), int(non_silent[-1]) + int(0.025 * vits_sr))
+                out_wav = out_wav[s_idx:e_idx]
+
+            fade_len = min(int(0.008 * vits_sr), len(out_wav) // 4)
+            if fade_len > 2:
+                out_wav[:fade_len] *= np.linspace(0.0, 1.0, fade_len, dtype=np.float32)
+                out_wav[-fade_len:] *= np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
+            chunks.append(out_wav)
+    return np.concatenate(chunks) if chunks else np.zeros(int(0.3 * vits_sr), dtype=np.float32)
+
+
+def _master_and_mix(raw_voice: np.ndarray, vits_sr: int, sample_rate: int, wav_path: Path) -> Path:
+    if vits_sr != sample_rate:
+        target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
+        raw_voice = signal.resample(raw_voice, target_len).astype(np.float32)
+
+    mastered_voice = _apply_studio_broadcast_dsp(raw_voice, sample_rate)
+    win_len = max(1, int(0.08 * sample_rate))
+    voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
+    bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env)
+    final_mix = mastered_voice * 0.86 + bgm
+    final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.90
+    wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
+    print(f"[TTS Neural VITS Studio] Đã sinh giọng đọc (`facebook/mms-tts-vie` + Studio EQ + BGM) -> {wav_path.name}")
+    return wav_path
+
+
+def _resolve_wav_path(output_filename: Any) -> Path:
+    target = Path(output_filename)
+    wav_path = target if (target.is_absolute() or len(target.parts) > 1) else OUTPUT_AUDIO_DIR / target.name
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
+    return wav_path
+
+
+def synthesize_scene_voiceover(
+    scene_texts: List[str],
+    output_filename: Any = "voiceover_studio.wav",
+    sample_rate: int = AUDIO_SAMPLE_RATE,
+    scene_gap_sec: float = 0.18,
+) -> Tuple[Path, List[Tuple[float, float]]]:
+    """
+    Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
+    Nhờ đó ảnh, chuyển cảnh và phụ đề từng từ khớp đúng thời điểm đọc (không ước lượng theo số ký tự).
+    Không có dự phòng "bíp sine": nếu VITS lỗi sẽ raise để người dùng biết.
+    """
+    wav_path = _resolve_wav_path(output_filename)
+    import torch
+
+    model, tokenizer = _get_local_vits_vietnamese_model()
+    vits_sr = int(model.config.sampling_rate)
+
+    lead = 0.20
+    chunks: List[np.ndarray] = [np.zeros(int(lead * vits_sr), dtype=np.float32)]
+    cursor = lead
+    timings: List[Tuple[float, float]] = []
+    for text in scene_texts:
+        audio = _vits_clause_audio(normalize_vi_text_for_tts(text), model, tokenizer, vits_sr, torch)
+        dur = len(audio) / float(vits_sr)
+        timings.append((round(cursor, 3), round(cursor + dur, 3)))
+        chunks.append(audio)
+        chunks.append(np.zeros(int(scene_gap_sec * vits_sr), dtype=np.float32))
+        cursor += dur + scene_gap_sec
+    chunks.append(np.zeros(int(0.45 * vits_sr), dtype=np.float32))
+    _master_and_mix(np.concatenate(chunks), vits_sr, sample_rate, wav_path)
+    return wav_path, timings
+
+
 def synthesize_voiceover_waveform(
     full_voiceover_text: str,
-    output_filename: str,
+    output_filename: Any = "voiceover_studio.wav",
     sample_rate: int = AUDIO_SAMPLE_RATE,
 ) -> Path:
-    """
-    Sinh giọng đọc Neural VITS Tiếng Việt (`facebook/mms-tts-vie`) chạy trực tiếp trên PyTorch
-    kết hợp Studio Broadcast Mastering & Nhạc nền Ambient Auto-Ducking.
-    """
-    OUTPUT_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
-    wav_path = OUTPUT_AUDIO_DIR / output_filename
-    wav_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Làm sạch ký tự đặc biệt nhưng giữ nguyên dấu câu để tách nhịp ngắt nghỉ tự nhiên
-    clean_text = re.sub(r'["“”()\[\]*#]', "", full_voiceover_text)
-    clean_text = re.sub(r"\s+", " ", clean_text).strip()
-
+    """Sinh giọng đọc Neural VITS Tiếng Việt cho 1 đoạn văn liền (giữ cho tương thích ngược)."""
+    wav_path = _resolve_wav_path(output_filename)
     try:
         import torch
+
         model, tokenizer = _get_local_vits_vietnamese_model()
         vits_sr = int(model.config.sampling_rate)
-
-        # Tách văn bản theo từng mệnh đề dấu phẩy, chấm, hỏi, chấm than để tạo nhịp thở tự nhiên
-        parts = [p.strip() for p in re.split(r"([,.;:?!]+)", clean_text) if p.strip()]
-        chunks: List[np.ndarray] = [np.zeros(int(0.20 * vits_sr), dtype=np.float32)]
-
-        with torch.no_grad():
-            for part in parts:
-                if re.match(r"^[,.;:?!]+$", part):
-                    if any(ch in part for ch in ".?!"):
-                        pause_sec = 0.46  # Nghỉ hết câu truyền cảm
-                    else:
-                        pause_sec = 0.20  # Nghỉ lấy hơi nhẹ ở dấu phẩy
-                    chunks.append(np.zeros(int(pause_sec * vits_sr), dtype=np.float32))
-                    continue
-
-                # Chuẩn hóa chữ thường cho VITS tokenizer tiếng Việt
-                clause_clean = part.lower().strip()
-                if not clause_clean:
-                    continue
-                inputs = tokenizer(clause_clean, return_tensors="pt")
-                if inputs["input_ids"].shape[1] == 0:
-                    continue
-                out_wav = model(**inputs).waveform[0].cpu().numpy().astype(np.float32)
-
-                # Khử khoảng lặng thừa ở hai đầu mỗi mệnh đề và áp fade 8ms chống click
-                non_silent = np.where(np.abs(out_wav) > 0.008)[0]
-                if len(non_silent) > 10:
-                    s_idx = max(0, int(non_silent[0]) - int(0.015 * vits_sr))
-                    e_idx = min(len(out_wav), int(non_silent[-1]) + int(0.025 * vits_sr))
-                    out_wav = out_wav[s_idx:e_idx]
-
-                fade_len = min(int(0.008 * vits_sr), len(out_wav) // 4)
-                if fade_len > 2:
-                    out_wav[:fade_len] *= np.linspace(0.0, 1.0, fade_len, dtype=np.float32)
-                    out_wav[-fade_len:] *= np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
-
-                chunks.append(out_wav)
-
-        chunks.append(np.zeros(int(0.45 * vits_sr), dtype=np.float32))
-        raw_voice = np.concatenate(chunks)
-
-        if vits_sr != sample_rate:
-            target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
-            raw_voice = signal.resample(raw_voice, target_len).astype(np.float32)
-
-        # Áp dụng Studio Broadcast Mastering (Warmth EQ + Presence + Studio Room)
-        mastered_voice = _apply_studio_broadcast_dsp(raw_voice, sample_rate)
-
-        # Tính đường bao âm lượng giọng nói để điều khiển Auto-Ducking cho nhạc nền Ambient
-        win_len = max(1, int(0.08 * sample_rate))
-        voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
-
-        # Hòa trộn nhạc nền Ambient Điện ảnh (Auto-Ducking)
-        bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env)
-        final_mix = mastered_voice * 0.86 + bgm
-        final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.90
-
-        pcm16 = (final_mix * 32767.0).astype(np.int16)
-        wavfile.write(str(wav_path), sample_rate, pcm16)
-        print(
-            f"[TTS Neural VITS Studio] Đã sinh giọng đọc Nam Neural VITS (`facebook/mms-tts-vie` + Studio EQ + Ambient BGM) -> {wav_path.name}"
+        text = normalize_vi_text_for_tts(full_voiceover_text)
+        raw = np.concatenate(
+            [
+                np.zeros(int(0.20 * vits_sr), dtype=np.float32),
+                _vits_clause_audio(text, model, tokenizer, vits_sr, torch),
+                np.zeros(int(0.45 * vits_sr), dtype=np.float32),
+            ]
         )
-        return wav_path
+        return _master_and_mix(raw, vits_sr, sample_rate, wav_path)
     except Exception as e:
         print(f" [TTS Warning] Lỗi VITS Neural ({e}) -> Chuyển sang bộ tổng hợp dự phòng.")
 
-    # Dự phòng an toàn
     dur = 10.0
     t = np.linspace(0, dur, int(dur * sample_rate), endpoint=False, dtype=np.float32)
     wave = 0.5 * np.sin(2 * np.pi * 130.0 * t)

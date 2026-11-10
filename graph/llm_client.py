@@ -2,7 +2,7 @@
 Module kết nối LLM Thinking để lên kịch bản từ A-Z cho mọi Chủ đề (Topic):
 1. Nếu `GEMINI_API_KEY` hợp lệ (bắt đầu bằng `AIza...`), gọi trực tiếp Google Gemini 2.5 Flash Thinking API với `responseSchema`.
 2. Nếu `GEMINI_API_KEY` chưa hợp lệ hoặc bị lỗi, tự động gọi **Free LLM Reasoning API (`https://text.pollinations.ai/openai`, model `openai-fast`)**
-   để LLM thật sự suy luận (`reasoning`) và viết kịch bản JSON chặt chẽ từ A-Z (Nhân vật + Bối cảnh + 4 Phân cảnh 2x2 + Lời bình) cho bất kỳ Topic nào.
+   để LLM thật sự suy luận (`reasoning`) và viết kịch bản JSON chặt chẽ từ A-Z (thể loại + phong cách + danh sách cảnh lời bình/ảnh/camera) cho bất kỳ Topic nào.
 """
 
 import re
@@ -27,6 +27,7 @@ from config.settings import (
     GEMINI_THINKING_BUDGET,
     FREE_LLM_ENDPOINT,
     FREE_LLM_MODEL,
+    FREE_LLM_TIMEOUT,
 )
 
 # =====================================================================
@@ -36,55 +37,51 @@ ARCHITECT_GEMINI_SCHEMA: Dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
         "topic_title": {"type": "STRING"},
+        "genre": {"type": "STRING"},
         "thinking_process": {"type": "STRING"},
-        "visual_archetype": {"type": "STRING"},
-        "visual_labels": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "scene_action_prompt": {"type": "STRING"},
-        "hook_and_context_vn": {"type": "STRING"},
-        "deep_explanation_vn": {"type": "STRING"},
-        "outro_takeaway_vn": {"type": "STRING"},
-        "story_moral": {"type": "STRING"},
-        "new_characters": {
+        "style_anchor_en": {"type": "STRING"},
+        "music_mood": {"type": "STRING"},
+        "scenes": {
             "type": "ARRAY",
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "key_name": {"type": "STRING"},
-                    "aliases": {"type": "ARRAY", "items": {"type": "STRING"}},
-                    "visual_traits": {"type": "STRING"},
+                    "narration_vn": {"type": "STRING"},
+                    "image_prompt_en": {"type": "STRING"},
+                    "stock_query_en": {"type": "STRING"},
+                    "camera": {"type": "STRING"},
+                    "overlay_keyword_vn": {"type": "STRING"},
                 },
-                "required": ["key_name", "aliases", "visual_traits"],
+                "required": ["narration_vn", "image_prompt_en", "stock_query_en", "camera"],
             },
         },
+        "story_moral": {"type": "STRING"},
+        "claims_to_verify": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
     "required": [
         "topic_title",
+        "genre",
         "thinking_process",
-        "visual_archetype",
-        "visual_labels",
-        "scene_action_prompt",
-        "hook_and_context_vn",
-        "deep_explanation_vn",
-        "outro_takeaway_vn",
+        "style_anchor_en",
+        "scenes",
         "story_moral",
-        "new_characters",
     ],
 }
 
 SCORER_GEMINI_SCHEMA: Dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
-        "rag_faithfulness_score": {"type": "NUMBER"},
-        "cinematic_quality_score": {"type": "NUMBER"},
-        "theological_moral_score": {"type": "NUMBER"},
+        "hook_score": {"type": "NUMBER"},
+        "visual_match_score": {"type": "NUMBER"},
+        "story_score": {"type": "NUMBER"},
         "average_score": {"type": "NUMBER"},
         "pass_validation": {"type": "BOOLEAN"},
         "feedback_for_rewrite": {"type": "STRING"},
     },
     "required": [
-        "rag_faithfulness_score",
-        "cinematic_quality_score",
-        "theological_moral_score",
+        "hook_score",
+        "visual_match_score",
+        "story_score",
         "average_score",
         "pass_validation",
         "feedback_for_rewrite",
@@ -129,8 +126,8 @@ def call_gemini_thinking_structured(
     prompt: str,
     response_schema: Dict[str, Any],
     system_instruction: str = (
-        "Bạn là Đạo diễn Phim Hoạt hình Điện ảnh 3D (Pixar / Makoto Shinkai Style) và Biên kịch Short Video. "
-        "Hãy suy luận chặt chẽ và trả về DUY NHẤT 1 JSON Object hợp lệ theo đúng schema yêu cầu."
+        "Bạn là Đạo diễn kiêm Biên kịch phim tài liệu ngắn 9:16 (phong cách Vox / Thư Viện Lịch Sử), viết cho người xem trưởng thành. "
+        "Tuân thủ nghiêm các RULE trong prompt, tự kiểm tra checklist rồi trả về DUY NHẤT 1 JSON Object hợp lệ theo schema."
     ),
 ) -> Optional[Dict[str, Any]]:
     """
@@ -158,7 +155,7 @@ def call_gemini_thinking_structured(
             "generationConfig": generation_config,
         }
         try:
-            resp = requests.post(url, json=payload, timeout=35)
+            resp = requests.post(url, json=payload, timeout=90)
             resp.raise_for_status()
             data = resp.json()
             parts = data["candidates"][0]["content"]["parts"]
@@ -174,9 +171,10 @@ def call_gemini_thinking_structured(
         required_keys = response_schema.get("required", [])
         schema_hint = (
             f"\nReturn ONLY a single valid JSON object containing keys: {required_keys}. "
+            f"Nested arrays/objects described in the prompt (e.g. `scenes`) must be included in full. "
             f"Keep reasoning brief and output valid JSON immediately."
         )
-        for model_name in ["openai-fast", "openai"]:
+        for model_name in [FREE_LLM_MODEL, "openai"] if FREE_LLM_MODEL != "openai" else ["openai"]:
             try:
                 oa_payload = {
                     "model": model_name,
@@ -185,12 +183,15 @@ def call_gemini_thinking_structured(
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": GEMINI_TEMPERATURE,
+                    "max_tokens": 8000,
                 }
-                resp = requests.post(FREE_LLM_ENDPOINT, json=oa_payload, timeout=45)
+                resp = requests.post(FREE_LLM_ENDPOINT, json=oa_payload, timeout=FREE_LLM_TIMEOUT)
                 if resp.status_code != 200:
+                    print(f" [Free LLM {model_name}] HTTP {resp.status_code}: {resp.text[:160]}")
                     continue
                 data = resp.json()
-                msg = data["choices"][0]["message"]
+                choice = data["choices"][0]
+                msg = choice["message"]
                 content = msg.get("content") or ""
                 reasoning = msg.get("reasoning") or ""
                 parsed = _extract_json_object(content) or _extract_json_object(reasoning)
@@ -199,8 +200,13 @@ def call_gemini_thinking_structured(
                         parsed["thinking_process"] = reasoning[:350]
                     print(f"[LLM Thinking ({model_name})] Đã suy luận & thiết kế kịch bản thành công!")
                     return parsed
+                print(
+                    f" [Free LLM {model_name}] Không có JSON hợp lệ (finish_reason={choice.get('finish_reason')}, "
+                    f"content={len(content)} ký tự, reasoning={len(reasoning)} ký tự)."
+                )
             except Exception as e:
+                print(f" [Free LLM {model_name}] {type(e).__name__}: {str(e)[:140]}")
                 continue
-        print(" [LLM Info] Endpoint miễn phí đang bận -> Kích hoạt Kiến trúc sư Kịch bản 4 Cảnh Nội bộ.")
+        print(" [LLM] Endpoint miễn phí lỗi/quá tải. Khuyến nghị: điền GEMINI_API_KEY (AIza...) vào .env để ổn định.")
 
     return None

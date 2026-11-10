@@ -1,5 +1,5 @@
 """
-Module lắp ghép 5 Nodes vào `StateGraph` (Topic -> LLM Script & Visual Design -> Scorer Gate -> Audio/Video 30fps Renderer -> Output Judge & TikTok Queue).
+Module lắp ghép 5 Nodes vào `StateGraph` (Topic -> Intent Router -> LLM Script & Visual Design -> Scorer Gate -> Audio/Video 30fps Renderer -> Output Judge & TikTok Queue).
 """
 
 import json
@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional, Callable, Annotated, get_type_hints, get
 from config.settings import CHECKPOINT_DB_PATH
 from graph.state import ChristianVideoState
 from graph.nodes.filter_context import filter_context_node
+from graph.nodes.intent_router import intent_router_node
 from graph.nodes.prompt_architect import prompt_architect_node
 from graph.nodes.prompt_scorer import prompt_scorer_node, should_retry_prompt
 from graph.nodes.media_generator import media_generator_node
@@ -153,6 +154,7 @@ def create_christian_short_video_app(
     builder = StateGraph(ChristianVideoState)
 
     builder.add_node("filter_context_node", filter_context_node)
+    builder.add_node("intent_router_node", intent_router_node)
     builder.add_node("prompt_architect_node", prompt_architect_node)
     builder.add_node("prompt_scorer_node", prompt_scorer_node)
     builder.add_node("media_generator_node", media_generator_node)
@@ -161,7 +163,8 @@ def create_christian_short_video_app(
     )
 
     builder.add_edge(START, "filter_context_node")
-    builder.add_edge("filter_context_node", "prompt_architect_node")
+    builder.add_edge("filter_context_node", "intent_router_node")
+    builder.add_edge("intent_router_node", "prompt_architect_node")
     builder.add_edge("prompt_architect_node", "prompt_scorer_node")
 
     builder.add_conditional_edges(
