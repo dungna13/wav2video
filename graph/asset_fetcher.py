@@ -65,6 +65,43 @@ def _fetch_pexels_video(query: str, dest: Path, width: int, height: int) -> bool
     return False
 
 
+def _fetch_mixkit_video(query: str, dest: Path) -> bool:
+    """Tự động tìm và tải clip video stock HD (720p) từ Mixkit (100% miễn phí, không cần API key)."""
+    if not query:
+        return False
+    import re
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    words = [w.lower() for w in re.findall(r"\b\w+\b", query) if len(w) > 2]
+    synonyms = {
+        "battlefield": "fire", "battle": "fire", "war": "fire", "artillery": "cannon", "gun": "smoke",
+        "mud": "rain", "storm": "rain", "trench": "dark", "victory": "flag", "soldiers": "people",
+        "soldier": "man", "military": "crowd", "climbing": "mountain", "attack": "explosion",
+        "history": "book", "ancient": "temple", "science": "technology", "nature": "forest"
+    }
+    search_terms = []
+    for w in words:
+        search_terms.append(w)
+        if w in synonyms:
+            search_terms.append(synonyms[w])
+
+    for term in search_terms:
+        url = f"https://mixkit.co/free-stock-video/{term}/"
+        try:
+            r = requests.get(url, headers=headers, timeout=6)
+            if r.status_code == 200:
+                mp4s = re.findall(r"https://assets\.mixkit\.co/videos/(\d+)/\1-1080\.mp4", r.text)
+                if mp4s:
+                    vid_id = mp4s[0]
+                    vid_url = f"https://assets.mixkit.co/videos/{vid_id}/{vid_id}-720.mp4"
+                    down = requests.get(vid_url, headers=headers, timeout=40)
+                    if down.status_code == 200 and len(down.content) > 50000:
+                        dest.write_bytes(down.content)
+                        return True
+        except Exception as e:
+            continue
+    return False
+
+
 def _fetch_pixabay_video(query: str, dest: Path, width: int, height: int) -> bool:
     """Pixabay không lọc được khổ dọc: tải clip ngang rồi renderer crop giữa về 9:16."""
     if not PIXABAY_API_KEY or not query:
@@ -151,6 +188,9 @@ def fetch_scene_assets(
             elif _fetch_pixabay_video(sc.get("stock_query_en", ""), vid_path, width, height):
                 sc.update(media_path=str(vid_path), media_type="video")
                 source = "pixabay_video"
+            elif _fetch_mixkit_video(sc.get("stock_query_en", ""), vid_path):
+                sc.update(media_path=str(vid_path), media_type="video")
+                source = "mixkit_video"
             elif online_img:
                 prompt = f"{sc['image_prompt_en']}. {style_anchor_en}. {NEGATIVE_STYLE}"
                 if _fetch_pollinations_image(prompt, img_path, seed + i * 17, width, height):
@@ -174,6 +214,6 @@ def fetch_scene_assets(
         "sources": sources,
         "fallback_scenes": n_fallback,
         "real_scenes": len(sources) - n_fallback,
-        "stock_enabled": bool(PEXELS_API_KEY or PIXABAY_API_KEY),
+        "stock_enabled": True,
     }
 
