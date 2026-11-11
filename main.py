@@ -10,6 +10,8 @@ Chế độ Sách RAG & Đăng Hằng Ngày:
     python main.py --book nha_gia_kim "Bí mật hạnh phúc qua hai giọt dầu"
     python main.py --book nha_gia_kim --chunk 14
     python main.py --book nha_gia_kim --daily
+    python main.py --mine nha_gia_kim --chunk 14 # khai thác 3-5 góc kể sắc nét từ 1 chunk sách
+    python main.py --model myth_vs_reality "Bí ẩn văn minh Maya"
     python main.py --logs                      # xem checkpoint & error log gần nhất
 
 Chế độ (`--mode`): NO_HUMAN_BROLL (mặc định/tự suy ra) | HUMAN_NO_LIPSYNC | HUMAN_WITH_LIPSYNC (chưa có nhép môi).
@@ -28,15 +30,19 @@ from graph.book_rag import (
     list_book_chunks,
     mark_chunk_done,
 )
+from graph.llm_client import ANGLE_MINER_GEMINI_SCHEMA, call_gemini_thinking_structured
 from graph.run_logger import print_diagnostics, start_run_log
 from graph.workflow import create_christian_short_video_app
+from prompts.angle_miner_prompt import render_angle_miner_prompt
 
 
 def _parse_args(argv) -> Dict[str, Any]:
     opts: Dict[str, Any] = {
         "mode": "",
+        "model": "auto",
         "ingest": "",
         "list_book": None,
+        "mine": "",
         "book": "",
         "chunk": 0,
         "daily": False,
@@ -48,10 +54,14 @@ def _parse_args(argv) -> Dict[str, Any]:
     for a in it:
         if a == "--mode":
             opts["mode"] = next(it, "").strip().upper()
+        elif a == "--model":
+            opts["model"] = next(it, "auto").strip().lower()
         elif a == "--ingest":
             opts["ingest"] = next(it, "").strip()
         elif a == "--list-book":
             opts["list_book"] = next(it, "").strip()
+        elif a == "--mine":
+            opts["mine"] = next(it, "").strip()
         elif a == "--book":
             opts["book"] = next(it, "").strip()
         elif a == "--chunk":
@@ -100,6 +110,32 @@ def main():
         print_diagnostics()
         return
 
+    if opts["mine"]:
+        ch = get_chunk_by_idx(opts["mine"], opts["chunk"] or 1)
+        if not ch:
+            print(f"Không tìm thấy chunk #{opts['chunk'] or 1} của sách '{opts['mine']}'.")
+            return
+        prompt = render_angle_miner_prompt(
+            source_chunk=ch["content"],
+            book_title=ch.get("book_title", opts["mine"]),
+            num_angles=4,
+        )
+        res = call_gemini_thinking_structured(
+            prompt=prompt,
+            response_schema=ANGLE_MINER_GEMINI_SCHEMA,
+            system_instruction="Bạn là Trưởng ban Biên tập Phim Tài liệu Ngắn 9:16. Trả về JSON.",
+        )
+        angles = (res or {}).get("angles") or []
+        print("=" * 96)
+        print(f"ANGLE MINER: '{ch.get('book_title')}' | Chunk #{ch['chunk_idx']} ({ch['section_title']})")
+        print("=" * 96)
+        for idx, ang in enumerate(angles, 1):
+            print(f" [{idx}] {ang.get('angle_title')}  ({ang.get('recommended_narrative_model')} | {ang.get('recommended_intent_mode')})")
+            print(f"     • Hook  : {ang.get('hook_idea_vn')}")
+            print(f"     • Quote : {ang.get('key_evidence_quote')}")
+            print(f"     • Lệnh  : ../.venv/bin/python main.py --book {opts['mine']} --chunk {ch['chunk_idx']} --model {ang.get('recommended_narrative_model')} \"{ang.get('user_request_for_architect')}\"")
+        return
+
     book_id = opts["book"]
     chunk_idx = opts["chunk"]
     topic = opts["topic"]
@@ -140,6 +176,7 @@ def main():
             {
                 "user_request": topic,
                 "intent_mode": opts["mode"],
+                "preferred_narrative_model": opts["model"],
                 "book_id": book_id,
                 "book_chunk_idx": chunk_idx,
             },
@@ -164,10 +201,11 @@ def main():
     print("\n" + "=" * 96)
     print("BẢNG 1: KỊCH BẢN & CẢNH")
     print("=" * 96)
-    print(f" • Tiêu đề   : {state['topic_title']}   | Thể loại: {state.get('genre')}   | Mode: {state.get('intent_mode')} -> {state.get('effective_intent_mode')}")
+    print(f" • Tiêu đề   : {state['topic_title']}   | Thể loại: {state.get('genre')}   | Mô hình: {state.get('narrative_model')}   | Mode: {state.get('intent_mode')} -> {state.get('effective_intent_mode')}")
     print(f" • Phong cách: {state.get('style_anchor_en')}")
     for i, sc in enumerate(scenes, 1):
-        print(f"   [{i}] ({sc.get('camera')}, {sc.get('media_source')}) {sc['narration_vn']}")
+        sfx_tag = f", sfx={sc.get('sfx_cue')}" if sc.get("sfx_cue") and sc.get("sfx_cue") != "none" else ""
+        print(f"   [{i}] ({sc.get('camera')}, {sc.get('media_source')}{sfx_tag}) {sc['narration_vn']}")
     print(f" • Cần kiểm chứng trước khi đăng: {state.get('claims_to_verify')}")
 
     print("\n" + "=" * 96)

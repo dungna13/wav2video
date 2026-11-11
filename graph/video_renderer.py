@@ -150,7 +150,8 @@ def build_ass(
                 f"Dialogue: 1,{_to_ass_time(k_start)},{_to_ass_time(k_end)},Kicker,,0,0,0,,{{\\fad(220,220)}}{kw}"
             )
 
-        words = [x for x in re.sub(r"[{}\\]", "", sc["narration_vn"]).split() if x]
+        sub_text = str(sc.get("subtitle_vn") or sc["narration_vn"]).strip()
+        words = [x for x in re.sub(r"[{}\\]", "", sub_text).split() if x]
         if not words:
             continue
         weights = _word_weights(words)
@@ -241,10 +242,12 @@ def render_documentary_video(
         {
             "scene": i + 1,
             "narration_vn": sc["narration_vn"],
+            "subtitle_vn": sc.get("subtitle_vn", sc["narration_vn"]),
             "voice_start": timings[i][0],
             "voice_end": timings[i][1],
             "visible_sec": round(durations[i], 2),
             "camera": sc.get("camera"),
+            "sfx_cue": sc.get("sfx_cue", "none"),
             "media_type": sc.get("media_type"),
             "media_source": sc.get("media_source"),
             "image_prompt_en": sc["image_prompt_en"],

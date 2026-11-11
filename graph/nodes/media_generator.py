@@ -87,9 +87,11 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
     run_dir = WORKSPACE_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Giọng đọc theo cảnh + mốc thời gian thật
+    # 1. Giọng đọc theo cảnh + mốc thời gian thật (+ sfx_cue nếu có)
     wav_path, timings = synthesize_scene_voiceover(
-        [s["narration_vn"] for s in scenes], output_filename=run_dir / "audio_16k_mono.wav"
+        [s["narration_vn"] for s in scenes],
+        output_filename=run_dir / "audio_16k_mono.wav",
+        sfx_cues=[str(s.get("sfx_cue", "none")) for s in scenes],
     )
     hook = state.get("hook_and_context_vn", "") or scenes[0]["narration_vn"]
     deep = state.get("deep_explanation_vn", "") or " ".join(s["narration_vn"] for s in scenes[1:-1])

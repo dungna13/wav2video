@@ -11,33 +11,41 @@ Từ danh sách cảnh, node suy ra 3 trường tương thích ngược (`hook_a
 from typing import Dict, List, Any
 
 from prompts.architect_prompt import render_architect_prompt
+from prompts.narrative_models import VALID_NARRATIVE_MODELS, select_optimal_narrative_model
 from graph.llm_client import call_gemini_thinking_structured, ARCHITECT_GEMINI_SCHEMA
 from graph.state import ChristianVideoState
 
 VALID_CAMERAS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "tilt_up", "tilt_down"]
+VALID_SFX_CUES = frozenset({"none", "low_thud", "subtle_whoosh", "camera_click", "wind_swell"})
 LLM_ATTEMPTS = 2
 
 
 def normalize_scenes(raw_scenes: Any) -> List[Dict[str, Any]]:
-    """Làm sạch danh sách cảnh: bỏ cảnh rỗng, ép camera hợp lệ và không lặp liền kề."""
+    """Làm sạch danh sách cảnh: bỏ cảnh rỗng, chuẩn hóa `subtitle_vn`, `sfx_cue` và camera không lặp liền kề."""
     scenes: List[Dict[str, Any]] = []
     for item in raw_scenes or []:
         if not isinstance(item, dict):
             continue
         narration = " ".join(str(item.get("narration_vn", "")).split())
+        subtitle = " ".join(str(item.get("subtitle_vn", "")).split()) or narration
         image_prompt = " ".join(str(item.get("image_prompt_en", "")).split())
         if not narration or not image_prompt:
             continue
         camera = str(item.get("camera", "")).strip().lower()
         if camera not in VALID_CAMERAS:
             camera = ""
+        sfx_cue = str(item.get("sfx_cue", "none") or "none").strip().lower()
+        if sfx_cue not in VALID_SFX_CUES:
+            sfx_cue = "none"
         scenes.append(
             {
                 "narration_vn": narration,
+                "subtitle_vn": subtitle,
                 "image_prompt_en": image_prompt,
                 "stock_query_en": " ".join(str(item.get("stock_query_en", "")).split()),
                 "camera": camera,
                 "overlay_keyword_vn": " ".join(str(item.get("overlay_keyword_vn", "")).split()).upper(),
+                "sfx_cue": sfx_cue,
             }
         )
 
@@ -155,6 +163,12 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
     intent_mode = state.get("effective_intent_mode") or state.get("intent_mode") or "NO_HUMAN_BROLL"
 
     rag_context = str(state.get("retrieved_scripture", "") or "").strip()
+    preferred_model = str(state.get("preferred_narrative_model", "") or "auto").strip() or "auto"
+    selection = select_optimal_narrative_model(
+        user_request,
+        source_context=rag_context,
+        preferred_model=preferred_model,
+    )
 
     rendered_prompt = render_architect_prompt(
         user_request=user_request,
@@ -162,6 +176,7 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
         prompt_feedback=state.get("prompt_feedback", ""),
         filtered_character_context=state.get("filtered_character_context", ""),
         source_context=rag_context,
+        narrative_model=selection["selected_model_id"],
     )
 
     llm_json = None
@@ -183,6 +198,10 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
 
     topic_title = str(llm_json.get("topic_title") or user_request[:42]).strip()
     genre = str(llm_json.get("genre", "")).strip() or "history_culture"
+    narrative_model = str(llm_json.get("narrative_model", "")).strip().lower()
+    if narrative_model not in VALID_NARRATIVE_MODELS:
+        narrative_model = selection["selected_model_id"]
+    narrative_model_reason = str(llm_json.get("narrative_model_reason", "")).strip() or selection["rationale"]
     style_anchor = " ".join(str(llm_json.get("style_anchor_en", "")).split())
     music_mood = str(llm_json.get("music_mood", "")).strip()
     thinking_process = str(llm_json.get("thinking_process", "")).strip()
@@ -194,8 +213,9 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
     total_words = sum(len(s["narration_vn"].split()) for s in scenes)
 
     print(
-        f"[Node 2: prompt_architect_node] '{topic_title}' | genre={genre} | mode={intent_mode}\n"
+        f"[Node 2: prompt_architect_node] '{topic_title}' | genre={genre} | model={narrative_model} | mode={intent_mode}\n"
         f"   ├─ Số cảnh / số từ   : {len(scenes)} cảnh / {total_words} từ\n"
+        f"   ├─ Mô hình kịch bản  : {narrative_model_reason[:110]}\n"
         f"   ├─ Phong cách chung  : {style_anchor[:110]}\n"
         f"   └─ Cần kiểm chứng    : {claims}"
     )
@@ -215,6 +235,8 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
         "story_moral": story_moral,
         "new_characters": {},
         "genre": genre,
+        "narrative_model": narrative_model,
+        "narrative_model_reason": narrative_model_reason,
         "style_anchor_en": style_anchor,
         "music_mood": music_mood,
         "scenes": scenes,

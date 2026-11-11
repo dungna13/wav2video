@@ -28,15 +28,19 @@ class NewCharacterItemSchema(BaseModel):
 
 class SceneSchema(BaseModel):
     narration_vn: str = Field(default="")
+    subtitle_vn: str = Field(default="")
     image_prompt_en: str = Field(default="")
     stock_query_en: str = Field(default="")
     camera: str = Field(default="zoom_in")
     overlay_keyword_vn: str = Field(default="")
+    sfx_cue: str = Field(default="none")
 
 
 class PromptArchitectOutput(BaseModel):
     topic_title: str = Field(default="")
     genre: str = Field(default="")
+    narrative_model: str = Field(default="abt")
+    narrative_model_reason: str = Field(default="")
     thinking_process: str = Field(default="")
     style_anchor_en: str = Field(default="")
     music_mood: str = Field(default="")
@@ -141,6 +145,9 @@ class ChristianVideoState(TypedDict):
     story_moral: str
     new_characters: Dict[str, CharacterProfile]
     genre: str
+    preferred_narrative_model: str
+    narrative_model: str
+    narrative_model_reason: str
     style_anchor_en: str
     music_mood: str
     scenes: List[Dict[str, Any]]

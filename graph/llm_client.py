@@ -38,6 +38,8 @@ ARCHITECT_GEMINI_SCHEMA: Dict[str, Any] = {
     "properties": {
         "topic_title": {"type": "STRING"},
         "genre": {"type": "STRING"},
+        "narrative_model": {"type": "STRING"},
+        "narrative_model_reason": {"type": "STRING"},
         "thinking_process": {"type": "STRING"},
         "style_anchor_en": {"type": "STRING"},
         "music_mood": {"type": "STRING"},
@@ -47,12 +49,14 @@ ARCHITECT_GEMINI_SCHEMA: Dict[str, Any] = {
                 "type": "OBJECT",
                 "properties": {
                     "narration_vn": {"type": "STRING"},
+                    "subtitle_vn": {"type": "STRING"},
                     "image_prompt_en": {"type": "STRING"},
                     "stock_query_en": {"type": "STRING"},
                     "camera": {"type": "STRING"},
                     "overlay_keyword_vn": {"type": "STRING"},
+                    "sfx_cue": {"type": "STRING"},
                 },
-                "required": ["narration_vn", "image_prompt_en", "stock_query_en", "camera"],
+                "required": ["narration_vn", "subtitle_vn", "image_prompt_en", "stock_query_en", "camera"],
             },
         },
         "story_moral": {"type": "STRING"},
@@ -61,6 +65,8 @@ ARCHITECT_GEMINI_SCHEMA: Dict[str, Any] = {
     "required": [
         "topic_title",
         "genre",
+        "narrative_model",
+        "narrative_model_reason",
         "thinking_process",
         "style_anchor_en",
         "scenes",
@@ -91,15 +97,57 @@ SCORER_GEMINI_SCHEMA: Dict[str, Any] = {
 OUTRO_MORAL_GEMINI_SCHEMA: Dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
-        "scene_narration_vn": {"type": "STRING"},
-        "outro_reflection_vn": {"type": "STRING"},
-        "closing_prayer_vn": {"type": "STRING"},
+        "refined_narrations": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "scene_index": {"type": "INTEGER"},
+                    "narration_vn": {"type": "STRING"},
+                    "subtitle_vn": {"type": "STRING"},
+                },
+                "required": ["scene_index", "narration_vn", "subtitle_vn"],
+            },
+        },
+        "story_moral": {"type": "STRING"},
     },
     "required": [
-        "scene_narration_vn",
-        "outro_reflection_vn",
-        "closing_prayer_vn",
+        "refined_narrations",
+        "story_moral",
     ],
+}
+
+ANGLE_MINER_GEMINI_SCHEMA: Dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "book_title": {"type": "STRING"},
+        "angles": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "angle_title": {"type": "STRING"},
+                    "user_request_for_architect": {"type": "STRING"},
+                    "hook_idea_vn": {"type": "STRING"},
+                    "recommended_genre": {"type": "STRING"},
+                    "recommended_intent_mode": {"type": "STRING"},
+                    "recommended_narrative_model": {"type": "STRING"},
+                    "model_selection_reason": {"type": "STRING"},
+                    "key_evidence_quote": {"type": "STRING"},
+                },
+                "required": [
+                    "angle_title",
+                    "user_request_for_architect",
+                    "hook_idea_vn",
+                    "recommended_genre",
+                    "recommended_intent_mode",
+                    "recommended_narrative_model",
+                    "key_evidence_quote",
+                ],
+            },
+        },
+    },
+    "required": ["book_title", "angles"],
 }
 
 

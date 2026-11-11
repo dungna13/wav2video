@@ -246,7 +246,47 @@ def _vits_clause_audio(text: str, model, tokenizer, vits_sr: int, torch_mod) -> 
     return np.concatenate(chunks) if chunks else np.zeros(int(0.3 * vits_sr), dtype=np.float32)
 
 
-def _master_and_mix(raw_voice: np.ndarray, vits_sr: int, sample_rate: int, wav_path: Path) -> Path:
+def _synth_sfx(cue: str, sr: int) -> np.ndarray:
+    """Sinh hiệu ứng âm thanh chuyển nhịp nhẹ (`low_thud`, `subtle_whoosh`, `camera_click`, `wind_swell`)."""
+    cue = (cue or "none").strip().lower()
+    if cue == "low_thud":
+        n = int(0.45 * sr)
+        t = np.linspace(0.0, 0.45, n, endpoint=False, dtype=np.float32)
+        freq = 68.0 - 32.0 * (t / 0.45)
+        env = np.exp(-t * 8.5).astype(np.float32)
+        return (np.sin(2.0 * np.pi * np.cumsum(freq) / sr) * env * 0.42).astype(np.float32)
+    if cue == "subtle_whoosh":
+        n = int(0.36 * sr)
+        rng = np.random.default_rng(7)
+        noise = rng.normal(0.0, 1.0, n).astype(np.float32)
+        b, a = signal.butter(2, [300.0 / (sr / 2), min(0.95, 2200.0 / (sr / 2))], btype="band")
+        filtered = signal.lfilter(b, a, noise).astype(np.float32)
+        env = np.hanning(n).astype(np.float32)
+        return (filtered * env * 0.18).astype(np.float32)
+    if cue == "camera_click":
+        n = int(0.09 * sr)
+        t = np.linspace(0.0, 0.09, n, endpoint=False, dtype=np.float32)
+        rng = np.random.default_rng(13)
+        click = rng.normal(0.0, 1.0, n).astype(np.float32) * np.exp(-t * 65.0)
+        return (click * 0.25).astype(np.float32)
+    if cue == "wind_swell":
+        n = int(0.68 * sr)
+        rng = np.random.default_rng(21)
+        noise = rng.normal(0.0, 1.0, n).astype(np.float32)
+        b, a = signal.butter(2, min(0.95, 750.0 / (sr / 2)), btype="low")
+        filtered = signal.lfilter(b, a, noise).astype(np.float32)
+        env = np.hanning(n).astype(np.float32)
+        return (filtered * env * 0.22).astype(np.float32)
+    return np.zeros(0, dtype=np.float32)
+
+
+def _master_and_mix(
+    raw_voice: np.ndarray,
+    vits_sr: int,
+    sample_rate: int,
+    wav_path: Path,
+    sfx_events: Optional[List[Tuple[float, str]]] = None,
+) -> Path:
     if vits_sr != sample_rate:
         target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
         raw_voice = signal.resample(raw_voice, target_len).astype(np.float32)
@@ -256,6 +296,14 @@ def _master_and_mix(raw_voice: np.ndarray, vits_sr: int, sample_rate: int, wav_p
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
     bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env)
     final_mix = mastered_voice * 0.86 + bgm
+    if sfx_events:
+        for t_sec, cue in sfx_events:
+            sfx = _synth_sfx(cue, sample_rate)
+            if len(sfx) > 0:
+                idx = max(0, int(t_sec * sample_rate))
+                end = min(len(final_mix), idx + len(sfx))
+                if end > idx:
+                    final_mix[idx:end] += sfx[: end - idx]
     final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.90
     wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
     print(f"[TTS Neural VITS Studio] Đã sinh giọng đọc (`facebook/mms-tts-vie` + Studio EQ + BGM) -> {wav_path.name}")
@@ -274,6 +322,7 @@ def synthesize_scene_voiceover(
     output_filename: Any = "voiceover_studio.wav",
     sample_rate: int = AUDIO_SAMPLE_RATE,
     scene_gap_sec: float = 0.18,
+    sfx_cues: Optional[List[str]] = None,
 ) -> Tuple[Path, List[Tuple[float, float]]]:
     """
     Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
@@ -290,15 +339,20 @@ def synthesize_scene_voiceover(
     chunks: List[np.ndarray] = [np.zeros(int(lead * vits_sr), dtype=np.float32)]
     cursor = lead
     timings: List[Tuple[float, float]] = []
-    for text in scene_texts:
+    sfx_events: List[Tuple[float, str]] = []
+    for i, text in enumerate(scene_texts):
         audio = _vits_clause_audio(normalize_vi_text_for_tts(text), model, tokenizer, vits_sr, torch)
         dur = len(audio) / float(vits_sr)
         timings.append((round(cursor, 3), round(cursor + dur, 3)))
+        if sfx_cues and i < len(sfx_cues):
+            cue = str(sfx_cues[i] or "none").strip().lower()
+            if cue != "none":
+                sfx_events.append((max(0.0, cursor - 0.08), cue))
         chunks.append(audio)
         chunks.append(np.zeros(int(scene_gap_sec * vits_sr), dtype=np.float32))
         cursor += dur + scene_gap_sec
     chunks.append(np.zeros(int(0.45 * vits_sr), dtype=np.float32))
-    _master_and_mix(np.concatenate(chunks), vits_sr, sample_rate, wav_path)
+    _master_and_mix(np.concatenate(chunks), vits_sr, sample_rate, wav_path, sfx_events=sfx_events)
     return wav_path, timings
 
 

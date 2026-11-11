@@ -144,3 +144,4 @@ def print_diagnostics(checkpoint_db: Path = CHECKPOINT_DB_PATH, limit: int = 5) 
     else:
         print(f"  (Chưa có log trong {LOG_DIR})")
     print("=" * 96)
+
