@@ -10,6 +10,7 @@ Chế độ Sách RAG & Đăng Hằng Ngày:
     python main.py --book nha_gia_kim "Bí mật hạnh phúc qua hai giọt dầu"
     python main.py --book nha_gia_kim --chunk 14
     python main.py --book nha_gia_kim --daily
+    python main.py --logs                      # xem checkpoint & error log gần nhất
 
 Chế độ (`--mode`): NO_HUMAN_BROLL (mặc định/tự suy ra) | HUMAN_NO_LIPSYNC | HUMAN_WITH_LIPSYNC (chưa có nhép môi).
 Luồng: filter_context (RAG nếu có --book) -> intent_router -> prompt_architect (kịch bản + cảnh)
@@ -27,6 +28,7 @@ from graph.book_rag import (
     list_book_chunks,
     mark_chunk_done,
 )
+from graph.run_logger import print_diagnostics, start_run_log
 from graph.workflow import create_christian_short_video_app
 
 
@@ -38,6 +40,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "book": "",
         "chunk": 0,
         "daily": False,
+        "logs": False,
         "topic": "",
     }
     words = []
@@ -56,6 +59,8 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["chunk"] = int(raw) if raw.isdigit() else 0
         elif a == "--daily":
             opts["daily"] = True
+        elif a == "--logs":
+            opts["logs"] = True
         else:
             words.append(a)
     opts["topic"] = " ".join(words).strip()
@@ -91,6 +96,10 @@ def main():
         _print_book_queue(opts["list_book"])
         return
 
+    if opts["logs"]:
+        print_diagnostics()
+        return
+
     book_id = opts["book"]
     chunk_idx = opts["chunk"]
     topic = opts["topic"]
@@ -113,31 +122,39 @@ def main():
     if not topic:
         topic = "Chiến dịch Điện Biên Phủ 1954: 56 ngày đêm thay đổi cục diện"
 
-    app = create_christian_short_video_app()
-    config = {"configurable": {"thread_id": f"topic_to_video_{int(time.time())}"}}
+    log_path, stop_log = start_run_log(book_id or topic[:24])
+    try:
+        app = create_christian_short_video_app()
+        config = {"configurable": {"thread_id": f"topic_to_video_{int(time.time())}"}}
 
-    print("=" * 96)
-    print(
-        f"CHỦ ĐỀ: {topic}"
-        + (f" | BOOK: {book_id}" if book_id else "")
-        + (f" (chunk #{chunk_idx})" if chunk_idx else "")
-        + (f" | MODE: {opts['mode']}" if opts["mode"] else "")
-    )
-    print("=" * 96)
+        print("=" * 96)
+        print(
+            f"CHỦ ĐỀ: {topic}"
+            + (f" | BOOK: {book_id}" if book_id else "")
+            + (f" (chunk #{chunk_idx})" if chunk_idx else "")
+            + (f" | MODE: {opts['mode']}" if opts["mode"] else "")
+        )
+        print("=" * 96)
 
-    state = app.invoke(
-        {
-            "user_request": topic,
-            "intent_mode": opts["mode"],
-            "book_id": book_id,
-            "book_chunk_idx": chunk_idx,
-        },
-        config=config,
-    )
+        state = app.invoke(
+            {
+                "user_request": topic,
+                "intent_mode": opts["mode"],
+                "book_id": book_id,
+                "book_chunk_idx": chunk_idx,
+            },
+            config=config,
+        )
 
-    if opts["daily"] and active_chunk:
-        mark_chunk_done(int(active_chunk["chunk_id"]), state.get("final_master_video_path", ""))
-        print(f"[Book RAG] Đã đánh dấu Chunk #{chunk_idx} là DONE trong hàng đợi hằng ngày.")
+        if opts["daily"] and active_chunk:
+            mark_chunk_done(int(active_chunk["chunk_id"]), state.get("final_master_video_path", ""))
+            print(f"[Book RAG] Đã đánh dấu Chunk #{chunk_idx} là DONE trong hàng đợi hằng ngày.")
+    except Exception:
+        print(f"\n[Log] Xem toàn bộ log lỗi tại: {log_path}")
+        print("[Log] Hoặc chạy: python main.py --logs")
+        raise
+    finally:
+        stop_log()
 
     scenes = state.get("scenes", [])
     v = state["visual_scores"]

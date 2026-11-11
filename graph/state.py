@@ -97,6 +97,16 @@ def character_registry_reducer(
     return registry
 
 
+def error_logs_reducer(
+    existing: Optional[List[str]],
+    updates: Optional[List[str]],
+) -> List[str]:
+    logs = list(existing) if existing else []
+    if updates:
+        logs.extend(str(x) for x in updates if x)
+    return logs
+
+
 class ChristianVideoState(TypedDict):
     user_request: str
     intent_mode: str  # NO_HUMAN_BROLL | HUMAN_NO_LIPSYNC | HUMAN_WITH_LIPSYNC (người dùng chọn hoặc router tự suy ra)
@@ -175,3 +185,6 @@ class ChristianVideoState(TypedDict):
     tiktok_publish_status: str
     tiktok_caption: str
     visual_retry_count: int
+    last_completed_node: str
+    run_status: str
+    error_logs: Annotated[List[str], error_logs_reducer]

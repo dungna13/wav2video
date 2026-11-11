@@ -7,6 +7,8 @@
 # Thư mục đầu ra Video, Audio (giữ lại các file .sqlite trong workspace/)
 workspace/*
 !workspace/*.sqlite
+workspace/logs/
+*.log
 output_audio/
 assets/continuity_state/
 *.mp4

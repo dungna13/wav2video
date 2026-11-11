@@ -4,6 +4,7 @@ Module lắp ghép 5 Nodes vào `StateGraph` (Topic -> Intent Router -> LLM Scri
 
 import json
 import sqlite3
+import traceback
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, Annotated, get_type_hints, get_origin, get_args
 
@@ -35,6 +36,19 @@ except ImportError:
                 )
                 """
             )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS error_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    thread_id TEXT NOT NULL,
+                    node_name TEXT NOT NULL,
+                    error_type TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    traceback TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
             self.conn.commit()
 
         def get(self, thread_id: str) -> Dict[str, Any]:
@@ -47,7 +61,17 @@ except ImportError:
         def put(self, thread_id: str, state: Dict[str, Any]):
             self.conn.execute(
                 "INSERT OR REPLACE INTO checkpoints (thread_id, state_json, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (thread_id, json.dumps(state, ensure_ascii=False)),
+                (thread_id, json.dumps(state, ensure_ascii=False, default=str)),
+            )
+            self.conn.commit()
+
+        def log_error(self, thread_id: str, node_name: str, exc: Exception, tb_str: str) -> None:
+            self.conn.execute(
+                """
+                INSERT INTO error_logs (thread_id, node_name, error_type, message, traceback)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (thread_id, node_name, type(exc).__name__, str(exc), tb_str),
             )
             self.conn.commit()
 
@@ -92,16 +116,41 @@ except ImportError:
                 else:
                     current_state[k] = v
 
+            current_state["run_status"] = "running"
+            if self.checkpointer:
+                self.checkpointer.put(thread_id, current_state)
+
             curr_node = self.edges.get(START)
             while curr_node and curr_node != END:
                 node_fn = self.nodes[curr_node]
-                updates = node_fn(current_state) or {}
+                try:
+                    updates = node_fn(current_state) or {}
+                except Exception as exc:
+                    tb_str = traceback.format_exc()
+                    err_entry = f"[{curr_node}] {type(exc).__name__}: {exc}"
+                    err_fn = self.reducers.get("error_logs")
+                    if err_fn:
+                        current_state["error_logs"] = err_fn(current_state.get("error_logs"), [err_entry])
+                    else:
+                        current_state["error_logs"] = list(current_state.get("error_logs") or []) + [err_entry]
+                    current_state["run_status"] = f"failed_at:{curr_node}"
+                    if self.checkpointer:
+                        self.checkpointer.put(thread_id, current_state)
+                        if hasattr(self.checkpointer, "log_error"):
+                            self.checkpointer.log_error(thread_id, curr_node, exc, tb_str)
+                    print(f"\n[ERROR] Pipeline dừng tại node '{curr_node}': {type(exc).__name__}: {exc}")
+                    print(tb_str)
+                    raise
 
                 for k, v in updates.items():
                     if k in self.reducers:
                         current_state[k] = self.reducers[k](current_state.get(k), v)
                     else:
                         current_state[k] = v
+                current_state["last_completed_node"] = curr_node
+
+                if self.checkpointer:
+                    self.checkpointer.put(thread_id, current_state)
 
                 if curr_node in self.conditional_edges:
                     router_fn, mapping = self.conditional_edges[curr_node]
@@ -110,6 +159,7 @@ except ImportError:
                 else:
                     curr_node = self.edges.get(curr_node, END)
 
+            current_state["run_status"] = "completed"
             if self.checkpointer:
                 self.checkpointer.put(thread_id, current_state)
 
