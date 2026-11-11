@@ -171,6 +171,7 @@ def create_christian_short_video_app(
         "prompt_scorer_node",
         should_retry_prompt,
         {
+            "retry_rag": "filter_context_node",
             "prompt_architect_node": "prompt_architect_node",
             "media_generator_node": "media_generator_node",
         },

@@ -11,6 +11,7 @@ Hỗ trợ nạp sách (.epub, .txt, .md, .docx, .pdf) 1 lần vào SQLite + FTS
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import time
@@ -19,11 +20,15 @@ import zipfile
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from config.settings import WORKSPACE_DIR
 
 BOOK_RAG_DB_PATH: Path = WORKSPACE_DIR / "book_rag.sqlite"
+EMBED_MODEL_ID: str = os.getenv("RAG_EMBED_MODEL", "intfloat/multilingual-e5-small").strip()
+_EMBED_CACHE: Dict[str, Any] = {}
 
 _SECTION_RE = re.compile(
     r"^(?:"
@@ -294,10 +299,14 @@ def _connect_db(db_path: Path = BOOK_RAG_DB_PATH) -> sqlite3.Connection:
             word_count INTEGER NOT NULL,
             topic_suggestion TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'pending',
-            last_video_path TEXT NOT NULL DEFAULT ''
+            last_video_path TEXT NOT NULL DEFAULT '',
+            embedding BLOB DEFAULT NULL
         )
         """
     )
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(chunks)").fetchall()}
+    if "embedding" not in cols:
+        conn.execute("ALTER TABLE chunks ADD COLUMN embedding BLOB DEFAULT NULL")
     conn.execute(
         """
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -320,13 +329,109 @@ def _fallback_topic_from_chunk(book_title: str, section_title: str, content: str
     return f"Review sách {book_title} ({section_title}): {snippet}"
 
 
+def _get_embedder() -> Tuple[Any, Any]:
+    """Tải model embedding đa ngôn ngữ/tiếng Việt chạy local CPU (0 token API)."""
+    if "ready" in _EMBED_CACHE:
+        return _EMBED_CACHE.get("tok"), _EMBED_CACHE.get("mod")
+    try:
+        from transformers import AutoModel, AutoTokenizer
+
+        try:
+            tok = AutoTokenizer.from_pretrained(EMBED_MODEL_ID, local_files_only=True)
+            mod = AutoModel.from_pretrained(EMBED_MODEL_ID, local_files_only=True)
+        except Exception:
+            tok = AutoTokenizer.from_pretrained(EMBED_MODEL_ID)
+            mod = AutoModel.from_pretrained(EMBED_MODEL_ID)
+        mod.eval()
+        _EMBED_CACHE.update({"ready": True, "tok": tok, "mod": mod})
+        return tok, mod
+    except Exception as e:
+        print(f" [Book RAG] Chưa nạp được model embedding local ({e}) -> Dùng BM25/FTS5 thuần.")
+        _EMBED_CACHE.update({"ready": False, "tok": None, "mod": None})
+        return None, None
+
+
+def embed_texts(texts: Sequence[str], is_query: bool = False, batch_size: int = 16) -> Optional[np.ndarray]:
+    """Mã hóa danh sách văn bản sang vector chuẩn hóa L2 (float32)."""
+    if not texts:
+        return None
+    tok, mod = _get_embedder()
+    if tok is None or mod is None:
+        return None
+    import torch
+
+    prefix = "query: " if (is_query and "e5" in EMBED_MODEL_ID.lower()) else ("passage: " if "e5" in EMBED_MODEL_ID.lower() else "")
+    vecs: List[np.ndarray] = []
+    for i in range(0, len(texts), batch_size):
+        batch = [prefix + t.strip() for t in texts[i : i + batch_size]]
+        enc = tok(batch, padding=True, truncation=True, max_length=384, return_tensors="pt")
+        with torch.no_grad():
+            out = mod(**enc)
+            mask = enc["attention_mask"].unsqueeze(-1).expand(out.last_hidden_state.size()).float()
+            emb = (out.last_hidden_state * mask).sum(1) / torch.clamp(mask.sum(1), min=1e-9)
+            emb = torch.nn.functional.normalize(emb, p=2, dim=1)
+        vecs.append(emb.cpu().numpy().astype(np.float32))
+    return np.vstack(vecs)
+
+
+def _embed_chunk_text(section_title: str, content: str) -> Optional[bytes]:
+    """Chia chunk dài thành 2-3 cửa sổ gối đầu rồi lấy trung bình vector để đại diện trọn vẹn cả đoạn."""
+    words = content.split()
+    if not words:
+        return None
+    windows: List[str] = []
+    step, win_size = 240, 300
+    for start in range(0, len(words), step):
+        seg = " ".join(words[start : start + win_size])
+        windows.append(f"{section_title}: {seg}")
+        if start + win_size >= len(words) or len(windows) >= 4:
+            break
+    embs = embed_texts(windows, is_query=False)
+    if embs is None:
+        return None
+    avg = embs.mean(axis=0)
+    norm = float(np.linalg.norm(avg))
+    if norm > 1e-9:
+        avg = avg / norm
+    return avg.astype(np.float32).tobytes()
+
+
+def ensure_book_embeddings(book_id: str, db_path: Path = BOOK_RAG_DB_PATH) -> int:
+    """Tính & lưu embedding local cho các chunk còn thiếu (chỉ chạy 1 lần mỗi sách)."""
+    if not db_path.exists():
+        return 0
+    conn = _connect_db(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT chunk_id, section_title, content FROM chunks WHERE book_id = ? AND embedding IS NULL ORDER BY chunk_idx",
+            (book_id,),
+        ).fetchall()
+        if not rows:
+            return 0
+        tok, mod = _get_embedder()
+        if tok is None or mod is None:
+            return 0
+        print(f"[Book RAG] Đang tạo vector ngữ nghĩa local cho {len(rows)} chunks của '{book_id}' (0 token API)...")
+        updated = 0
+        for r in rows:
+            blob = _embed_chunk_text(r["section_title"], r["content"])
+            if blob is not None:
+                conn.execute("UPDATE chunks SET embedding = ? WHERE chunk_id = ?", (blob, r["chunk_id"]))
+                updated += 1
+        conn.commit()
+        return updated
+    finally:
+        conn.close()
+
+
 def ingest_book(
     file_path: str | Path,
     book_id: Optional[str] = None,
     target_words: int = 900,
     db_path: Path = BOOK_RAG_DB_PATH,
+    build_embeddings: bool = True,
 ) -> Dict[str, Any]:
-    """Nạp toàn bộ sách vào SQLite FTS5 RAG + tạo hàng đợi topic hằng ngày."""
+    """Nạp toàn bộ sách vào SQLite FTS5 + Vector Embedding local + hàng đợi topic hằng ngày."""
     t0 = time.perf_counter()
     title, paragraphs = extract_book_paragraphs(file_path)
     chunks = chunk_book_paragraphs(paragraphs, target_words=target_words)
@@ -364,13 +469,18 @@ def ingest_book(
     finally:
         conn.close()
 
+    embedded_cnt = ensure_book_embeddings(resolved_id, db_path) if build_embeddings else 0
     elapsed = round(time.perf_counter() - t0, 3)
-    print(f"[Book RAG] Đã nạp '{title}' (book_id={resolved_id}) | {len(chunks)} chunks | {total_words} từ | {elapsed}s")
+    print(
+        f"[Book RAG] Đã nạp '{title}' (book_id={resolved_id}) | {len(chunks)} chunks | {total_words} từ "
+        f"| vectors={embedded_cnt} | {elapsed}s"
+    )
     return {
         "book_id": resolved_id,
         "title": title,
         "total_chunks": len(chunks),
         "total_words": total_words,
+        "embedded_chunks": embedded_cnt,
         "elapsed_sec": elapsed,
         "db_path": str(db_path),
     }
@@ -391,24 +501,25 @@ def _fts_query_terms(query: str) -> str:
     return " OR ".join(f'"{t}"' for t in kept)
 
 
-def _rerank_by_coverage(query: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Ưu tiên chunk khớp nhiều từ khoá phân biệt & cụm 2 từ liên tiếp (bigram) thay vì lặp 1 từ phổ biến."""
+def _lexical_scores(query: str, rows: List[Dict[str, Any]], fts_ranks: Dict[int, float]) -> Dict[int, float]:
+    """Tính điểm khớp từ khóa BM25 + bigram coverage chuẩn hóa về [0.0, 1.0]."""
     q_tokens = _query_tokens(query)
-    if not q_tokens:
-        return rows
     bigrams = [f"{q_tokens[i]} {q_tokens[i + 1]}" for i in range(len(q_tokens) - 1)]
-
-    scored: List[Tuple[float, Dict[str, Any]]] = []
-    for idx, row in enumerate(rows):
+    raw_scores: Dict[int, float] = {}
+    max_s = 0.0
+    for row in rows:
+        cid = int(row["chunk_id"])
         hay = f"{row.get('section_title', '')} {row.get('content', '')}".lower()
-        uniq_hits = sum(1 for t in set(q_tokens) if re.search(rf"\b{re.escape(t)}\b", hay))
-        bigram_hits = sum(1 for bg in bigrams if bg in hay)
-        bm25_bonus = max(0.0, 2.0 - idx * 0.15)
-        score = uniq_hits * 2.0 + bigram_hits * 4.5 + bm25_bonus
-        scored.append((score, row))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [r for _, r in scored]
+        uniq_hits = sum(1 for t in set(q_tokens) if re.search(rf"\b{re.escape(t)}\b", hay)) if q_tokens else 0
+        bigram_hits = sum(1 for bg in bigrams if bg in hay) if bigrams else 0
+        fts_bonus = fts_ranks.get(cid, 0.0)
+        sc = uniq_hits * 2.0 + bigram_hits * 4.5 + fts_bonus
+        raw_scores[cid] = sc
+        if sc > max_s:
+            max_s = sc
+    if max_s <= 0:
+        return {int(r["chunk_id"]): 0.0 for r in rows}
+    return {cid: val / max_s for cid, val in raw_scores.items()}
 
 
 def format_chunks_for_prompt(book_title: str, chunks: List[Dict[str, Any]], max_words: int = 1600) -> str:
@@ -433,9 +544,13 @@ def retrieve_chunks(
     query: str,
     book_id: Optional[str] = None,
     top_k: int = 2,
+    exclude_chunk_ids: Optional[Sequence[int]] = None,
     db_path: Path = BOOK_RAG_DB_PATH,
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    """Truy xuất Top-K chunk khớp nhất bằng SQLite FTS5 BM25 (hoặc theo số chương nếu query nêu rõ)."""
+    """
+    Hybrid Search (Từ khóa SQLite FTS5 BM25 + Vector Ngữ nghĩa local multilingual-e5-small).
+    Trả về `(context_str, results)` trong đó mỗi chunk đính kèm `s_rag`, `dense_score`, `lexical_score`.
+    """
     if not db_path.exists():
         return "", []
 
@@ -450,43 +565,142 @@ def retrieve_chunks(
 
         book_row = conn.execute("SELECT title FROM books WHERE book_id = ?", (resolved_book,)).fetchone()
         book_title = book_row["title"] if book_row else resolved_book
+    finally:
+        conn.close()
 
-        rows: List[sqlite3.Row] = []
+    ensure_book_embeddings(resolved_book, db_path)
+
+    conn = _connect_db(db_path)
+    try:
+        fts_ranks: Dict[int, float] = {}
         fts_q = _fts_query_terms(query)
         if fts_q:
             try:
-                rows = conn.execute(
+                fts_rows = conn.execute(
                     """
-                    SELECT c.chunk_id, c.book_id, c.chunk_idx, c.section_title, c.content, c.word_count,
-                           c.topic_suggestion, c.status, bm25(chunks_fts) AS rank
+                    SELECT c.chunk_id
                     FROM chunks_fts
                     JOIN chunks c ON chunks_fts.chunk_id = c.chunk_id
                     WHERE chunks_fts MATCH ? AND c.book_id = ?
-                    ORDER BY rank
-                    LIMIT ?
+                    ORDER BY bm25(chunks_fts)
+                    LIMIT 20
                     """,
-                    (fts_q, resolved_book, max(12, top_k * 5)),
+                    (fts_q, resolved_book),
                 ).fetchall()
+                for idx, fr in enumerate(fts_rows):
+                    fts_ranks[int(fr["chunk_id"])] = max(0.2, 2.5 - idx * 0.12)
             except sqlite3.OperationalError:
-                rows = []
+                pass
 
-        if not rows:
-            rows = conn.execute(
-                """
-                SELECT chunk_id, book_id, chunk_idx, section_title, content, word_count, topic_suggestion, status
-                FROM chunks
-                WHERE book_id = ?
-                ORDER BY chunk_idx ASC
-                LIMIT ?
-                """,
-                (resolved_book, top_k),
-            ).fetchall()
-
-        results = _rerank_by_coverage(query, [dict(r) for r in rows])[:top_k]
-        context = format_chunks_for_prompt(book_title, results)
-        return context, results
+        all_rows = conn.execute(
+            """
+            SELECT chunk_id, book_id, chunk_idx, section_title, content, word_count, topic_suggestion, status, embedding
+            FROM chunks
+            WHERE book_id = ?
+            ORDER BY chunk_idx ASC
+            """,
+            (resolved_book,),
+        ).fetchall()
     finally:
         conn.close()
+
+    excluded = set(int(x) for x in (exclude_chunk_ids or []))
+    candidates = [dict(r) for r in all_rows if int(r["chunk_id"]) not in excluded]
+    if not candidates:
+        candidates = [dict(r) for r in all_rows]
+    if not candidates:
+        return "", []
+
+    lex_map = _lexical_scores(query, candidates, fts_ranks)
+
+    q_vec = embed_texts([query], is_query=True)
+    dense_raw: Dict[int, float] = {}
+    if q_vec is not None:
+        valid_vecs: List[np.ndarray] = []
+        valid_cids: List[int] = []
+        for c in candidates:
+            blob = c.get("embedding")
+            if blob:
+                vec = np.frombuffer(blob, dtype=np.float32)
+                if vec.shape[0] == q_vec.shape[1]:
+                    valid_vecs.append(vec)
+                    valid_cids.append(int(c["chunk_id"]))
+        if valid_vecs:
+            mat = np.vstack(valid_vecs)
+            sims = (mat @ q_vec[0]).tolist()
+            for cid, sim in zip(valid_cids, sims):
+                dense_raw[cid] = float(sim)
+
+    max_d = max(dense_raw.values()) if dense_raw else 1.0
+    min_d = min(dense_raw.values()) if dense_raw else 0.0
+    span_d = max(1e-5, max_d - min_d)
+
+    scored_rows: List[Tuple[float, Dict[str, Any]]] = []
+    for c in candidates:
+        cid = int(c["chunk_id"])
+        c.pop("embedding", None)
+        lex_s = lex_map.get(cid, 0.0)
+        if cid in dense_raw:
+            d_raw = dense_raw[cid]
+            d_norm = (d_raw - min_d) / span_d
+            hybrid = 0.62 * d_norm + 0.38 * lex_s
+            s_rag = round(min(1.0, max(0.0, 0.72 * d_raw + 0.28 * lex_s)), 4)
+        else:
+            d_raw = 0.0
+            hybrid = lex_s
+            s_rag = round(lex_s, 4)
+
+        c["dense_score"] = round(d_raw, 4)
+        c["lexical_score"] = round(lex_s, 4)
+        c["s_rag"] = s_rag
+        scored_rows.append((hybrid, c))
+
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+    results = [row for _, row in scored_rows[:top_k]]
+    context = format_chunks_for_prompt(book_title, results)
+    return context, results
+
+
+def compute_groundedness_local(scenes: List[Dict[str, Any]], source_text: str) -> Tuple[float, List[int]]:
+    """
+    Chấm độ bám sát đoạn sách (Groundedness) hoàn toàn LOCAL (0 token API):
+    So sánh từng câu `narration_vn` với các cửa sổ câu trong `source_text` bằng Vector Cosine + Khớp từ nội dung.
+    Trả về `(groundedness_score [0..1], danh_sách_cảnh_yếu)`.
+    """
+    if not scenes or not source_text or not source_text.strip():
+        return 1.0, []
+
+    body_lines = [ln for ln in source_text.splitlines() if not ln.startswith("[Sách:") and ln.strip() != "---"]
+    words = " ".join(body_lines).split()
+    if len(words) < 20:
+        return 1.0, []
+
+    passages = [" ".join(words[i : i + 65]) for i in range(0, len(words), 40)]
+    narrations = [str(s.get("narration_vn", "")).strip() for s in scenes]
+
+    full_low = " ".join(words).lower()
+    s_vecs = embed_texts(narrations, is_query=True)
+    p_vecs = embed_texts(passages, is_query=False)
+
+    sim_matrix = (s_vecs @ p_vecs.T) if (s_vecs is not None and p_vecs is not None) else None
+    scene_scores: List[float] = []
+    weak_scenes: List[int] = []
+
+    for idx, narr in enumerate(narrations):
+        tokens = [t for t in _query_tokens(narr) if len(t) >= 3]
+        overlap = (sum(1 for t in set(tokens) if t in full_low) / max(1, len(set(tokens)))) if tokens else 0.5
+        if sim_matrix is not None:
+            raw_sem = float(sim_matrix[idx].max())
+            sem_norm = min(1.0, max(0.0, (raw_sem - 0.71) / 0.17))
+            sc = 0.72 * sem_norm + 0.28 * overlap
+        else:
+            sc = overlap
+        scene_scores.append(sc)
+        if sc < 0.50:
+            weak_scenes.append(idx + 1)
+
+    avg = float(sum(scene_scores) / max(1, len(scene_scores)))
+    return round(min(1.0, max(0.0, avg)), 4), weak_scenes
 
 
 def get_chunk_by_idx(

@@ -104,10 +104,14 @@ class ChristianVideoState(TypedDict):
     intent_notes: str
     characters: Annotated[Dict[str, CharacterProfile], character_registry_reducer]
 
-    # Node 1 (`filter_context_node`)
+    # Node 1 (`filter_context_node` + Book RAG QueryRewriter)
     book_id: str
     book_chunk_idx: int
     book_chunk_id: int
+    rag_relevance_score: float
+    rag_retry_count: int
+    rag_tried_chunk_ids: List[int]
+    rag_search_query: str
     detected_characters: List[str]
     filtered_character_context: str
     known_reference_urls: List[str]
@@ -135,11 +139,13 @@ class ChristianVideoState(TypedDict):
     # Node 3 (`prompt_scorer_node`)
     rendered_scorer_prompt: str
     rag_faithfulness_score: float
+    script_groundedness_score: float
     cinematic_quality_score: float
     theological_moral_score: float
     average_score: float
     pass_validation: bool
     prompt_feedback: str
+    retry_target: str
     retry: int
 
     # Node 4 (`media_generator_node`)

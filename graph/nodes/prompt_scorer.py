@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Tuple
 
 from config.settings import MIN_AVERAGE_SCORE, MAX_PROMPT_RETRIES
 from prompts.scorer_prompt import render_scorer_prompt
+from graph.book_rag import compute_groundedness_local
 from graph.llm_client import call_gemini_thinking_structured, SCORER_GEMINI_SCHEMA
 from graph.state import ChristianVideoState
 
@@ -184,35 +185,64 @@ def prompt_scorer_node(state: ChristianVideoState) -> Dict[str, Any]:
                 pass
 
     weighted_avg = round(0.30 * hook + 0.35 * visual + 0.35 * story, 2)
-    pass_val = (not hard) and weighted_avg >= MIN_AVERAGE_SCORE and visual >= MIN_AVERAGE_SCORE
+
+    groundedness = 1.0
+    weak_scenes: List[int] = []
+    retry_target = ""
+    rag_retry_count = int(state.get("rag_retry_count", 0) or 0)
+    book_id = str(state.get("book_id", "") or "").strip()
+    retrieved_ctx = str(state.get("retrieved_scripture", "") or "").strip()
+    if book_id and retrieved_ctx:
+        groundedness, weak_scenes = compute_groundedness_local(scenes, retrieved_ctx)
+        if groundedness < 0.62 and weak_scenes:
+            msg = (
+                f"Cảnh {weak_scenes}: chưa bám sát đoạn sách đã trích "
+                f"(Local Groundedness={groundedness:.2f}); cần dùng đúng tình tiết trong đoạn sách hoặc tìm lại chunk khác."
+            )
+            if (
+                len(weak_scenes) >= max(3, len(scenes) // 2)
+                and rag_retry_count < 3
+                and int(state.get("book_chunk_idx", 0) or 0) == 0
+            ):
+                retry_target = "retry_rag"
+                hard.append(msg)
+            else:
+                soft.append(msg)
+
+    pass_val = (not hard) and weighted_avg >= MIN_AVERAGE_SCORE and visual >= MIN_AVERAGE_SCORE and groundedness >= 0.55
 
     feedback_lines = hard + soft
     if critic_feedback:
         feedback_lines.append(critic_feedback)
     feedback = " | ".join(feedback_lines)
 
+    ground_log = f" | Ground={groundedness:.2f}" if (book_id and retrieved_ctx) else ""
     print(
-        f"[Node 3: prompt_scorer_node] Điểm: {weighted_avg}/10 (Hook={hook}, Khớp hình-lời={visual}, Mạch kể={story}) "
+        f"[Node 3: prompt_scorer_node] Điểm: {weighted_avg}/10 (Hook={hook}, Khớp hình-lời={visual}, Mạch kể={story}{ground_log}) "
         f"| LLM critic={'có' if critic_used else 'không'} | lỗi nặng={len(hard)} nhẹ={len(soft)} | Pass={pass_val}"
     )
     if not pass_val and feedback:
-        print(f"   └─ Phản hồi gửi lại Architect: {feedback[:400]}")
+        print(f"   └─ Phản hồi gửi lại {'QueryRewriter (RAG)' if retry_target == 'retry_rag' else 'Architect'}: {feedback[:400]}")
 
     return {
         "rendered_scorer_prompt": rendered,
-        "rag_faithfulness_score": story,
+        "rag_faithfulness_score": round(story * groundedness, 2) if (book_id and retrieved_ctx) else story,
+        "script_groundedness_score": groundedness,
         "cinematic_quality_score": visual,
         "theological_moral_score": hook,
         "average_score": weighted_avg,
         "pass_validation": pass_val,
         "prompt_feedback": "" if pass_val else feedback,
-        "retry": retry_count + 1,
+        "retry_target": "" if pass_val else retry_target,
+        "retry": retry_count if retry_target == "retry_rag" else (retry_count + 1),
     }
 
 
 def should_retry_prompt(state: ChristianVideoState) -> str:
     if state.get("pass_validation", False):
         return "media_generator_node"
+    if state.get("retry_target") == "retry_rag" and int(state.get("rag_retry_count", 0) or 0) < 3:
+        return "retry_rag"
     if state.get("retry", 0) >= MAX_PROMPT_RETRIES:
         return "media_generator_node"
     return "prompt_architect_node"
