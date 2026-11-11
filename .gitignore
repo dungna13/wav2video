@@ -4,8 +4,9 @@
 .env.*.local
 !.env.example
 
-# Thư mục đầu ra Video, Audio & Database tạm
-workspace/
+# Thư mục đầu ra Video, Audio (giữ lại các file .sqlite trong workspace/)
+workspace/*
+!workspace/*.sqlite
 output_audio/
 assets/continuity_state/
 *.mp4
@@ -14,6 +15,7 @@ assets/continuity_state/
 *.avi
 *.ass
 *.sqlite
+!workspace/*.sqlite
 *.sqlite3
 *.db
 
