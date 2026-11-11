@@ -139,32 +139,41 @@ def call_gemini_thinking_structured(
         return None
 
     if GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIza"):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-        generation_config: Dict[str, Any] = {
-            "temperature": GEMINI_TEMPERATURE,
-            "topP": 0.85,
-            "responseMimeType": "application/json",
-            "responseSchema": response_schema,
-        }
-        if "2.5" in GEMINI_MODEL and GEMINI_THINKING_BUDGET > 0:
-            generation_config["thinkingConfig"] = {"thinkingBudget": GEMINI_THINKING_BUDGET}
+        candidate_models = [GEMINI_MODEL]
+        for fallback_m in ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-2.5-flash"]:
+            if fallback_m not in candidate_models:
+                candidate_models.append(fallback_m)
 
-        payload = {
-            "systemInstruction": {"parts": [{"text": system_instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": generation_config,
-        }
-        try:
-            resp = requests.post(url, json=payload, timeout=90)
-            resp.raise_for_status()
-            data = resp.json()
-            parts = data["candidates"][0]["content"]["parts"]
-            parsed = _extract_json_object(parts[-1]["text"])
-            if parsed:
-                print(f"[LLM Thinking] Đã sinh JSON từ Gemini ({GEMINI_MODEL})")
-                return parsed
-        except Exception as e:
-            print(f" [Gemini API Info] Chuyển sang Free LLM Reasoning API do: {e}")
+        for model_name in candidate_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+            generation_config: Dict[str, Any] = {
+                "temperature": GEMINI_TEMPERATURE,
+                "topP": 0.85,
+                "responseMimeType": "application/json",
+                "responseSchema": response_schema,
+            }
+            if "2.5" in model_name and GEMINI_THINKING_BUDGET > 0:
+                generation_config["thinkingConfig"] = {"thinkingBudget": GEMINI_THINKING_BUDGET}
+
+            payload = {
+                "systemInstruction": {"parts": [{"text": system_instruction}]},
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": generation_config,
+            }
+            try:
+                resp = requests.post(url, json=payload, timeout=45)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    parts = data["candidates"][0]["content"]["parts"]
+                    parsed = _extract_json_object(parts[-1]["text"])
+                    if parsed:
+                        print(f"[LLM Thinking] Đã sinh JSON từ Gemini ({model_name})")
+                        return parsed
+                else:
+                    print(f" [Gemini {model_name}] HTTP {resp.status_code} ({resp.text[:120]}) -> Thử model dự phòng...")
+            except Exception as e:
+                print(f" [Gemini {model_name}] Lỗi: {e} -> Thử model dự phòng...")
+                continue
 
     # Gọi Free LLM Reasoning Endpoint (OpenAI-compatible `openai-fast`) hoàn toàn miễn phí
     if FREE_LLM_ENDPOINT:

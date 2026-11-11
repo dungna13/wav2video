@@ -36,7 +36,7 @@ TTS_PITCH: str = os.getenv("TTS_PITCH", "-2Hz").strip()
 # 2. CẤU HÌNH LLM THINKING API (ĐỌC TỪ `.env`)
 # =====================================================================
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip()
 GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
 GEMINI_THINKING_BUDGET: int = int(os.getenv("GEMINI_THINKING_BUDGET", "1024"))
 FREE_LLM_ENDPOINT: str = os.getenv("FREE_LLM_ENDPOINT", "https://text.pollinations.ai/openai").strip()
