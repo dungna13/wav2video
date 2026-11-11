@@ -154,11 +154,14 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
     user_request = state.get("user_request", "").strip()
     intent_mode = state.get("effective_intent_mode") or state.get("intent_mode") or "NO_HUMAN_BROLL"
 
+    rag_context = str(state.get("retrieved_scripture", "") or "").strip()
+
     rendered_prompt = render_architect_prompt(
         user_request=user_request,
         intent_mode=intent_mode,
         prompt_feedback=state.get("prompt_feedback", ""),
         filtered_character_context=state.get("filtered_character_context", ""),
+        source_context=rag_context,
     )
 
     llm_json = None
@@ -200,7 +203,7 @@ def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
     return {
         "topic_title": topic_title,
         "scripture_reference": topic_title,
-        "retrieved_scripture": " ".join(s["narration_vn"] for s in scenes),
+        "retrieved_scripture": rag_context or " ".join(s["narration_vn"] for s in scenes),
         "visual_archetype": genre,
         "visual_labels": labels,
         "rendered_architect_prompt": rendered_prompt,

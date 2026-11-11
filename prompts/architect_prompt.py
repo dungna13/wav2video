@@ -18,7 +18,7 @@ Khán giả: người lớn 18–45 tuổi, lướt rất nhanh, bỏ xem nếu 
 Chủ đề người dùng: "{user_request}"
 Chế độ hình ảnh (`intent_mode`): {intent_mode}
 Phản hồi từ giám khảo vòng trước (BẮT BUỘC sửa đúng từng điểm nếu có): "{prompt_feedback}"
-Ngữ cảnh kế thừa (nếu có): "{filtered_character_context}"
+Ngữ cảnh kế thừa (nếu có): "{filtered_character_context}"{source_context_block}
 
 ═══ 6 RULE NỀN (BẮT BUỘC) ═══
 
@@ -113,7 +113,7 @@ Tạo MỘT `style_anchor_en` (30–45 từ, tiếng Anh): chất liệu phim, b
 }"""
 
 
-_TOKENS = ("user_request", "intent_mode", "prompt_feedback", "filtered_character_context")
+_TOKENS = ("user_request", "intent_mode", "prompt_feedback", "filtered_character_context", "source_context_block")
 
 
 def render_architect_prompt(
@@ -121,12 +121,23 @@ def render_architect_prompt(
     intent_mode: str = "NO_HUMAN_BROLL",
     prompt_feedback: str = "",
     filtered_character_context: str = "",
+    source_context: str = "",
 ) -> str:
+    source_block = ""
+    if source_context and source_context.strip():
+        source_block = (
+            "\n\n═══ TƯ LIỆU SÁCH ĐÃ TRUY XUẤT (RAG CHUNK — BẮT BUỘC BÁM SÁT) ═══\n"
+            f"{source_context.strip()}\n"
+            "⚠️ Kỷ luật tư liệu: Bắt buộc khai thác đúng tình tiết, nhân vật, hình ảnh ẩn dụ hoặc câu thoại đắt giá từ đoạn sách trên; "
+            "KHÔNG bịa tình tiết mâu thuẫn với đoạn sách này, KHÔNG tóm tắt dàn trải cả cuốn sách."
+        )
+
     values = {
         "user_request": user_request,
         "intent_mode": intent_mode,
         "prompt_feedback": prompt_feedback or "Không có phản hồi lỗi.",
         "filtered_character_context": filtered_character_context or "Không có.",
+        "source_context_block": source_block,
     }
     out = PROMPT_ARCHITECT_TEMPLATE
     for k in _TOKENS:

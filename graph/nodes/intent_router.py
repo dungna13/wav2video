@@ -17,7 +17,7 @@ from graph.state import ChristianVideoState
 VALID_MODES = ("NO_HUMAN_BROLL", "HUMAN_NO_LIPSYNC", "HUMAN_WITH_LIPSYNC")
 
 _LIPSYNC_HINTS = ("mc dẫn", "người dẫn", "avatar", "nhép môi", "lipsync", "nói trực diện", "talking head", "host")
-_HUMAN_HINTS = ("chân dung", "người lính", "công nhân", "nông dân", "câu chuyện của", "cuộc đời", "cảm xúc", "gia đình")
+_HUMAN_HINTS = ("chân dung", "người lính", "công nhân", "nông dân", "câu chuyện", "chàng trai", "cuộc đời", "cảm xúc", "gia đình", "nhân vật")
 
 
 def _infer_mode(topic: str) -> str:

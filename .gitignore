@@ -17,6 +17,12 @@ assets/continuity_state/
 *.sqlite3
 *.db
 
+# Sách đầu vào cho RAG (tránh đẩy file sách bản quyền lên repo)
+*.epub
+*.pdf
+*.docx
+books/
+
 # Python cache & môi trường ảo
 __pycache__/
 *.py[cod]

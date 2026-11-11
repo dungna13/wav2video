@@ -111,8 +111,8 @@ def rule_check(
             sq_words = len(stock_q.split())
             if sq_words < 2 or sq_words > 5:
                 soft.append(f"Cảnh {i}: stock_query_en có {sq_words} từ (nên 2–4 từ tiếng Anh).")
-        if overlay and len(overlay.split()) > 3:
-            soft.append(f"Cảnh {i}: overlay_keyword_vn dài hơn 3 từ ('{overlay}').")
+        if overlay and len(overlay.split()) > 5:
+            soft.append(f"Cảnh {i}: overlay_keyword_vn dài hơn 5 từ ('{overlay}').")
         has_human = _has_word(img, HUMAN_WORDS)
         human_scenes += int(has_human)
         if intent_mode == "NO_HUMAN_BROLL" and has_human:

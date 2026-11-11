@@ -105,6 +105,9 @@ class ChristianVideoState(TypedDict):
     characters: Annotated[Dict[str, CharacterProfile], character_registry_reducer]
 
     # Node 1 (`filter_context_node`)
+    book_id: str
+    book_chunk_idx: int
+    book_chunk_id: int
     detected_characters: List[str]
     filtered_character_context: str
     known_reference_urls: List[str]
