@@ -16,8 +16,6 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
-from PIL import Image
-
 from config.settings import IMAGE_WIDTH, IMAGE_HEIGHT, VIDEO_FPS
 
 TRANSITION_SEC = 0.35
@@ -184,29 +182,6 @@ def build_ass(
     return "\n".join(lines)
 
 
-def _make_contact_sheet(clips: List[Path], out_path: Path, run_dir: Path) -> None:
-    thumbs = []
-    ff = _ffmpeg()
-    for i, clip in enumerate(clips):
-        frame = run_dir / f"_thumb_{i}.jpg"
-        try:
-            _run([ff, "-y", "-ss", "0.6", "-i", str(clip), "-frames:v", "1", "-vf", "scale=180:-2", str(frame)])
-            thumbs.append(Image.open(frame).convert("RGB"))
-        except Exception:
-            continue
-        finally:
-            frame.unlink(missing_ok=True)
-    if not thumbs:
-        return
-    tw, th = thumbs[0].size
-    cols = min(len(thumbs), 5)
-    rows = (len(thumbs) + cols - 1) // cols
-    sheet = Image.new("RGB", (cols * tw, rows * th), (10, 10, 10))
-    for idx, im in enumerate(thumbs):
-        sheet.paste(im, ((idx % cols) * tw, (idx // cols) * th))
-    sheet.save(str(out_path), quality=90)
-
-
 def render_documentary_video(
     run_dir: Path,
     wav_path: Path,
@@ -262,11 +237,6 @@ def render_documentary_video(
         cwd=run_dir,
     )
 
-    keyframe = run_dir / "prepped_keyframe.jpg"
-    _run([ff, "-y", "-ss", "1.0", "-i", str(final_mp4), "-frames:v", "1", str(keyframe)])
-    contact = run_dir / "contact_sheet.jpg"
-    _make_contact_sheet(clips, contact, run_dir)
-
     timeline = [
         {
             "scene": i + 1,
@@ -299,8 +269,8 @@ def render_documentary_video(
     return {
         "final_master_video_path": str(final_mp4),
         "subtitles_ass_path": str(ass_path),
-        "prepped_visual_path": str(keyframe),
-        "contact_sheet_path": str(contact),
+        "prepped_visual_path": "",
+        "contact_sheet_path": "",
         "scene_timeline_path": str(run_dir / "scene_timeline.json"),
         "video_fps": fps,
         "duration_sec": total_audio_sec,

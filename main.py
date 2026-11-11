@@ -165,7 +165,8 @@ def main():
     print("=" * 96)
     print(f" • Video        : {state['final_master_video_path']}  ({state['audio_duration_sec']}s)")
     print(f" • Giọng + nhạc : {state['voiceover_wav_path']}")
-    print(f" • Contact sheet: {asset.get('contact_sheet')}   (xem nhanh tất cả cảnh)")
+    if asset.get("contact_sheet"):
+        print(f" • Contact sheet: {asset.get('contact_sheet')}")
     print(f" • Timeline     : {asset.get('timeline')}")
     print(f" • Caption      : {state.get('tiktok_caption')}")
     print("=" * 96)
