@@ -16,17 +16,36 @@ from graph.llm_client import call_gemini_thinking_structured, SCORER_GEMINI_SCHE
 from graph.state import ChristianVideoState
 
 BANNED_VISUAL_TERMS = [
-    "chart", "graph", "diagram", "infographic", "axis", "equation", "formula", "slide", "presentation",
+    "chart", "graph", "diagram", "infographic", "axis", "equation", "formula", "ui", "slide", "presentation",
     "cartoon", "anime", "pixar", "disney", "3d render", "illustration", "clipart", "vector", "neon",
-    "fireflies", "magic particles", "caption", "watermark", "logo", "text overlay",
+    "fireflies", "magic particles", "caption", "watermark", "logo", "text overlay", "on-screen text",
 ]
 HUMAN_WORDS = [
-    "man", "men", "woman", "women", "people", "person", "soldier", "soldiers", "crowd", "child", "children", "worker",
-    "workers", "farmer", "hands", "hand", "figure", "silhouette", "pilot", "doctor", "student", "family", "villagers",
-    "troops", "fighter", "fighters", "miner", "miners", "driver", "boy", "girl", "couple", "runner", "walker",
+    "man", "men", "woman", "women", "people", "person", "human", "soldier", "soldiers", "crowd", "child", "children",
+    "worker", "workers", "farmer", "hands", "hand", "face", "portrait", "figure", "silhouette", "pilot", "doctor",
+    "student", "family", "villagers", "troops", "fighter", "fighters", "miner", "miners", "driver", "boy", "girl",
+    "couple", "runner", "walker",
 ]
-BAD_OPENERS = ("bạn có biết", "hôm nay", "trong video này", "hãy cùng", "xin chào", "chào các bạn", "chào mọi người")
+BAD_OPENERS = ("bạn có biết", "hôm nay", "trong video này", "hãy cùng", "xin chào", "chào mừng", "chào các bạn", "chào mọi người")
 CLICHES = ["hành trình", "hạt mầm", "ánh sáng cuối", "cuộc sống là", "hãy luôn", "mỗi chúng ta", "bài học đắt giá"]
+BANNED_ABBREV_PATTERNS = (
+    r"\btp\.?\s*hcm\b",
+    r"\bkm/h\b",
+    r"\bm/s\b",
+    r"\bvd\b",
+    r"\bv\.v\.",
+    r"\busd\b",
+    r"\bvnd\b",
+)
+VALID_GENRES = frozenset({
+    "history_war", "history_culture", "science_nature", "economics_business",
+    "psychology_philosophy", "true_story_crime", "tech_future", "lifestyle_motivation",
+})
+VALID_MUSIC_MOODS = frozenset({
+    "tense_epic", "solemn_cinematic", "wonder_ambient", "driving_modern",
+    "reflective_piano", "suspense_dark", "uplifting_soft",
+})
+VALID_CAMERAS = frozenset({"zoom_in", "zoom_out", "pan_left", "pan_right", "tilt_up", "tilt_down"})
 
 
 def _has_word(text: str, words: List[str]) -> bool:
@@ -34,12 +53,27 @@ def _has_word(text: str, words: List[str]) -> bool:
     return any(re.search(rf"\b{re.escape(w)}\b", low) for w in words)
 
 
-def rule_check(scenes: List[Dict[str, Any]], intent_mode: str) -> Tuple[float, List[str], List[str]]:
+def rule_check(
+    scenes: List[Dict[str, Any]],
+    intent_mode: str,
+    genre: str = "",
+    music_mood: str = "",
+    style_anchor_en: str = "",
+) -> Tuple[float, List[str], List[str]]:
     """Trả về (điểm 1-10, lỗi nặng, lỗi nhẹ)."""
     hard: List[str] = []
     soft: List[str] = []
     n = len(scenes)
     total_words = sum(len(s["narration_vn"].split()) for s in scenes)
+
+    if genre and genre not in VALID_GENRES:
+        soft.append(f"genre '{genre}' chưa nằm trong 8 thể loại chuẩn.")
+    if music_mood and music_mood not in VALID_MUSIC_MOODS:
+        soft.append(f"music_mood '{music_mood}' chưa nằm trong 7 mood chuẩn.")
+    if style_anchor_en:
+        sw = len(style_anchor_en.split())
+        if sw < 20 or sw > 55:
+            soft.append(f"style_anchor_en có {sw} từ (nên 30–45 từ).")
 
     if n < 6 or n > 10:
         hard.append(f"Số cảnh = {n}, cần 7–9 cảnh.")
@@ -53,11 +87,16 @@ def rule_check(scenes: List[Dict[str, Any]], intent_mode: str) -> Tuple[float, L
     human_scenes = 0
     for i, s in enumerate(scenes, 1):
         narr, img = s["narration_vn"], s["image_prompt_en"]
+        stock_q = str(s.get("stock_query_en", "")).strip()
+        overlay = str(s.get("overlay_keyword_vn", "")).strip()
+        cam = str(s.get("camera", "")).strip()
         nw, iw = len(narr.split()), len(img.split())
         if nw < 6 or nw > 30:
             soft.append(f"Cảnh {i}: lời bình {nw} từ, cần 8–24 từ/cảnh.")
-        if re.search(r"\d|[%$&#@]", narr):
+        if re.search(r"\d|[%$€₫&#@+=/*]", narr):
             soft.append(f"Cảnh {i}: có chữ số/ký hiệu trong lời bình — viết bằng chữ để TTS đọc đúng.")
+        if any(re.search(pat, narr, flags=re.IGNORECASE) for pat in BANNED_ABBREV_PATTERNS):
+            soft.append(f"Cảnh {i}: chứa từ viết tắt/đơn vị (km/h, TP.HCM, USD...) — viết thành chữ để TTS đọc chuẩn.")
         if iw < 14 or iw > 70:
             hard.append(f"Cảnh {i}: image_prompt_en {iw} từ, cần 22–40 từ mô tả MỘT ảnh cụ thể.")
         hit = [t for t in BANNED_VISUAL_TERMS if re.search(rf"\b{re.escape(t)}\b", img.lower())]
@@ -66,6 +105,14 @@ def rule_check(scenes: List[Dict[str, Any]], intent_mode: str) -> Tuple[float, L
         for c in CLICHES:
             if c in narr.lower():
                 soft.append(f"Cảnh {i}: sáo ngữ '{c}' — thay bằng chi tiết cụ thể.")
+        if cam and cam not in VALID_CAMERAS:
+            soft.append(f"Cảnh {i}: camera '{cam}' không hợp lệ.")
+        if stock_q:
+            sq_words = len(stock_q.split())
+            if sq_words < 2 or sq_words > 5:
+                soft.append(f"Cảnh {i}: stock_query_en có {sq_words} từ (nên 2–4 từ tiếng Anh).")
+        if overlay and len(overlay.split()) > 3:
+            soft.append(f"Cảnh {i}: overlay_keyword_vn dài hơn 3 từ ('{overlay}').")
         has_human = _has_word(img, HUMAN_WORDS)
         human_scenes += int(has_human)
         if intent_mode == "NO_HUMAN_BROLL" and has_human:
@@ -90,7 +137,7 @@ def rule_check(scenes: List[Dict[str, Any]], intent_mode: str) -> Tuple[float, L
 
 def _scenes_block(scenes: List[Dict[str, Any]]) -> str:
     return "\n".join(
-        f"[Cảnh {i}] camera={s['camera']}\n   LỜI: {s['narration_vn']}\n   ẢNH: {s['image_prompt_en']}"
+        f"[Cảnh {i}] camera={s.get('camera', '')} | stock={s.get('stock_query_en', '')}\n   LỜI: {s['narration_vn']}\n   ẢNH: {s['image_prompt_en']}"
         for i, s in enumerate(scenes, 1)
     )
 
@@ -100,7 +147,13 @@ def prompt_scorer_node(state: ChristianVideoState) -> Dict[str, Any]:
     mode = state.get("effective_intent_mode") or state.get("intent_mode") or "NO_HUMAN_BROLL"
     retry_count = state.get("retry", 0)
 
-    rule_score, hard, soft = rule_check(scenes, mode)
+    rule_score, hard, soft = rule_check(
+        scenes,
+        mode,
+        genre=str(state.get("genre", "")).strip(),
+        music_mood=str(state.get("music_mood", "")).strip(),
+        style_anchor_en=str(state.get("style_anchor_en", "")).strip(),
+    )
     hook = visual = story = rule_score
     critic_feedback = ""
     critic_used = False

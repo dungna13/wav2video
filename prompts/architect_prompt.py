@@ -1,8 +1,8 @@
 """
 Prompt cho Node `prompt_architect_node` — ĐẠO DIỄN PHIM TÀI LIỆU NGẮN (9:16).
 
-Thiết kế theo phong cách prompt của `ai_orchestrator` (LLM-FIRST, RULE NỀN đánh số, PHẠM VI ⛔,
-BẢNG QUYẾT ĐỊNH, SELF-CHECK trước khi trả JSON) nhưng áp dụng cho bài toán biên kịch + đạo diễn hình ảnh:
+Thiết kế theo chuẩn LLM-FIRST của `wav2video` (RULE NỀN đánh số, PHẠM VI ⛔,
+BẢNG QUYẾT ĐỊNH, SELF-CHECK trước khi trả JSON) áp dụng cho bài toán biên kịch + đạo diễn hình ảnh:
 
 - Không còn ép phong cách hoạt hình Pixar / 4 archetype / lưới 2x2.
 - LLM tự nhận diện THỂ LOẠI chủ đề (lịch sử, khoa học, kinh tế, tâm lý, tội phạm...) và chọn ngôn ngữ hình ảnh phù hợp.
