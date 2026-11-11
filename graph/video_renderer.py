@@ -216,6 +216,7 @@ def render_documentary_video(
     topic_title: str,
     genre: str = "",
     fps: int = VIDEO_FPS,
+    cleanup_intermediates: bool = True,
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các cảnh đã có `media_path`, `camera`, `narration_vn`."""
     w, h = IMAGE_WIDTH, IMAGE_HEIGHT
@@ -281,6 +282,19 @@ def render_documentary_video(
         for i, sc in enumerate(scenes)
     ]
     (run_dir / "scene_timeline.json").write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if cleanup_intermediates and final_mp4.exists() and final_mp4.stat().st_size > 100_000:
+        resolved_run = run_dir.resolve()
+        for c in clips:
+            if c.resolve().parent == resolved_run:
+                c.unlink(missing_ok=True)
+        merged_file = run_dir / "raw_visual_merged.mp4"
+        if merged_file.resolve().parent == resolved_run:
+            merged_file.unlink(missing_ok=True)
+        for sc in scenes:
+            mp = Path(str(sc.get("media_path", "")))
+            if mp.name.startswith("scene_") and mp.resolve().parent == resolved_run:
+                mp.unlink(missing_ok=True)
 
     return {
         "final_master_video_path": str(final_mp4),
