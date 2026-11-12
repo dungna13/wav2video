@@ -67,6 +67,8 @@ MIN_FACE_SIMILARITY_SCORE: float = float(os.getenv("MIN_FACE_SIMILARITY_SCORE", 
 MAX_PROMPT_RETRIES: int = int(os.getenv("MAX_PROMPT_RETRIES", "3"))
 
 # Chốt chặn 1: Visual Feature Gate (`VisualFeatureScorer`)
+ENABLE_LOCAL_CLIP: bool = os.getenv("ENABLE_LOCAL_CLIP", "true").strip().lower() == "true"
+LOCAL_CLIP_MODEL: str = os.getenv("LOCAL_CLIP_MODEL", "openai/clip-vit-base-patch32").strip()
 MIN_CLIP_PROMPT_SCORE: float = float(os.getenv("MIN_CLIP_PROMPT_SCORE", "0.28"))
 MIN_CONTINUITY_SCORE: float = float(os.getenv("MIN_CONTINUITY_SCORE", "0.75"))
 MIN_ID_POSE_SCORE: float = float(os.getenv("MIN_ID_POSE_SCORE", "0.70"))

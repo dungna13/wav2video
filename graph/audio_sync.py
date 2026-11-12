@@ -45,18 +45,35 @@ def _get_local_vits_vietnamese_model():
     return _VITS_MODEL, _VITS_TOKENIZER
 
 
-def _generate_cinematic_ambient_bgm(num_samples: int, sample_rate: int, voice_env: np.ndarray) -> np.ndarray:
+def _resolve_bgm_file(music_mood: str = "") -> Optional[Path]:
+    bgm_dir = Path(__file__).resolve().parent.parent / "assets" / "bgm"
+    if music_mood and bgm_dir.exists():
+        slug = re.sub(r"[^a-z0-9]+", "_", music_mood.lower()).strip("_")
+        for candidate in (f"{slug}.mp3", f"{slug}.wav"):
+            p = bgm_dir / candidate
+            if p.exists():
+                return p
+    default_bgm = bgm_dir / "cinematic_piano_ambient.mp3"
+    return default_bgm if default_bgm.exists() else None
+
+
+def _generate_cinematic_ambient_bgm(
+    num_samples: int,
+    sample_rate: int,
+    voice_env: np.ndarray,
+    music_mood: str = "",
+) -> np.ndarray:
     """
-    Sử dụng file nhạc nền Piano / Lofi Ambient phòng thu thực tế (`assets/bgm/cinematic_piano_ambient.mp3`)
+    Sử dụng file nhạc nền trong `assets/bgm/` (theo `music_mood` nếu có, mặc định `cinematic_piano_ambient.mp3`)
     và áp dụng Auto-Ducking tự động hạ âm lượng khi có giọng đọc vang lên.
     """
     import subprocess
     import imageio_ffmpeg
 
-    bgm_path = Path(__file__).resolve().parent.parent / "assets" / "bgm" / "cinematic_piano_ambient.mp3"
+    bgm_path = _resolve_bgm_file(music_mood)
     pad = None
 
-    if bgm_path.exists():
+    if bgm_path is not None and bgm_path.exists():
         try:
             ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
             cmd = [
@@ -280,12 +297,49 @@ def _synth_sfx(cue: str, sr: int) -> np.ndarray:
     return np.zeros(0, dtype=np.float32)
 
 
+def _normalize_loudness_lufs(wav_path: Path, sample_rate: int, target_lufs: float = -14.0) -> bool:
+    """Chuẩn hóa âm lượng đầu ra về chuẩn TikTok/Shorts (`-14 LUFS`, `-1 dBTP`) bằng FFmpeg `loudnorm`."""
+    import subprocess
+    import imageio_ffmpeg
+
+    tmp_path = wav_path.with_suffix(".lufs_tmp.wav")
+    try:
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        cmd = [
+            ff,
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(wav_path),
+            "-af",
+            f"loudnorm=I={target_lufs}:TP=-1.0:LRA=11",
+            "-ar",
+            str(sample_rate),
+            "-ac",
+            "1",
+            "-c:a",
+            "pcm_s16le",
+            str(tmp_path),
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if res.returncode == 0 and tmp_path.exists() and tmp_path.stat().st_size > 1000:
+            tmp_path.replace(wav_path)
+            return True
+    except Exception:
+        pass
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    return False
+
+
 def _master_and_mix(
     raw_voice: np.ndarray,
     vits_sr: int,
     sample_rate: int,
     wav_path: Path,
     sfx_events: Optional[List[Tuple[float, str]]] = None,
+    music_mood: str = "",
 ) -> Path:
     if vits_sr != sample_rate:
         target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
@@ -294,7 +348,7 @@ def _master_and_mix(
     mastered_voice = _apply_studio_broadcast_dsp(raw_voice, sample_rate)
     win_len = max(1, int(0.08 * sample_rate))
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
-    bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env)
+    bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env, music_mood=music_mood)
     final_mix = mastered_voice * 0.86 + bgm
     if sfx_events:
         for t_sec, cue in sfx_events:
@@ -306,7 +360,9 @@ def _master_and_mix(
                     final_mix[idx:end] += sfx[: end - idx]
     final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.90
     wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
-    print(f"[TTS Neural VITS Studio] Đã sinh giọng đọc (`facebook/mms-tts-vie` + Studio EQ + BGM) -> {wav_path.name}")
+    lufs_ok = _normalize_loudness_lufs(wav_path, sample_rate, target_lufs=-14.0)
+    lufs_tag = " + -14 LUFS" if lufs_ok else ""
+    print(f"[TTS Neural VITS Studio] Đã sinh giọng đọc (`facebook/mms-tts-vie` + Studio EQ + BGM{lufs_tag}) -> {wav_path.name}")
     return wav_path
 
 
@@ -323,6 +379,7 @@ def synthesize_scene_voiceover(
     sample_rate: int = AUDIO_SAMPLE_RATE,
     scene_gap_sec: float = 0.18,
     sfx_cues: Optional[List[str]] = None,
+    music_mood: str = "",
 ) -> Tuple[Path, List[Tuple[float, float]]]:
     """
     Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
@@ -352,7 +409,9 @@ def synthesize_scene_voiceover(
         chunks.append(np.zeros(int(scene_gap_sec * vits_sr), dtype=np.float32))
         cursor += dur + scene_gap_sec
     chunks.append(np.zeros(int(0.45 * vits_sr), dtype=np.float32))
-    _master_and_mix(np.concatenate(chunks), vits_sr, sample_rate, wav_path, sfx_events=sfx_events)
+    _master_and_mix(
+        np.concatenate(chunks), vits_sr, sample_rate, wav_path, sfx_events=sfx_events, music_mood=music_mood
+    )
     return wav_path, timings
 
 

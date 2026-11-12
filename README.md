@@ -22,7 +22,8 @@ Thay vì sinh video kiểu *"slide ảnh vô hồn, hoạt hình trẻ con, hìn
 * **🧠 12 Mô hình Kịch bản & 4 Nguyên lý Nhận thức**: Tự chấm điểm chủ đề để chọn Beat Sheet tối ưu (`ABT`, `In Medias Res`, `Myth vs. Reality`, `Open Loops`, `Rule of Three`, `SCQA`, `PAS`, `AIDA`...), áp dụng *Information Gap* cho Hook 6–11 từ và *Habituation Break* xen cảnh Twist ngắn gắt.
 * **🛡️ Groundedness 0-Token & QueryRewriter Loop**: Chấm mức độ bám sát sách ngay trên CPU bằng Vector Cosine (0 tốn token LLM Scorer); nếu kịch bản lệch nguồn hoặc topic quá trừu tượng (`S_rag < 0.78`), hệ thống tự mở rộng từ khóa qua `QueryRewriter` và tìm lại chunk khác.
 * **🗣️ Tách đôi Giọng đọc (`narration_vn`) & Phụ đề Mắt đọc (`subtitle_vn`)**: TTS đọc thuần chữ tự nhiên (*"năm một nghìn chín trăm năm mươi tư"*), còn màn hình hiện gọn *"năm 1954"*, *"20%"* kèm highlight từng từ và Safe-Zone 1/3 dưới.
-* **🎞️ Tự động săn Footage HD thật + Nhạc nền & SFX**: Lấy video stock thật từ Mixkit (miễn phí, không cần API key) / Pexels / Pixabay, dự phòng ảnh AI Pollinations, lồng tiếng Neural VITS tiếng Việt (`facebook/mms-tts-vie`), trộn SFX chuyển nhịp (`low_thud`, `subtle_whoosh`, `camera_click`, `wind_swell`), và tự dọn sạch file trung gian sau khi render.
+* **🎞️ Tự động săn Footage HD thật + Chấm CLIP 0-Token + Nhạc nền `-14 LUFS`**: Lấy đa ứng viên video stock (Mixkit / Pexels / Pixabay) chống trùng lặp giữa các cảnh, trích keyframe bằng `ffmpeg` và chấm khớp ngữ nghĩa + lọc dính người ngay trên CPU bằng `openai/clip-vit-base-patch32` (0-token API), cân bằng màu liên tục (`ContinuityHarmonizer` qua Reinhard / `lutrgb`), lồng tiếng Neural VITS tiếng Việt (`facebook/mms-tts-vie`), trộn SFX và chuẩn hóa âm lượng `-14 LUFS`.
+* **🌊 Luồng Google Flow 4 Block Liền Mạch (`--flow-prep` / `--flow-render`)**: Tự động đo thời lượng audio thật để chia kịch bản thành 4 Block cân bằng (`flow_prompts.txt`) kèm neo nối cảnh (*seamless continuation*); khi bạn tải clip Flow về `flow_clips/`, hệ thống tự khớp đúng block theo tên file gốc và dựng hoàn chỉnh không tốn thêm token LLM.
 * **🩺 Checkpoint từng Node & Error Logs SQLite**: Lưu trạng thái sau mỗi node vào `wav2vid_checkpoints.sqlite`, ghi log phiên chạy vào `workspace/logs/latest.log` và bảng `error_logs` để truy vết lỗi tức thì qua `--logs`.
 
 ---
@@ -41,7 +42,7 @@ flowchart TD
 
     N3 -->|"retry_rag (Groundedness thấp, < 3 lần)"| N1
     N3 -->|"Viết lại kịch bản / cảnh lỗi"| N2
-    N3 -->|"Pass / Đạt ngưỡng"| N4["Node 4: media_generator_node\n• VITS TTS theo từng cảnh + SFX Cues\n• Mixkit HD / Pexels / Pixabay / Pollinations\n• FFmpeg 9:16 xfade + Color Grade + .ASS Karaoke\n• Auto-cleanup file trung gian"]
+    N3 -->|"Pass / Đạt ngưỡng"| N4["Node 4: media_generator_node\n• VITS TTS + SFX + FFmpeg -14 LUFS\n• Đa ứng viên chống trùng + Local CLIP 0-Token\n• ContinuityHarmonizer (Reinhard / lutrgb)\n• FFmpeg 9:16 xfade + Color Grade + .ASS Karaoke"]
 
     N4 --> N5["Node 5: visual_judge_node\nĐo lệch A/V (frames), kiểm định đầu ra\n& sinh Caption TikTok"]
     N5 --> Done(["final_master.mp4 + JSON Reports"])
@@ -97,17 +98,21 @@ wav2video/
 │   ├── state.py                    # TypedDict State, Reducers (`error_logs`, `characters`) & Pydantic Schemas
 │   ├── llm_client.py               # Gemini Multi-Model Cascade (gemini-3.1-flash-lite -> 3-flash) + Free LLM fallback
 │   ├── book_rag.py                 # Parser (.epub/.txt/.md/.docx/.pdf), FTS5 + multilingual-e5 Hybrid Search, 0-Token Groundedness
-│   ├── asset_fetcher.py            # Tự động lấy Video HD (Mixkit / Pexels / Pixabay) & Ảnh AI Pollinations
-│   ├── audio_sync.py               # Local VITS TTS (facebook/mms-tts-vie), DSP Broadcast, Auto-Ducking BGM & Procedural SFX
-│   ├── video_renderer.py           # FFmpeg 9:16 Composer (Zoom/Pan, Xfade, Genre Color Grade, .ASS Karaoke, Auto-Cleanup)
+│   ├── asset_fetcher.py            # Đa ứng viên Video HD (Mixkit / Pexels / Pixabay), chống trùng & Ảnh AI Pollinations
+│   ├── visual_scorer.py            # VisualFeatureScorer 0-token (ffmpeg keyframe, local CLIP, dark/static) & ContinuityHarmonizer
+│   ├── flow_bundler.py             # Chia 4 Block cân bằng cho Google Flow (--flow-prep) & dựng phim từ clip Flow (--flow-render)
+│   ├── audio_sync.py               # Local VITS TTS (facebook/mms-tts-vie), DSP Broadcast, Auto-Ducking BGM, SFX & -14 LUFS
+│   ├── video_renderer.py           # FFmpeg 9:16 Composer (Zoom/Pan, lutrgb, Xfade, Genre Grade, .ASS Karaoke, Auto-Cleanup)
 │   ├── run_logger.py               # Auto Tee File Logger (`workspace/logs/latest.log`) & CLI Diagnostics
 │   └── nodes/
 │       ├── filter_context.py       # Node 1: Book RAG Retrieval + QueryRewriter
 │       ├── intent_router.py        # Node 1.5: 3-Mode Intent Router
 │       ├── prompt_architect.py     # Node 2: Đạo diễn & Sinh kịch bản JSON
 │       ├── prompt_scorer.py        # Node 3: Deterministic Rules + Local Groundedness + LLM Critic
-│       ├── media_generator.py      # Node 4: Điều phối TTS, Visual Assets & FFmpeg Render
+│       ├── media_generator.py      # Node 4: Điều phối TTS, Visual Assets, Harmonizer & FFmpeg Render
 │       └── visual_judge.py         # Node 5: Kiểm định đồng bộ A/V & xuất báo cáo duyệt thủ công
+├── tests/
+│   └── test_visual_phase2.py       # Bộ unit & E2E tests cho Tầng 2 (CLIP, Harmonizer, -14 LUFS, Flow pipeline)
 └── workspace/
     ├── book_rag.sqlite             # Kho chunk sách + vector embeddings + hàng đợi đăng hằng ngày
     ├── wav2vid_checkpoints.sqlite  # Checkpoints từng node & bảng `error_logs`
@@ -177,10 +182,28 @@ python main.py --book nha_gia_kim "Bí mật hạnh phúc qua câu chuyện hai 
 python main.py --book nha_gia_kim --chunk 14 --model abt
 ```
 
-### 3. Kiểm tra Log, Checkpoint & Lỗi hệ thống
+### 3. Luồng Bán Tự Động với Google Flow (4 Block Liền Mạch)
+```bash
+# Bước 1: Lên kịch bản + sinh audio -14 LUFS + xuất 4 Block prompt nối tiếp (`flow_prompts.txt`)
+python main.py --flow-prep "Chủ đề của bạn"
+
+# Hoặc dùng với sách RAG (mặc định --blocks 4, có thể đổi --blocks 3 hoặc 5)
+python main.py --flow-prep --book nha_gia_kim --chunk 14 --mode HUMAN_NO_LIPSYNC
+
+# Bước 2: Copy 4 prompt trong `flow_prompts.txt` sang Google Flow (dùng Extend / Start Frame từ Block 2)
+#         rồi tải 4 file .mp4 thả vào thư mục `flow_clips/` (giữ nguyên tên gốc của Flow cũng được).
+
+# Bước 3: Dựng video hoàn chỉnh (tự khớp clip vào đúng block, cân bằng màu, phụ đề karaoke)
+python main.py --flow-render "workspace/flow_<ten_thu_muc_vua_tao>"
+```
+
+### 4. Kiểm tra Log, Checkpoint & Chạy Test
 ```bash
 # Xem 5 checkpoint gần nhất, bảng error_logs trong SQLite và 25 dòng cuối của latest.log
 python main.py --logs
+
+# Chạy toàn bộ bộ kiểm thử Tầng 2 (VisualScorer, ContinuityHarmonizer, -14 LUFS, Flow)
+python -m unittest discover -s tests -v
 ```
 
 ---

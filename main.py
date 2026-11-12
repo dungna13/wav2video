@@ -21,6 +21,7 @@ Luồng: filter_context (RAG nếu có --book) -> intent_router -> prompt_archit
 
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict
 
 from graph.book_rag import (
@@ -30,6 +31,7 @@ from graph.book_rag import (
     list_book_chunks,
     mark_chunk_done,
 )
+from graph.flow_bundler import prepare_flow_workspace, render_from_flow_clips
 from graph.llm_client import ANGLE_MINER_GEMINI_SCHEMA, call_gemini_thinking_structured
 from graph.run_logger import print_diagnostics, start_run_log
 from graph.workflow import create_christian_short_video_app
@@ -47,6 +49,11 @@ def _parse_args(argv) -> Dict[str, Any]:
         "chunk": 0,
         "daily": False,
         "logs": False,
+        "flow_prep": False,
+        "flow_render": "",
+        "clips_dir": "",
+        "block_sec": 14.0,
+        "max_blocks": 4,
         "topic": "",
     }
     words = []
@@ -71,6 +78,21 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["daily"] = True
         elif a == "--logs":
             opts["logs"] = True
+        elif a == "--flow-prep":
+            opts["flow_prep"] = True
+        elif a == "--flow-render":
+            opts["flow_render"] = next(it, "").strip()
+        elif a == "--clips-dir":
+            opts["clips_dir"] = next(it, "").strip()
+        elif a == "--block-sec":
+            raw = next(it, "14").strip()
+            try:
+                opts["block_sec"] = max(4.0, float(raw))
+            except ValueError:
+                opts["block_sec"] = 14.0
+        elif a == "--blocks":
+            raw = next(it, "4").strip()
+            opts["max_blocks"] = max(1, int(raw)) if raw.isdigit() else 4
         else:
             words.append(a)
     opts["topic"] = " ".join(words).strip()
@@ -108,6 +130,25 @@ def main():
 
     if opts["logs"]:
         print_diagnostics()
+        return
+
+    if opts["flow_render"]:
+        res = render_from_flow_clips(
+            run_dir=Path(opts["flow_render"]),
+            clips_dir=Path(opts["clips_dir"]) if opts["clips_dir"] else None,
+        )
+        m = res["manifest"]
+        r = res["rendered"]
+        v = res["visual_scores"]
+        o = res["output_scores"]
+        print("\n" + "=" * 96)
+        print(f"FLOW RENDER HOÀN TẤT: {m['topic_title']}")
+        print("=" * 96)
+        print(f" • Video        : {r['final_master_video_path']} ({m['audio_duration_sec']}s)")
+        print(f" • Hình ảnh     : tổng={v['visual_total_score']} | nét={v['sharpness_score']} | liên tục màu={v['continuity_score']}")
+        print(f" • Đầu ra       : tổng={o['output_total_score']} | lệch A/V={o['av_offset_frames']} frame | {res['tiktok_publish_status']}")
+        print(f" • Caption      : {res['tiktok_caption']}")
+        print("=" * 96)
         return
 
     if opts["mine"]:
@@ -160,7 +201,7 @@ def main():
 
     log_path, stop_log = start_run_log(book_id or topic[:24])
     try:
-        app = create_christian_short_video_app()
+        app = create_christian_short_video_app(stop_after_tier1=opts["flow_prep"])
         config = {"configurable": {"thread_id": f"topic_to_video_{int(time.time())}"}}
 
         print("=" * 96)
@@ -169,6 +210,7 @@ def main():
             + (f" | BOOK: {book_id}" if book_id else "")
             + (f" (chunk #{chunk_idx})" if chunk_idx else "")
             + (f" | MODE: {opts['mode']}" if opts["mode"] else "")
+            + (f" | FLOW-PREP ({opts['block_sec']:.0f}s/block)" if opts["flow_prep"] else "")
         )
         print("=" * 96)
 
@@ -182,6 +224,21 @@ def main():
             },
             config=config,
         )
+
+        if opts["flow_prep"]:
+            flow_info = prepare_flow_workspace(
+                state,
+                target_block_sec=opts["block_sec"],
+                max_blocks=opts["max_blocks"],
+            )
+            print("\n" + "=" * 96)
+            print(f"FLOW PREP SẴN SÀNG ({len(flow_info['blocks'])} BLOCK | Audio={flow_info['audio_duration_sec']:.2f}s)")
+            print("=" * 96)
+            print(f" • File Prompt Google Flow : {flow_info['prompts_path']}")
+            print(f" • Thư mục thả clip Flow   : {flow_info['clips_dir']}")
+            print(f" • Lệnh dựng sau khi tải  : python main.py --flow-render \"{flow_info['run_dir']}\"")
+            print("=" * 96)
+            return
 
         if opts["daily"] and active_chunk:
             mark_chunk_done(int(active_chunk["chunk_id"]), state.get("final_master_video_path", ""))
@@ -212,7 +269,8 @@ def main():
     print("BẢNG 2: CHẤM ĐIỂM")
     print("=" * 96)
     print(f" • Kịch bản: {state['average_score']}/10 (Hook={state['theological_moral_score']}, Khớp hình-lời={state['cinematic_quality_score']}, Mạch kể={state['rag_faithfulness_score']}) | Pass={state['pass_validation']} | Lần thử: {state['retry']}")
-    print(f" • Hình ảnh: tổng={v['visual_total_score']} | nét={v['sharpness_score']} | liên tục màu={v['continuity_score']} | cảnh thật={v.get('real_scene_ratio')} | lỗi={v['failure_reason']}")
+    clip_txt = f" | CLIP={v['clip_prompt_score']}" if v.get("clip_prompt_score") is not None else ""
+    print(f" • Hình ảnh: tổng={v['visual_total_score']}{clip_txt} | nét={v['sharpness_score']} | liên tục màu={v['continuity_score']} | cảnh thật={v.get('real_scene_ratio')} | lỗi={v['failure_reason']}")
     print(f" • Đầu ra  : tổng={o['output_total_score']} | lệch A/V={o['av_offset_frames']} frame | trạng thái={state['tiktok_publish_status']} | vấn đề={o['failure_reason']}")
 
     print("\n" + "=" * 96)

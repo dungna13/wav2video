@@ -80,7 +80,8 @@ def _make_scene_clip(scene: Dict[str, Any], out_path: Path, length: float, w: in
     ff = _ffmpeg()
     frames = int(round(length * fps))
     if scene.get("media_type") == "video":
-        vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps},setsar=1"
+        harm = f",{scene['color_harm_vf']}" if scene.get("color_harm_vf") else ""
+        vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
         cmd = [ff, "-y", "-stream_loop", "-1", "-i", scene["media_path"], "-t", f"{length:.3f}", "-vf", vf, "-an"]
     else:
         big_w, big_h = w * 2, h * 2
@@ -183,53 +184,41 @@ def build_ass(
     return "\n".join(lines)
 
 
-def render_documentary_video(
+def _probe_clip_duration(video_path: Path) -> float:
+    res = subprocess.run([_ffmpeg(), "-i", str(video_path)], capture_output=True, text=True)
+    m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", res.stderr)
+    if not m:
+        return 0.0
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+
+
+def _finalize_master_video(
     run_dir: Path,
+    merged: Path,
     wav_path: Path,
     scenes: List[Dict[str, Any]],
     timings: List[Tuple[float, float]],
+    durations: List[float],
     total_audio_sec: float,
     topic_title: str,
-    genre: str = "",
-    fps: int = VIDEO_FPS,
-    cleanup_intermediates: bool = True,
+    genre: str,
+    w: int,
+    h: int,
+    fps: int,
+    cleanup_intermediates: bool,
+    clips_to_clean: List[Path],
+    delete_scene_media: bool = True,
 ) -> Dict[str, Any]:
-    """Dựng `final_master.mp4` từ các cảnh đã có `media_path`, `camera`, `narration_vn`."""
-    w, h = IMAGE_WIDTH, IMAGE_HEIGHT
     ff = _ffmpeg()
-    durations = compute_scene_durations(timings, total_audio_sec)
-    n = len(scenes)
-
-    clips: List[Path] = []
-    for i, (sc, dur) in enumerate(zip(scenes, durations)):
-        length = dur + (TRANSITION_SEC if i < n - 1 else 0.0)
-        clip = run_dir / f"clip_{i + 1}.mp4"
-        _make_scene_clip(sc, clip, length, w, h, fps)
-        clips.append(clip)
-
-    merged = run_dir / "raw_visual_merged.mp4"
-    if n == 1:
-        merged = clips[0]
-    else:
-        inputs: List[str] = []
-        for c in clips:
-            inputs += ["-i", str(c)]
-        chain, prev_label, offset = [], "[0:v]", 0.0
-        for k in range(1, n):
-            offset += durations[k - 1]
-            out_label = f"[x{k}]" if k < n - 1 else "[vout]"
-            chain.append(f"{prev_label}[{k}:v]xfade=transition=fade:duration={TRANSITION_SEC}:offset={offset:.3f}{out_label}")
-            prev_label = out_label
-        _run(
-            [ff, "-y", *inputs, "-filter_complex", ";".join(chain), "-map", "[vout]", "-c:v", "libx264",
-             "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(merged)]
-        )
-
     ass_path = run_dir / "subtitles.ass"
     ass_path.write_text(build_ass(scenes, timings, durations, w, h, topic_title), encoding="utf-8")
 
     grade = GRADE_BY_GENRE.get(genre, "eq=contrast=1.06:saturation=0.95")
-    vf = f"{grade},vignette=angle=PI/5,noise=alls=4:allf=t,fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.0, total_audio_sec - 0.6):.2f}:d=0.6,ass=subtitles.ass,format=yuv420p"
+    vf = (
+        f"{grade},vignette=angle=PI/5,noise=alls=4:allf=t,"
+        f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.0, total_audio_sec - 0.6):.2f}:d=0.6,"
+        f"ass=subtitles.ass,format=yuv420p"
+    )
     final_mp4 = run_dir / "final_master.mp4"
     _run(
         [ff, "-y", "-i", merged.name if merged.parent == run_dir else str(merged), "-i", str(wav_path), "-vf", vf,
@@ -258,16 +247,17 @@ def render_documentary_video(
 
     if cleanup_intermediates and final_mp4.exists() and final_mp4.stat().st_size > 100_000:
         resolved_run = run_dir.resolve()
-        for c in clips:
+        for c in clips_to_clean:
             if c.resolve().parent == resolved_run:
                 c.unlink(missing_ok=True)
         merged_file = run_dir / "raw_visual_merged.mp4"
         if merged_file.resolve().parent == resolved_run:
             merged_file.unlink(missing_ok=True)
-        for sc in scenes:
-            mp = Path(str(sc.get("media_path", "")))
-            if mp.name.startswith("scene_") and mp.resolve().parent == resolved_run:
-                mp.unlink(missing_ok=True)
+        if delete_scene_media:
+            for sc in scenes:
+                mp = Path(str(sc.get("media_path", "")))
+                if mp.name.startswith("scene_") and mp.resolve().parent == resolved_run:
+                    mp.unlink(missing_ok=True)
 
     return {
         "final_master_video_path": str(final_mp4),
@@ -278,3 +268,129 @@ def render_documentary_video(
         "video_fps": fps,
         "duration_sec": total_audio_sec,
     }
+
+
+def _merge_clips_xfade(clips: List[Path], clip_durations: List[float], out_path: Path, fps: int) -> Path:
+    if len(clips) == 1:
+        return clips[0]
+    ff = _ffmpeg()
+    inputs: List[str] = []
+    for c in clips:
+        inputs += ["-i", str(c)]
+    chain, prev_label, offset = [], "[0:v]", 0.0
+    for k in range(1, len(clips)):
+        offset += clip_durations[k - 1]
+        out_label = f"[x{k}]" if k < len(clips) - 1 else "[vout]"
+        chain.append(f"{prev_label}[{k}:v]xfade=transition=fade:duration={TRANSITION_SEC}:offset={offset:.3f}{out_label}")
+        prev_label = out_label
+    _run(
+        [ff, "-y", *inputs, "-filter_complex", ";".join(chain), "-map", "[vout]", "-c:v", "libx264",
+         "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_path)]
+    )
+    return out_path
+
+
+def render_flow_video(
+    run_dir: Path,
+    wav_path: Path,
+    scenes: List[Dict[str, Any]],
+    blocks: List[Dict[str, Any]],
+    timings: List[Tuple[float, float]],
+    total_audio_sec: float,
+    topic_title: str,
+    genre: str = "",
+    fps: int = VIDEO_FPS,
+    cleanup_intermediates: bool = True,
+) -> Dict[str, Any]:
+    """Dựng `final_master.mp4` từ các clip liền mạch (Google Flow) giữ nguyên mạch chạy của từng Block."""
+    w, h = IMAGE_WIDTH, IMAGE_HEIGHT
+    ff = _ffmpeg()
+    durations = compute_scene_durations(timings, total_audio_sec)
+    n_blocks = len(blocks)
+
+    prep_clips: List[Path] = []
+    block_durs: List[float] = []
+    for i, blk in enumerate(blocks):
+        b_dur = float(blk["duration_sec"])
+        block_durs.append(b_dur)
+        target_len = b_dur + (TRANSITION_SEC if i < n_blocks - 1 else 0.0)
+        src_path = Path(blk["media_path"])
+        src_dur = _probe_clip_duration(src_path)
+        harm = f",{blk['color_harm_vf']}" if blk.get("color_harm_vf") else ""
+
+        out_clip = run_dir / f"flow_prep_clip_{i + 1}.mp4"
+        if 0.0 < src_dur < target_len and src_dur >= target_len * 0.65:
+            ratio = target_len / src_dur
+            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},setpts={ratio:.4f}*PTS,fps={fps},setsar=1"
+            cmd = [ff, "-y", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
+        elif 0.0 < src_dur < target_len * 0.65:
+            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
+            cmd = [ff, "-y", "-stream_loop", "-1", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
+        else:
+            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
+            cmd = [ff, "-y", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
+        cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
+        _run(cmd)
+        prep_clips.append(out_clip)
+
+    merged = _merge_clips_xfade(prep_clips, block_durs, run_dir / "raw_visual_merged.mp4", fps)
+    return _finalize_master_video(
+        run_dir=run_dir,
+        merged=merged,
+        wav_path=wav_path,
+        scenes=scenes,
+        timings=timings,
+        durations=durations,
+        total_audio_sec=total_audio_sec,
+        topic_title=topic_title,
+        genre=genre,
+        w=w,
+        h=h,
+        fps=fps,
+        cleanup_intermediates=cleanup_intermediates,
+        clips_to_clean=prep_clips,
+        delete_scene_media=False,
+    )
+
+
+def render_documentary_video(
+    run_dir: Path,
+    wav_path: Path,
+    scenes: List[Dict[str, Any]],
+    timings: List[Tuple[float, float]],
+    total_audio_sec: float,
+    topic_title: str,
+    genre: str = "",
+    fps: int = VIDEO_FPS,
+    cleanup_intermediates: bool = True,
+) -> Dict[str, Any]:
+    """Dựng `final_master.mp4` từ các cảnh đã có `media_path`, `camera`, `narration_vn`."""
+    w, h = IMAGE_WIDTH, IMAGE_HEIGHT
+    durations = compute_scene_durations(timings, total_audio_sec)
+    n = len(scenes)
+
+    clips: List[Path] = []
+    for i, (sc, dur) in enumerate(zip(scenes, durations)):
+        length = dur + (TRANSITION_SEC if i < n - 1 else 0.0)
+        clip = run_dir / f"clip_{i + 1}.mp4"
+        _make_scene_clip(sc, clip, length, w, h, fps)
+        clips.append(clip)
+
+    merged = _merge_clips_xfade(clips, durations, run_dir / "raw_visual_merged.mp4", fps)
+    return _finalize_master_video(
+        run_dir=run_dir,
+        merged=merged,
+        wav_path=wav_path,
+        scenes=scenes,
+        timings=timings,
+        durations=durations,
+        total_audio_sec=total_audio_sec,
+        topic_title=topic_title,
+        genre=genre,
+        w=w,
+        h=h,
+        fps=fps,
+        cleanup_intermediates=cleanup_intermediates,
+        clips_to_clean=clips,
+        delete_scene_media=True,
+    )

@@ -197,6 +197,7 @@ except ImportError:
 
 def create_christian_short_video_app(
     checkpoint_db_path: Optional[Path] = None,
+    stop_after_tier1: bool = False,
 ):
     """Khởi tạo StateGraph Topic-to-Video Agentic Pipeline."""
     db_file = Path(checkpoint_db_path or CHECKPOINT_DB_PATH)
@@ -207,10 +208,11 @@ def create_christian_short_video_app(
     builder.add_node("intent_router_node", intent_router_node)
     builder.add_node("prompt_architect_node", prompt_architect_node)
     builder.add_node("prompt_scorer_node", prompt_scorer_node)
-    builder.add_node("media_generator_node", media_generator_node)
-    builder.add_node(
-        "visual_judge_and_update_registry_node", visual_judge_and_update_registry_node
-    )
+    if not stop_after_tier1:
+        builder.add_node("media_generator_node", media_generator_node)
+        builder.add_node(
+            "visual_judge_and_update_registry_node", visual_judge_and_update_registry_node
+        )
 
     builder.add_edge(START, "filter_context_node")
     builder.add_edge("filter_context_node", "intent_router_node")
@@ -223,19 +225,20 @@ def create_christian_short_video_app(
         {
             "retry_rag": "filter_context_node",
             "prompt_architect_node": "prompt_architect_node",
-            "media_generator_node": "media_generator_node",
+            "media_generator_node": END if stop_after_tier1 else "media_generator_node",
         },
     )
 
-    builder.add_edge("media_generator_node", "visual_judge_and_update_registry_node")
-    builder.add_conditional_edges(
-        "visual_judge_and_update_registry_node",
-        should_retry_output_gate,
-        {
-            "media_generator_node": "media_generator_node",
-            "done": END,
-        },
-    )
+    if not stop_after_tier1:
+        builder.add_edge("media_generator_node", "visual_judge_and_update_registry_node")
+        builder.add_conditional_edges(
+            "visual_judge_and_update_registry_node",
+            should_retry_output_gate,
+            {
+                "media_generator_node": "media_generator_node",
+                "done": END,
+            },
+        )
 
     sqlite_conn = sqlite3.connect(str(db_file), check_same_thread=False)
     checkpointer = SqliteSaver(sqlite_conn)
