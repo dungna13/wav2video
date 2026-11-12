@@ -183,19 +183,33 @@ python main.py --book nha_gia_kim --chunk 14 --model abt
 ```
 
 ### 3. Luồng Bán Tự Động với Google Flow (4 Block Liền Mạch)
-```bash
-# Bước 1: Lên kịch bản + sinh audio -14 LUFS + xuất 4 Block prompt nối tiếp (`flow_prompts.txt`)
-python main.py --flow-prep "Chủ đề của bạn"
 
-# Hoặc dùng với sách RAG (mặc định --blocks 4, có thể đổi --blocks 3 hoặc 5)
-python main.py --flow-prep --book nha_gia_kim --chunk 14 --mode HUMAN_NO_LIPSYNC
+Thay vì treo terminal chờ bạn gen clip trên trình duyệt, quy trình tách làm **3 bước gọn nhẹ** (lưu sẵn `audio_16k_mono.wav` và `flow_manifest.json` để dựng lại bất cứ lúc nào mà không tốn thêm token LLM):
 
-# Bước 2: Copy 4 prompt trong `flow_prompts.txt` sang Google Flow (dùng Extend / Start Frame từ Block 2)
-#         rồi tải 4 file .mp4 thả vào thư mục `flow_clips/` (giữ nguyên tên gốc của Flow cũng được).
+1. **Bước 1 — Chạy lệnh tạo file Prompts (`flow_prompts.txt`) & Audio (`-14 LUFS`):**
+   ```bash
+   # Từ chủ đề tự do (mặc định chia đều thành 4 Block; đổi số block bằng --blocks 3 hoặc --blocks 5)
+   python main.py --flow-prep "Bí ẩn sa mạc Sahara từng là vùng đất xanh tươi"
 
-# Bước 3: Dựng video hoàn chỉnh (tự khớp clip vào đúng block, cân bằng màu, phụ đề karaoke)
-python main.py --flow-render "workspace/flow_<ten_thu_muc_vua_tao>"
-```
+   # Hoặc từ sách RAG (ví dụ Nhà Giả Kim, chương có nhân vật nên dùng HUMAN_NO_LIPSYNC)
+   python main.py --flow-prep --book nha_gia_kim --chunk 14 --mode HUMAN_NO_LIPSYNC
+   ```
+   Sau khi chạy xong, terminal sẽ in ra 3 đường dẫn trong `workspace/flow_<ten>_<thoi_gian>/`:
+   * `flow_prompts.txt` — chứa sẵn **4 Prompt** đã tính khớp giây và gắn câu nối *seamless continuation*.
+   * `flow_clips/` — thư mục để bạn thả clip tải về từ Google Flow.
+   * Lệnh `--flow-render` chuẩn bị sẵn cho Bước 3.
+
+2. **Bước 2 — Tạo 4 clip trên Google Flow & tải về:**
+   * Mở `flow_prompts.txt`, copy **Block 1** sang Google Flow (khổ dọc `9:16`) để tạo clip đầu.
+   * Từ **Block 2 → 4**, bấm **Extend** (hoặc dùng khung hình cuối của clip trước làm Start Frame) rồi dán Prompt Block tương ứng.
+   * Tải cả 4 file `.mp4` (hoặc 1 file dài duy nhất nếu bạn Extend liên hoàn) thả vào thư mục `flow_clips/` *(giữ nguyên tên file gốc của Google Flow, không cần đổi tên `1.mp4`...)*.
+
+3. **Bước 3 — Chạy lệnh ghép các clip Flow thành video hoàn chỉnh:**
+   ```bash
+   python main.py --flow-render "workspace/flow_<ten_thu_muc_vua_tao>"
+   # (Tùy chọn: thêm --clips-dir /duong/dan/khac nếu bạn để clip ở thư mục ngoài)
+   ```
+   Hệ thống sẽ tự khớp từng clip vào đúng Block, cân bằng màu (`ContinuityHarmonizer`), ghép với giọng đọc `-14 LUFS`, burn phụ đề Karaoke và xuất **`final_master.mp4`**.
 
 ### 4. Kiểm tra Log, Checkpoint & Chạy Test
 ```bash
