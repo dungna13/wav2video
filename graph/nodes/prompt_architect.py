@@ -16,12 +16,18 @@ from graph.llm_client import call_gemini_thinking_structured, ARCHITECT_GEMINI_S
 from graph.state import ChristianVideoState
 
 VALID_CAMERAS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "tilt_up", "tilt_down"]
-VALID_SFX_CUES = frozenset({"none", "low_thud", "subtle_whoosh", "camera_click", "wind_swell"})
+VALID_SFX_CUES = frozenset({
+    "none", "low_thud", "subtle_whoosh", "camera_click", "wind_swell",
+    "deep_sub_drop", "heartbeat_pulse", "clock_tick_stop",
+})
+VALID_VISUAL_SOURCE_TYPES = frozenset({"real_photo", "stock_video", "ai_photo"})
+VALID_BGM_ENERGIES = frozenset({"low", "rise", "peak", "drop", "calm"})
+VALID_VOCAL_DELIVERIES = frozenset({"punch_urgent", "normal_story", "whisper_suspense", "solemn_slow"})
 LLM_ATTEMPTS = 2
 
 
 def normalize_scenes(raw_scenes: Any) -> List[Dict[str, Any]]:
-    """Làm sạch danh sách cảnh: bỏ cảnh rỗng, chuẩn hóa `subtitle_vn`, `sfx_cue` và camera không lặp liền kề."""
+    """Làm sạch danh sách cảnh: bỏ cảnh rỗng, chuẩn hóa `subtitle_vn`, `sfx_cue`, `visual_source_type` và camera."""
     scenes: List[Dict[str, Any]] = []
     for item in raw_scenes or []:
         if not isinstance(item, dict):
@@ -37,15 +43,31 @@ def normalize_scenes(raw_scenes: Any) -> List[Dict[str, Any]]:
         sfx_cue = str(item.get("sfx_cue", "none") or "none").strip().lower()
         if sfx_cue not in VALID_SFX_CUES:
             sfx_cue = "none"
+        real_media_query = " ".join(str(item.get("real_media_query", "") or "").split())
+        vst = str(item.get("visual_source_type", "") or "").strip().lower()
+        if vst not in VALID_VISUAL_SOURCE_TYPES:
+            vst = "real_photo" if real_media_query else "stock_video"
+        if vst != "real_photo":
+            real_media_query = ""
+        bgm_energy = str(item.get("bgm_energy", "rise") or "rise").strip().lower()
+        if bgm_energy not in VALID_BGM_ENERGIES:
+            bgm_energy = "rise"
+        vocal_delivery = str(item.get("vocal_delivery", "normal_story") or "normal_story").strip().lower()
+        if vocal_delivery not in VALID_VOCAL_DELIVERIES:
+            vocal_delivery = "normal_story"
         scenes.append(
             {
                 "narration_vn": narration,
                 "subtitle_vn": subtitle,
+                "visual_source_type": vst,
+                "real_media_query": real_media_query,
                 "image_prompt_en": image_prompt,
                 "stock_query_en": " ".join(str(item.get("stock_query_en", "")).split()),
                 "camera": camera,
                 "overlay_keyword_vn": " ".join(str(item.get("overlay_keyword_vn", "")).split()).upper(),
                 "sfx_cue": sfx_cue,
+                "bgm_energy": bgm_energy,
+                "vocal_delivery": vocal_delivery,
             }
         )
 

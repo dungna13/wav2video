@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wav2Video Studio - Google Flow Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --accent: #f59e0b;
+      --success: #10b981;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .step-badge {
+      background: var(--primary);
+      color: #000;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    input[type="text"], select {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #090d16;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, select:focus {
+      border-color: var(--primary);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 12px 20px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #000;
+      width: 100%;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      color: #fff;
+    }
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+      width: 100%;
+      font-size: 17px;
+      padding: 14px;
+    }
+    .btn-success:hover {
+      background: #059669;
+    }
+    .btn-copy {
+      background: #334155;
+      color: var(--text);
+      font-size: 13px;
+      padding: 6px 12px;
+    }
+    .btn-copy:hover {
+      background: #475569;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.1);
+      border-radius: 50%;
+      border-top: 3px solid var(--primary);
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .block-card {
+      background: #111827;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .block-title {
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .prompt-box {
+      background: #030712;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 13px;
+      font-family: monospace;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-bottom: 12px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .upload-zone {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,255,255,0.03);
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px dashed var(--border);
+    }
+    .upload-zone input[type="file"] {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .status-text {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .status-uploaded {
+      color: var(--success);
+    }
+    .status-pending {
+      color: var(--text-muted);
+    }
+    .preview-section {
+      text-align: center;
+      margin-top: 20px;
+    }
+    video {
+      max-width: 100%;
+      height: 480px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      background: #000;
+      margin-top: 12px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--success);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    /* TikTok Box */
+    .tiktok-box {
+      background: #090d16;
+      border: 1px solid #e11d48;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 20px;
+      text-align: left;
+    }
+    .tiktok-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: #fb7185;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+    .caption-box {
+      background: #030712;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 14px;
+      color: #e2e8f0;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+    .tiktok-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn-tiktok {
+      background: #e11d48;
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-tiktok:hover {
+      background: #be123c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Wav2Video Studio (Google Flow Assistant)</h1>
+      <p>Nhập chủ đề ➜ Tự sinh 4 Block Prompts ➜ Copy lên Google Flow ➜ Tải video lên & Ghép thành phẩm</p>
+    </header>
+
+    <!-- BƯỚC 1: NHẬP CHỦ ĐỀ & TẠO PROMPTS -->
+    <div class="card">
+      <div class="card-title">
+        <span class="step-badge">BƯỚC 1</span>
+        Nhập chủ đề & Lên kịch bản 4 Block
+      </div>
+      <div class="form-group">
+        <label for="topicInput">Chủ đề video (Lịch sử, Triết lý, Khoa học, Bài học sách...):</label>
+        <input type="text" id="topicInput" placeholder="Ví dụ: Chiến dịch Điện Biên Phủ 1954 hoặc Santiago vượt sa mạc..." value="Chiến dịch Điện Biên Phủ 1954: Khi sự kiêu ngạo trả giá bằng đế chế">
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="narrativeModel">Mô hình kịch bản:</label>
+          <select id="narrativeModel">
+            <option value="auto">(Tự động chọn mô hình tối ưu)</option>
+            <option value="in_medias_res">in_medias_res (Mở đầu giữa cao trào kịch tính)</option>
+            <option value="abt">abt (Và - Nhưng - Do đó)</option>
+            <option value="freytag_3_act">freytag_3_act (3 Hồi kinh điển)</option>
+            <option value="visual_math_essay">visual_math_essay (Trực quan hóa phong cách 3B1B)</option>
+            <option value="myth_vs_reality">myth_vs_reality (Đập tan định kiến / Huyền thoại vs Sự thật)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="maxBlocks">Số block video Flow:</label>
+          <select id="maxBlocks">
+            <option value="4" selected>4 Blocks (~12-14s/block, vừa vặn 45-60s)</option>
+            <option value="3">3 Blocks (~12s/block)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-primary" id="btnGenPrompts" onclick="handleGeneratePrompts()">
+        ⚡ Bắt đầu Lên Kịch bản & Sinh Prompts cho Google Flow
+      </button>
+      <div class="loading" id="loadingPrompts">
+        <span class="spinner"></span> Đang gọi LLM biên kịch & tổng hợp giọng đọc Neural VITS (-14 LUFS)... Vui lòng chờ ~10-15s.
+      </div>
+    </div>
+
+    <!-- BƯỚC 2: COPY PROMPT & UPLOAD CLIPS -->
+    <div class="card" id="step2Card" style="display: none;">
+      <div class="card-title">
+        <span class="step-badge">BƯỚC 2</span>
+        Copy Prompts lên Google Flow & Tải Clips về
+      </div>
+      <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+        Truy cập <b>Google Flow</b>, dán prompt từng Block để tạo video (chọn tỷ lệ dọc 9:16). Sau khi tải clip về, tải tương ứng vào từng Block bên dưới:
+      </p>
+
+      <div id="blocksContainer">
+        <!-- Render động các Block -->
+      </div>
+
+      <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px;">
+        <div class="form-group">
+          <label for="subModeSelect">Tùy chọn phụ đề cho Video cuối:</label>
+          <select id="subModeSelect">
+            <option value="narration_full" selected>Hiện đầy đủ 100% lời đọc (Karaoke khớp âm thanh từng từ)</option>
+            <option value="none">Video sạch (Không phụ đề, không chữ đè)</option>
+            <option value="keyword_only">Chỉ hiện từ khóa tóm tắt</option>
+          </select>
+        </div>
+        <button class="btn-success" id="btnRender" onclick="handleRenderMaster()">
+          🎬 Ghép thành Video Hoàn Chỉnh (final_master.mp4)
+        </button>
+        <div class="loading" id="loadingRender">
+          <span class="spinner"></span> Đang cân bằng màu sắc (ContinuityHarmonizer), đồng bộ âm thanh & burn phụ đề...
+        </div>
+      </div>
+    </div>
+
+    <!-- BƯỚC 3: THÀNH PHẨM -->
+    <div class="card preview-section" id="step3Card" style="display: none;">
+      <div class="card-title" style="justify-content: center; color: var(--success);">
+        🎉 VIDEO ĐÃ HOÀN TẤT THÀNH CÔNG!
+      </div>
+      <video id="masterVideo" controls playsinline></video>
+      <div style="margin-top: 16px;">
+        <a id="downloadBtn" href="#" download="final_master.mp4">
+          <button class="btn-primary" style="width: auto; padding: 10px 24px;">⬇️ Tải Video Về Máy</button>
+        </a>
+      </div>
+
+      <!-- TIKTOK PUBLISHING SECTION -->
+      <div class="tiktok-box" id="tiktokSection">
+        <div class="tiktok-header">
+          <span>🎵 ĐĂNG VIDEO LÊN TIKTOK (CREATOR ASSISTANT)</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">
+          Đã tạo sẵn Caption & Hashtags bám sát nội dung. Bạn có thể sao chép và mở nhanh trang đăng chính thức của TikTok:
+        </p>
+        <div class="caption-box" id="tiktokCaptionText">...</div>
+        <div class="tiktok-actions">
+          <button class="btn-copy" onclick="copyTiktokCaption()">📋 Copy Caption</button>
+          <button class="btn-tiktok" id="btnAutoUpload" onclick="handleAutoUploadTikTok()">⚡ TỰ ĐỘNG ĐĂNG LÊN TIKTOK (AUTO-POST)</button>
+          <button class="btn-copy" onclick="openTiktokLogin()">🔑 Đăng nhập / Đổi nick TikTok</button>
+        </div>
+        <div class="loading" id="loadingTiktok" style="margin-top: 10px;">
+          <span class="spinner"></span> Đang tự động mở TikTok, nạp video và gõ caption... Vui lòng không đóng trình duyệt.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Đã copy prompt vào clipboard!</div>
+
+  <script>
+    let currentRunDir = "";
+    let currentMasterVideoPath = "";
+    let manifestData = null;
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.style.opacity = "1";
+      setTimeout(() => { t.style.opacity = "0"; }, 2500);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("✅ Đã copy Prompt Block vào clipboard!");
+      });
+    }
+
+    async function handleGeneratePrompts() {
+      const topic = document.getElementById("topicInput").value.trim();
+      const model = document.getElementById("narrativeModel").value;
+      const blocks = parseInt(document.getElementById("maxBlocks").value);
+
+      if (!topic) {
+        alert("Vui lòng nhập chủ đề!");
+        return;
+      }
+
+      document.getElementById("btnGenPrompts").disabled = true;
+      document.getElementById("loadingPrompts").style.display = "block";
+      document.getElementById("step2Card").style.display = "none";
+      document.getElementById("step3Card").style.display = "none";
+
+      try {
+        const resp = await fetch("/api/flow-prep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic, model, max_blocks: blocks })
+        });
+        const res = await resp.json();
+
+        if (res.status !== "success") {
+          throw new Error(res.message || "Lỗi tạo kịch bản");
+        }
+
+        currentRunDir = res.run_dir;
+        manifestData = res.manifest;
+        renderBlocks(manifestData.blocks);
+        document.getElementById("step2Card").style.display = "block";
+        showToast("Đã tạo xong 4 Block kịch bản!");
+      } catch (err) {
+        alert("Có lỗi xảy ra: " + err.message);
+      } finally {
+        document.getElementById("btnGenPrompts").disabled = false;
+        document.getElementById("loadingPrompts").style.display = "none";
+      }
+    }
+
+    function renderBlocks(blocks) {
+      const container = document.getElementById("blocksContainer");
+      container.innerHTML = "";
+
+      blocks.forEach((b, idx) => {
+        const div = document.createElement("div");
+        div.className = "block-card";
+        div.innerHTML = `
+          <div class="block-header">
+            <span class="block-title">Block ${b.block_index} (~${b.duration_sec.toFixed(1)}s - Cảnh ${JSON.stringify(b.scene_indices)})</span>
+            <button class="btn-copy" onclick="copyToClipboard(\`${b.flow_prompt.replace(/`/g, "\\`").replace(/\\/g, "\\\\")}\`)">
+              📋 Copy Prompt Flow
+            </button>
+          </div>
+          <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">
+            <b>Lời đọc:</b> "${b.narration_vn}"
+          </div>
+          <div class="prompt-box">${b.flow_prompt}</div>
+          <div class="upload-zone">
+            <input type="file" accept="video/mp4,video/webm,video/mov" id="file_block_${b.block_index}" onchange="uploadBlockClip(${b.block_index})">
+            <span class="status-text status-pending" id="status_block_${b.block_index}">Chưa upload clip</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function uploadBlockClip(blockIdx) {
+      const fileInput = document.getElementById(`file_block_${blockIdx}`);
+      const statusSpan = document.getElementById(`status_block_${blockIdx}`);
+
+      if (!fileInput.files || !fileInput.files[0]) return;
+
+      const file = fileInput.files[0];
+      statusSpan.innerText = "Đang tải lên...";
+
+      const formData = new FormData();
+      formData.append("run_dir", currentRunDir);
+      formData.append("block_index", blockIdx);
+      formData.append("clip_file", file);
+
+      try {
+        const resp = await fetch("/api/upload-clip", {
+          method: "POST",
+          body: formData
+        });
+        const res = await resp.json();
+        if (res.status === "success") {
+          statusSpan.className = "status-text status-uploaded";
+          statusSpan.innerText = `✅ Đã nhận clip: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`;
+          showToast(`Đã lưu clip cho Block ${blockIdx}!`);
+        } else {
+          statusSpan.innerText = "❌ Lỗi: " + res.message;
+        }
+      } catch (err) {
+        statusSpan.innerText = "❌ Lỗi upload: " + err.message;
+      }
+    }
+
+    async function handleRenderMaster() {
+      const subMode = document.getElementById("subModeSelect").value;
+      document.getElementById("btnRender").disabled = true;
+      document.getElementById("loadingRender").style.display = "block";
+
+      try {
+        const resp = await fetch("/api/flow-render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ run_dir: currentRunDir, sub_mode: subMode })
+        });
+        const res = await resp.json();
+        if (res.status !== "success") {
+          throw new Error(res.message || "Lỗi ghép video");
+        }
+
+        currentMasterVideoPath = res.final_master_video_path;
+        const videoPlayer = document.getElementById("masterVideo");
+        videoPlayer.src = res.video_url + "?t=" + new Date().getTime();
+        document.getElementById("downloadBtn").href = res.video_url;
+
+        // Cập nhật Caption TikTok
+        if (manifestData && manifestData.story_moral) {
+          document.getElementById("tiktokCaptionText").innerText = manifestData.story_moral;
+        } else {
+          document.getElementById("tiktokCaptionText").innerText = document.getElementById("topicInput").value + " #phimtailieu #kienthuc #shorts";
+        }
+
+        document.getElementById("step3Card").style.display = "block";
+        document.getElementById("step3Card").scrollIntoView({ behavior: 'smooth' });
+        showToast("🎉 Ghép video thành công!");
+      } catch (err) {
+        alert("Lỗi ghép video: " + err.message);
+      } finally {
+        document.getElementById("btnRender").disabled = false;
+        document.getElementById("loadingRender").style.display = "none";
+      }
+    }
+
+    function copyTiktokCaption() {
+      const text = document.getElementById("tiktokCaptionText").innerText;
+      copyToClipboard(text);
+      showToast("✅ Đã copy Caption TikTok vào clipboard!");
+    }
+
+    function openTiktokLogin() {
+      fetch("/api/tiktok/login", { method: "POST" });
+      alert("Cửa sổ trình duyệt đang được mở ra. Bạn hãy đăng nhập tài khoản TikTok của bạn vào đó, sau đó có thể đóng trình duyệt lại. Hệ thống sẽ tự nhớ nick này vĩnh viễn!");
+    }
+
+    async function handleAutoUploadTikTok() {
+      if (!currentMasterVideoPath) {
+        alert("Chưa có file video hoàn chỉnh!");
+        return;
+      }
+      const caption = document.getElementById("tiktokCaptionText").innerText;
+      document.getElementById("btnAutoUpload").disabled = true;
+      document.getElementById("loadingTiktok").style.display = "block";
+
+      try {
+        const resp = await fetch("/api/tiktok/auto-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_path: currentMasterVideoPath, caption: caption })
+        });
+        const res = await resp.json();
+        if (res.status === "success") {
+          alert("🎉 " + res.message);
+          showToast("Đã tự động đăng video lên TikTok thành công!");
+        } else if (res.code === "AUTH_REQUIRED") {
+          alert("⚠️ Bạn chưa đăng nhập nick TikTok trên trình duyệt của hệ thống. Vui lòng bấm '🔑 Đăng nhập / Đổi nick TikTok' để đăng nhập 1 lần trước!");
+        } else {
+          alert("Thông báo TikTok: " + res.message);
+        }
+      } catch (err) {
+        alert("Lỗi upload: " + err.message);
+      } finally {
+        document.getElementById("btnAutoUpload").disabled = false;
+        document.getElementById("loadingTiktok").style.display = "none";
+      }
+    }
+  </script>
+</body>
+</html>
+

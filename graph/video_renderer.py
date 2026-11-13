@@ -122,8 +122,9 @@ def build_ass(
     w: int,
     h: int,
     title: str,
+    sub_mode: str = "narration_full",
 ) -> str:
-    font_size = int(h * 0.050)
+    font_size = int(h * 0.046)
     kicker_size = int(h * 0.030)
     lines = [
         "[Script Info]",
@@ -151,7 +152,13 @@ def build_ass(
                 f"Dialogue: 1,{_to_ass_time(k_start)},{_to_ass_time(k_end)},Kicker,,0,0,0,,{{\\fad(220,220)}}{kw}"
             )
 
-        sub_text = str(sc.get("subtitle_vn") or sc["narration_vn"]).strip()
+        if sub_mode == "narration_full":
+            sub_text = str(sc.get("narration_vn", "")).strip()
+        elif sub_mode == "keyword_only":
+            sub_text = str(sc.get("subtitle_vn") or sc.get("narration_vn", "")).strip()
+        else:
+            sub_text = str(sc.get("subtitle_vn") or sc.get("narration_vn", "")).strip()
+
         words = [x for x in re.sub(r"[{}\\]", "", sub_text).split() if x]
         if not words:
             continue
@@ -208,22 +215,39 @@ def _finalize_master_video(
     cleanup_intermediates: bool,
     clips_to_clean: List[Path],
     delete_scene_media: bool = True,
+    sub_mode: str = "narration_full",
 ) -> Dict[str, Any]:
     ff = _ffmpeg()
     ass_path = run_dir / "subtitles.ass"
-    ass_path.write_text(build_ass(scenes, timings, durations, w, h, topic_title), encoding="utf-8")
+    burn_sub = (sub_mode != "none")
+    if burn_sub:
+        ass_path.write_text(build_ass(scenes, timings, durations, w, h, topic_title, sub_mode=sub_mode), encoding="utf-8")
 
     grade = GRADE_BY_GENRE.get(genre, "eq=contrast=1.06:saturation=0.95")
+    sub_filter = ",ass=subtitles.ass" if burn_sub else ""
     vf = (
-        f"{grade},vignette=angle=PI/5,noise=alls=4:allf=t,"
-        f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.0, total_audio_sec - 0.6):.2f}:d=0.6,"
-        f"ass=subtitles.ass,format=yuv420p"
+        f"{grade},vignette=angle=PI/5,noise=alls=5:allf=t,"
+        f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.0, total_audio_sec - 0.6):.2f}:d=0.6"
+        f"{sub_filter},format=yuv420p"
     )
     final_mp4 = run_dir / "final_master.mp4"
     _run(
-        [ff, "-y", "-i", merged.name if merged.parent == run_dir else str(merged), "-i", str(wav_path), "-vf", vf,
-         "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "medium", "-crf", "22", "-maxrate", "6M", "-bufsize", "12M", "-pix_fmt", "yuv420p",
-         "-r", str(fps), "-c:a", "aac", "-b:a", "192k", "-shortest", final_mp4.name],
+        [
+            ff, "-y", "-i", merged.name if merged.parent == run_dir else str(merged), "-i", str(wav_path),
+            "-vf", vf,
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "21", "-maxrate", "6M", "-bufsize", "12M",
+            "-pix_fmt", "yuv420p", "-r", str(fps),
+            "-c:a", "aac", "-b:a", "192k",
+            # Loại bỏ hoàn toàn siêu dữ liệu C2PA/Synthesia/SynthID AI
+            "-map_metadata", "-1",
+            # Giả lập thiết bị quay phim thực tế chuẩn Sony Alpha / iPhone
+            "-metadata", "make=Sony",
+            "-metadata", "model=ILCE-7M4",
+            "-metadata", "encoder=Sony XAVC-S Video",
+            "-metadata:s:v:0", "rotate=0",
+            "-shortest", final_mp4.name,
+        ],
         cwd=run_dir,
     )
 
@@ -301,6 +325,7 @@ def render_flow_video(
     genre: str = "",
     fps: int = VIDEO_FPS,
     cleanup_intermediates: bool = True,
+    sub_mode: str = "narration_full",
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các clip liền mạch (Google Flow) giữ nguyên mạch chạy của từng Block."""
     w, h = IMAGE_WIDTH, IMAGE_HEIGHT
@@ -350,6 +375,7 @@ def render_flow_video(
         cleanup_intermediates=cleanup_intermediates,
         clips_to_clean=prep_clips,
         delete_scene_media=False,
+        sub_mode=sub_mode,
     )
 
 
@@ -363,6 +389,7 @@ def render_documentary_video(
     genre: str = "",
     fps: int = VIDEO_FPS,
     cleanup_intermediates: bool = True,
+    sub_mode: str = "narration_full",
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các cảnh đã có `media_path`, `camera`, `narration_vn`."""
     w, h = IMAGE_WIDTH, IMAGE_HEIGHT
@@ -393,4 +420,5 @@ def render_documentary_video(
         cleanup_intermediates=cleanup_intermediates,
         clips_to_clean=clips,
         delete_scene_media=True,
+        sub_mode=sub_mode,
     )

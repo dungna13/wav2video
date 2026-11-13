@@ -2,7 +2,7 @@
 
 # 🎬 wav2video — Agentic Short Documentary & Book-to-Video Pipeline (9:16)
 
-**Biến một chủ đề tự do hoặc cả một cuốn sách (`.epub` / `.txt` / `.docx` / `.pdf`) thành video tài liệu ngắn dọc 9:16 hoàn chỉnh — tự động biên kịch theo 12 mô hình tự sự, kiểm định Groundedness 0-token, lồng tiếng Neural VITS tiếng Việt, tổng hợp SFX, tải Video Footage HD và dựng phụ đề Karaoke chuẩn TikTok / Reels / Shorts.**
+**Biến một chủ đề tự do hoặc cả một cuốn sách (`.epub` / `.txt` / `.docx` / `.pdf`) thành video tài liệu ngắn dọc 9:16 hoàn chỉnh — tự động biên kịch theo 13 mô hình tự sự & 14 chuyên gia lĩnh vực, kiểm định Groundedness 0-token, lồng tiếng Neural VITS tiếng Việt, tải ảnh tư liệu thật Wikimedia, hỗ trợ Google Flow 4-Block, Giao diện Web UX/UI Studio, HITL CLI và Tự động Đăng TikTok (Anti-AI Metadata).**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/Workflow-LangGraph%20StateGraph-1C3C3C?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
@@ -211,12 +211,32 @@ Thay vì treo terminal chờ bạn gen clip trên trình duyệt, quy trình tá
    ```
    Hệ thống sẽ tự khớp từng clip vào đúng Block, cân bằng màu (`ContinuityHarmonizer`), ghép với giọng đọc `-14 LUFS`, burn phụ đề Karaoke và xuất **`final_master.mp4`**.
 
-### 4. Kiểm tra Log, Checkpoint & Chạy Test
+### 4. Giao diện Web UX/UI Studio & Tự động Đăng TikTok
+```bash
+# Khởi động Web Studio tại http://localhost:8000
+python main.py --ui
+
+# Hoặc chỉ định cổng tùy ý
+python main.py --ui --port 8080
+```
+Quy trình thao tác 3 bước trên Web:
+1. **Bước 1**: Nhập chủ đề video ➜ Bấm nút sinh kịch bản & 4 Prompts khối cho Google Flow.
+2. **Bước 2**: Nhấn nút "Copy Prompt Flow" từng block ➜ dán vào Google Flow để gen video ➜ Tải file video lên tương ứng từng Block trên web.
+3. **Bước 3**: Chọn chế độ phụ đề (mặc định hiện 100% lời đọc) ➜ Bấm "Ghép Video Hoàn Chỉnh".
+4. **Đăng TikTok**: Bấm nút "🔑 Đăng nhập / Đổi nick TikTok" để đăng nhập 1 lần ➜ Bấm "⚡ TỰ ĐỘNG ĐĂNG LÊN TIKTOK" để bot tự động upload, điền caption và bấm Post (hoặc bấm copy caption để đăng thủ công).
+
+### 5. Giao diện HITL CLI (Duyệt nhanh trên Terminal)
+```bash
+# Duyệt dashboard, preview thumbnail hoặc đổi riêng 1 clip cảnh lỗi
+python main.py --hitl workspace/flow_<ten_thu_muc>
+```
+
+### 6. Kiểm tra Log, Checkpoint & Chạy Test
 ```bash
 # Xem 5 checkpoint gần nhất, bảng error_logs trong SQLite và 25 dòng cuối của latest.log
 python main.py --logs
 
-# Chạy toàn bộ bộ kiểm thử Tầng 2 (VisualScorer, ContinuityHarmonizer, -14 LUFS, Flow)
+# Chạy toàn bộ bộ kiểm thử tự động
 python -m unittest discover -s tests -v
 ```
 
@@ -238,8 +258,10 @@ Sau khi dựng xong `final_master.mp4`, hệ thống **tự động dọn sạch
 
 ## 🗺️ Lộ trình Phát triển (So với [`wav2vid.md`](wav2vid.md))
 
-* [x] **Tầng 1 (100%)**: Intent Router 3 chế độ, 12 Mô hình Kịch bản + Beat Sheets, Book RAG Hybrid Search (`FTS5` + `multilingual-e5-small`), Angle Miner, Local Groundedness 0-Token & `QueryRewriter` Loop (`retry_rag < 3`).
-* [x] **Độ tin cậy & Quan sát (100%)**: Checkpoint SQLite sau từng Node, bảng `error_logs`, Auto File Logging (`--logs`) & Gemini Multi-Model Cascade.
-* [ ] **Tầng 2 Nâng cao (Đang phát triển)**: Chấm khung hình *video tải về thật* bằng Local CLIP (`openai/clip-vit-base-patch32` 0-token), lọc trùng clip Mixkit & cân màu đồng nhất giữa các cảnh (`ContinuityHarmonizer`).
-* [ ] **Tầng 4 (HITL CLI)**: Giao diện duyệt nhanh trên terminal cho phép đổi riêng clip cảnh lỗi mà không cần chạy lại LLM/TTS.
-* [ ] **Giai đoạn 2 (`HUMAN_WITH_LIPSYNC` & Tầng 5)**: Tích hợp `Wav2Lip` + `GFPGAN` + `SyncNet` (GPU CUDA) và TikTok Content Posting API v2.
+* [x] **Tầng 1 (100%)**: Intent Router 3 chế độ, 13 Mô hình Kịch bản độc lập + 14 Chuyên gia miền, Book RAG Hybrid Search (`FTS5` + `multilingual-e5-small`), Angle Miner, Local Groundedness 0-Token & `QueryRewriter` Loop (`retry_rag < 3`).
+* [x] **Tầng 2 (100%)**: Săn Footage HD thật (Mixkit / Pexels / Pixabay), Tải ảnh tư liệu thật Wikimedia API (`real_photo`), Chấm CLIP 0-token, Lọc đứng hình/tối, Cân bằng màu `ContinuityHarmonizer`, DSP âm thanh `-14 LUFS` + 7 SFX cues.
+* [x] **Quy trình Google Flow (100%)**: Tự gom 4 Block cân bằng thời lượng (`--flow-prep`), neo chuyển cảnh *seamless continuation*, khớp âm thanh thực tế & dựng phim chuẩn phụ đề Karaoke (`--flow-render`).
+* [x] **Tầng HITL CLI (100%)**: Giao diện dòng lệnh tương tác (`--hitl`), duyệt dashboard từng block, trích xuất thumbnail và hoán đổi (Swap) clip cảnh lỗi tại chỗ không cần chạy lại LLM/TTS.
+* [x] **Giao diện Web UX/UI Studio (100%)**: Web Studio trực quan tại `http://localhost:8000` (`--ui`) — nhập topic ➜ copy 4 block prompts ➜ upload clips ➜ ghép và xem video thành phẩm trực tiếp trên trình duyệt.
+* [x] **Đăng tải TikTok Tự Động & Chống Nhãn AI (100%)**: Tự động loại bỏ siêu dữ liệu C2PA/SynthID, giả lập máy quay thực tế Sony Alpha 7 IV, tự động gõ Caption/Hashtags và click Post qua Playwright bot.
+* [ ] **Giai đoạn tiếp theo (`HUMAN_WITH_LIPSYNC`)**: Khẩu hình miệng AI chân dung (`Wav2Lip` + `GFPGAN` + `SyncNet` trên máy chủ GPU CUDA).

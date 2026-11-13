@@ -264,7 +264,7 @@ def _vits_clause_audio(text: str, model, tokenizer, vits_sr: int, torch_mod) -> 
 
 
 def _synth_sfx(cue: str, sr: int) -> np.ndarray:
-    """Sinh hiệu ứng âm thanh chuyển nhịp nhẹ (`low_thud`, `subtle_whoosh`, `camera_click`, `wind_swell`)."""
+    """Sinh hiệu ứng âm thanh chuyển nhịp (`low_thud`, `subtle_whoosh`, `camera_click`, `wind_swell`, `deep_sub_drop`, `heartbeat_pulse`, `clock_tick_stop`)."""
     cue = (cue or "none").strip().lower()
     if cue == "low_thud":
         n = int(0.45 * sr)
@@ -272,6 +272,25 @@ def _synth_sfx(cue: str, sr: int) -> np.ndarray:
         freq = 68.0 - 32.0 * (t / 0.45)
         env = np.exp(-t * 8.5).astype(np.float32)
         return (np.sin(2.0 * np.pi * np.cumsum(freq) / sr) * env * 0.42).astype(np.float32)
+    if cue == "deep_sub_drop":
+        n = int(0.65 * sr)
+        t = np.linspace(0.0, 0.65, n, endpoint=False, dtype=np.float32)
+        freq = 92.0 * np.exp(-t * 2.4) + 28.0
+        env = np.exp(-t * 4.8).astype(np.float32)
+        return (np.sin(2.0 * np.pi * np.cumsum(freq) / sr) * env * 0.46).astype(np.float32)
+    if cue == "heartbeat_pulse":
+        n = int(0.55 * sr)
+        t = np.linspace(0.0, 0.55, n, endpoint=False, dtype=np.float32)
+        lub = np.exp(-((t - 0.06) / 0.032) ** 2) * np.sin(2.0 * np.pi * 55.0 * t)
+        dub = np.exp(-((t - 0.24) / 0.028) ** 2) * np.sin(2.0 * np.pi * 48.0 * t) * 0.78
+        return ((lub + dub) * 0.44).astype(np.float32)
+    if cue == "clock_tick_stop":
+        n = int(0.32 * sr)
+        t = np.linspace(0.0, 0.32, n, endpoint=False, dtype=np.float32)
+        tick1 = np.exp(-t * 55.0) * np.sin(2.0 * np.pi * 1650.0 * t)
+        t2 = np.maximum(0.0, t - 0.14)
+        tick2 = np.where(t >= 0.14, np.exp(-t2 * 60.0) * np.sin(2.0 * np.pi * 1250.0 * t2) * 0.75, 0.0)
+        return ((tick1 + tick2) * 0.26).astype(np.float32)
     if cue == "subtle_whoosh":
         n = int(0.36 * sr)
         rng = np.random.default_rng(7)

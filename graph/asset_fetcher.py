@@ -281,6 +281,140 @@ def _candidate_rank(ev: Dict[str, Any], no_human: bool) -> float:
     return base + 0.15 * sharp - penalty
 
 
+_WIKIMEDIA_MIN_INTERVAL_SEC = 2.4
+_last_wikimedia_call_ts = 0.0
+_VALID_REAL_IMAGE_EXTS = (".jpg", ".jpeg", ".png")
+_BANNED_REAL_IMAGE_RE = re.compile(r"(?:^|[^a-z0-9])(logo|flag|icon)s?(?:[^a-z0-9]|$)")
+
+
+def _throttle_wikimedia() -> None:
+    """Giãn cách request Wikimedia tối thiểu 2.4s để tránh HTTP 429."""
+    global _last_wikimedia_call_ts
+    elapsed = time.monotonic() - _last_wikimedia_call_ts
+    remaining = _WIKIMEDIA_MIN_INTERVAL_SEC - elapsed
+    if remaining > 0:
+        time.sleep(remaining)
+    _last_wikimedia_call_ts = time.monotonic()
+
+
+def _is_valid_wikimedia_candidate(url: str, title: str, width: Any, min_width: int) -> bool:
+    if not url:
+        return False
+    clean_path = urllib.parse.urlsplit(url).path.lower()
+    if ".svg" in clean_path or not clean_path.endswith(_VALID_REAL_IMAGE_EXTS):
+        return False
+    if _BANNED_REAL_IMAGE_RE.search(f"{title} {clean_path}".lower()):
+        return False
+    if width is not None:
+        try:
+            if int(width) < min_width:
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
+def fetch_wikimedia_real_image(query: str, out_img: Path, min_width: int = 640) -> Optional[Path]:
+    """Tìm và tải ảnh tư liệu thật (.jpg/.jpeg/.png) từ Wikipedia API, fallback Wikimedia Commons API."""
+    clean_query = " ".join((query or "").split())
+    if not clean_query:
+        return None
+    headers = {"User-Agent": "wav2video/1.0"}
+
+    def _try_save(img_url: str) -> Optional[Path]:
+        try:
+            _throttle_wikimedia()
+            r = requests.get(img_url, headers=headers, timeout=25)
+            if r.status_code != 200 or len(r.content) < MIN_IMAGE_BYTES:
+                return None
+            im = Image.open(io.BytesIO(r.content))
+            im.verify()
+            out_img.parent.mkdir(parents=True, exist_ok=True)
+            Image.open(io.BytesIO(r.content)).convert("RGB").save(out_img, format="JPEG", quality=92)
+            return out_img
+        except Exception:
+            return None
+
+    # Bước 1: Wikipedia API
+    try:
+        _throttle_wikimedia()
+        r = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": clean_query,
+                "gsrlimit": 3,
+                "prop": "pageimages|info",
+                "piprop": "original|thumbnail",
+                "pithumbsize": 1400,
+                "inprop": "url",
+                "format": "json",
+            },
+            headers=headers,
+            timeout=15,
+        )
+        if r.status_code == 200:
+            pages = list((r.json().get("query") or {}).get("pages", {}).values())
+            pages.sort(key=lambda p: int(p.get("index", 999)))
+            for page in pages:
+                title = str(page.get("title", "")).strip()
+                for key in ("thumbnail", "original"):
+                    cand = page.get(key)
+                    if not isinstance(cand, dict):
+                        continue
+                    img_url = str(cand.get("source", "")).strip()
+                    if _is_valid_wikimedia_candidate(img_url, title, cand.get("width"), min_width):
+                        saved = _try_save(img_url)
+                        if saved is not None:
+                            return saved
+    except Exception:
+        pass
+
+    # Bước 2: Wikimedia Commons API (namespace 6)
+    try:
+        _throttle_wikimedia()
+        r = requests.get(
+            "https://commons.wikimedia.org/w/api.php",
+            params={
+                "action": "query",
+                "generator": "search",
+                "gsrnamespace": 6,
+                "gsrsearch": clean_query,
+                "gsrlimit": 5,
+                "prop": "imageinfo",
+                "iiprop": "url|size|mime",
+                "iiurlwidth": 1400,
+                "format": "json",
+            },
+            headers=headers,
+            timeout=15,
+        )
+        if r.status_code == 200:
+            pages = list((r.json().get("query") or {}).get("pages", {}).values())
+            pages.sort(key=lambda p: int(p.get("index", 999)))
+            for page in pages:
+                title = str(page.get("title", "")).strip()
+                infos = page.get("imageinfo") or []
+                if not infos:
+                    continue
+                info = infos[0]
+                mime = str(info.get("mime", "")).lower()
+                cands = []
+                if info.get("thumburl"):
+                    cands.append((str(info["thumburl"]).strip(), info.get("thumbwidth")))
+                if info.get("url") and mime in ("", "image/jpeg", "image/png"):
+                    cands.append((str(info["url"]).strip(), info.get("width")))
+                for img_url, width in cands:
+                    if _is_valid_wikimedia_candidate(img_url, title, width, min_width):
+                        saved = _try_save(img_url)
+                        if saved is not None:
+                            return saved
+    except Exception:
+        pass
+    return None
+
+
 def _select_best_stock_video(
     scene_idx: int,
     sc: Dict[str, Any],
@@ -387,6 +521,14 @@ def fetch_scene_assets(
             last_good = img_path
             source = "ai_image(cache)"
         else:
+            real_query = str(sc.get("real_media_query", "") or "").strip()
+            if str(sc.get("visual_source_type", "")).strip().lower() == "real_photo" and real_query:
+                if fetch_wikimedia_real_image(real_query, img_path) is not None:
+                    sc.update(media_path=str(img_path), media_type="image")
+                    last_good = img_path
+                    source = "wikimedia_real_photo"
+
+        if not source:
             accepted, backup, tried = _select_best_stock_video(
                 scene_idx=i,
                 sc=sc,

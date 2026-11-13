@@ -48,7 +48,10 @@ VALID_MUSIC_MOODS = frozenset({
     "reflective_piano", "suspense_dark", "uplifting_soft",
 })
 VALID_CAMERAS = frozenset({"zoom_in", "zoom_out", "pan_left", "pan_right", "tilt_up", "tilt_down"})
-VALID_SFX_CUES = frozenset({"none", "low_thud", "subtle_whoosh", "camera_click", "wind_swell"})
+VALID_SFX_CUES = frozenset({
+    "none", "low_thud", "subtle_whoosh", "camera_click", "wind_swell",
+    "deep_sub_drop", "heartbeat_pulse", "clock_tick_stop",
+})
 
 
 def _has_word(text: str, words: List[str]) -> bool:
@@ -75,7 +78,7 @@ def rule_check(
     if music_mood and music_mood not in VALID_MUSIC_MOODS:
         soft.append(f"music_mood '{music_mood}' chưa nằm trong 7 mood chuẩn.")
     if narrative_model and narrative_model not in VALID_NARRATIVE_MODELS:
-        soft.append(f"narrative_model '{narrative_model}' chưa nằm trong 12 mô hình chuẩn.")
+        soft.append(f"narrative_model '{narrative_model}' chưa nằm trong 13 mô hình chuẩn.")
     if style_anchor_en:
         sw = len(style_anchor_en.split())
         if sw < 20 or sw > 55:
@@ -140,9 +143,13 @@ def rule_check(
             soft.append(f"Cảnh {i}: sfx_cue '{sfx}' không hợp lệ.")
         elif sfx != "none":
             sfx_count += 1
+        vst = str(s.get("visual_source_type", "") or "").strip().lower()
+        rmq = str(s.get("real_media_query", "") or "").strip()
+        if vst == "real_photo" and not rmq:
+            soft.append(f"Cảnh {i}: visual_source_type là 'real_photo' nhưng thiếu real_media_query.")
         has_human = _has_word(img, HUMAN_WORDS)
         human_scenes += int(has_human)
-        if intent_mode == "NO_HUMAN_BROLL" and has_human:
+        if intent_mode == "NO_HUMAN_BROLL" and has_human and vst != "real_photo":
             hard.append(f"Cảnh {i}: chế độ NO_HUMAN_BROLL nhưng ảnh có người; đổi sang vật thể/địa điểm.")
 
     if n >= 5 and short_twist_count == 0:
@@ -171,7 +178,9 @@ def rule_check(
 
 def _scenes_block(scenes: List[Dict[str, Any]]) -> str:
     return "\n".join(
-        f"[Cảnh {i}] camera={s.get('camera', '')} | stock={s.get('stock_query_en', '')} | sfx={s.get('sfx_cue', 'none')} | kw={s.get('overlay_keyword_vn', '')}\n"
+        f"[Cảnh {i}] src={s.get('visual_source_type', 'stock_video')} | real_q={s.get('real_media_query', '')} "
+        f"| camera={s.get('camera', '')} | stock={s.get('stock_query_en', '')} | sfx={s.get('sfx_cue', 'none')} "
+        f"| bgm={s.get('bgm_energy', 'rise')} | vocal={s.get('vocal_delivery', 'normal_story')} | kw={s.get('overlay_keyword_vn', '')}\n"
         f"   LỜI TTS: {s['narration_vn']}\n"
         f"   PHỤ ĐỀ: {s.get('subtitle_vn', s['narration_vn'])}\n"
         f"   ẢNH: {s['image_prompt_en']}"

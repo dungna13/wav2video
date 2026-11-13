@@ -347,6 +347,7 @@ def prepare_flow_workspace(
 def render_from_flow_clips(
     run_dir: Path,
     clips_dir: Optional[Path] = None,
+    sub_mode: str = "narration_full",
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các clip Google Flow (không reject/bắt tạo lại clip)."""
     manifest_path = run_dir / "flow_manifest.json"
@@ -419,6 +420,7 @@ def render_from_flow_clips(
         total_audio_sec=total_audio_sec,
         topic_title=manifest["topic_title"],
         genre=manifest.get("genre", ""),
+        sub_mode=sub_mode,
     )
 
     judge_state = visual_judge_and_update_registry_node(

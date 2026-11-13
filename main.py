@@ -32,6 +32,8 @@ from graph.book_rag import (
     mark_chunk_done,
 )
 from graph.flow_bundler import prepare_flow_workspace, render_from_flow_clips
+from graph.hitl_cli import run_hitl_cli
+from graph.web_app import start_server
 from graph.llm_client import ANGLE_MINER_GEMINI_SCHEMA, call_gemini_thinking_structured
 from graph.run_logger import print_diagnostics, start_run_log
 from graph.workflow import create_christian_short_video_app
@@ -51,7 +53,11 @@ def _parse_args(argv) -> Dict[str, Any]:
         "logs": False,
         "flow_prep": False,
         "flow_render": "",
+        "hitl": "",
+        "ui": False,
+        "port": 8000,
         "clips_dir": "",
+        "sub_mode": "narration_full",
         "block_sec": 14.0,
         "max_blocks": 4,
         "topic": "",
@@ -82,8 +88,19 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["flow_prep"] = True
         elif a == "--flow-render":
             opts["flow_render"] = next(it, "").strip()
+        elif a in ("--hitl", "--review"):
+            opts["hitl"] = next(it, "").strip()
+        elif a in ("--ui", "--web"):
+            opts["ui"] = True
+        elif a == "--port":
+            p = next(it, "8000").strip()
+            opts["port"] = int(p) if p.isdigit() else 8000
         elif a == "--clips-dir":
             opts["clips_dir"] = next(it, "").strip()
+        elif a == "--sub-mode":
+            opts["sub_mode"] = next(it, "narration_full").strip().lower()
+        elif a == "--no-sub":
+            opts["sub_mode"] = "none"
         elif a == "--block-sec":
             raw = next(it, "14").strip()
             try:
@@ -132,10 +149,19 @@ def main():
         print_diagnostics()
         return
 
+    if opts["ui"]:
+        start_server(port=opts["port"])
+        return
+
+    if opts["hitl"]:
+        run_hitl_cli(opts["hitl"], sub_mode=opts["sub_mode"])
+        return
+
     if opts["flow_render"]:
         res = render_from_flow_clips(
             run_dir=Path(opts["flow_render"]),
             clips_dir=Path(opts["clips_dir"]) if opts["clips_dir"] else None,
+            sub_mode=opts["sub_mode"],
         )
         m = res["manifest"]
         r = res["rendered"]

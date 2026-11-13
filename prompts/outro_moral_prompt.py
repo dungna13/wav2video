@@ -6,13 +6,18 @@ sau khi kịch bản từ `prompt_architect_node` đã qua kiểm tra cấu trú
 Render bằng `render_outro_moral_prompt(...)` (thay token, không dùng str.format).
 """
 
-from .narrative_models import NARRATIVE_MODELS
+from .narrative_models import NARRATIVE_MODELS, select_domain_expert
 
-OUTRO_MORAL_PROMPT_TEMPLATE = """Bạn là **Biên tập viên Lồng tiếng TTS Tiếng Việt** cho kênh phim tài liệu ngắn 9:16 (phong cách Vox / Johnny Harris / Thư Viện Lịch Sử).
-Nhiệm vụ: chuốt lại lời bình `narration_vn` (cho TTS đọc) và `subtitle_vn` (cho mắt đọc) của từng cảnh cùng câu chốt `story_moral` nhưng KHÔNG làm đổi nghĩa hay số lượng cảnh (để hình ảnh vẫn khớp 100% lời).
+OUTRO_MORAL_PROMPT_TEMPLATE = """[ROLE]: {domain_expert_role} — kiêm Biên tập viên Lồng tiếng TTS Tiếng Việt
+[DOMAIN_LENS]: {domain_expert_lens}
+[PURPOSE]: Chuốt lại lời bình `narration_vn` (cho TTS đọc) và `subtitle_vn` (cho mắt đọc) của từng cảnh cùng câu chốt `story_moral` nhưng KHÔNG làm đổi nghĩa hay số lượng cảnh (để hình ảnh vẫn khớp 100% lời).
+[STYLE]: Vox / Johnny Harris / Thư Viện Lịch Sử — nhịp câu biến thiên (Staccato Hook, Twist ngắn gắt, Sonic Echo lúc kết), giàu động từ giác quan, sạch ký tự cấm TTS
+[PLATFORM]: Video dọc 9:16 (TikTok, Facebook/Instagram Reels, YouTube Shorts) — 45–60 giây (8–10 cảnh, 130–185 từ)
+[AUDIENCE]: Người lớn 18–45 tuổi, nghe nhanh trên di động, bỏ xem ngay nếu lời đọc đều giọng, sáo rỗng hoặc TTS đọc vấp
 
-Chủ đề: "{topic_title}"   |   Thể loại: {genre}   |   Mô hình: `{narrative_model_id}`
-Kiểu chốt bắt buộc của mô hình `{narrative_model_id}`: {outro_style}
+[TASK]: Tinh chỉnh lời bình từng cảnh và câu chốt `story_moral` theo đúng kiểu chốt của mô hình `{narrative_model_id}`, giữ nguyên số lượng cảnh và xuất đúng một JSON object hợp lệ.
+- Chủ đề: "{topic_title}"   |   Thể loại: {genre}   |   Mô hình: `{narrative_model_id}`
+- Kiểu chốt bắt buộc của mô hình `{narrative_model_id}`: {outro_style}
 
 ### LỜI BÌNH HIỆN TẠI THEO TỪNG CẢNH:
 {scenes_narration_block}
@@ -45,6 +50,8 @@ Kiểu chốt bắt buộc của mô hình `{narrative_model_id}`: {outro_style}
 
 
 _TOKENS = (
+    "domain_expert_role",
+    "domain_expert_lens",
     "narrative_model_id",
     "outro_style",
     "topic_title",
@@ -60,11 +67,21 @@ def render_outro_moral_prompt(
     scenes_narration_block: str,
     story_moral: str = "",
     narrative_model: str = "abt",
+    domain_expert: str = "auto",
 ) -> str:
     """Render prompt tinh chỉnh voiceover TTS theo token thay thế an toàn."""
     model_key = (narrative_model or "abt").strip().lower()
     model = NARRATIVE_MODELS.get(model_key) or NARRATIVE_MODELS["abt"]
+    expert = select_domain_expert(
+        topic_title,
+        source_context=scenes_narration_block,
+        genre_hint=genre,
+        narrative_model=model_key,
+        preferred_expert=domain_expert,
+    )
     values = {
+        "domain_expert_role": expert["expert_role"],
+        "domain_expert_lens": expert["expert_lens"],
         "narrative_model_id": model["id"],
         "outro_style": model["outro_style"],
         "topic_title": topic_title,

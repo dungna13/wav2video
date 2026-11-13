@@ -4,8 +4,8 @@ Kho Mô hình Lý thuyết & Bộ Chọn Mô hình Kịch bản Tối ưu theo C
 Tích hợp đầy đủ:
 - 5 nguyên lý nền tảng nhận thức/tự sự (ABT, Information Gap, Micro Beat Sheet & Callback,
   Dual-Coding & Multimedia Coherence, Habituation Break & Zeigarnik Effect).
-- 12 mô hình cấu trúc kịch bản phổ biến chia theo 3 nhóm mục tiêu:
-  1. Nhóm Phim Tài liệu / Edutainment / Kể chuyện: abt, in_medias_res, freytag_3_act, pixar_story_spine, scqa
+- 13 mô hình cấu trúc kịch bản phổ biến chia theo 3 nhóm mục tiêu:
+  1. Nhóm Phim Tài liệu / Edutainment / Kể chuyện: abt, in_medias_res, freytag_3_act, pixar_story_spine, scqa, visual_math_essay
   2. Nhóm Short-Form Viral (TikTok / Reels / Shorts): hook_retain_payoff, myth_vs_reality, open_loops, rule_of_three
   3. Nhóm Thuyết phục / Bán hàng / B2B: pas, bab, aida
 """
@@ -69,6 +69,10 @@ NARRATIVE_MODELS: dict[str, dict[str, Any]] = {
             ("vũ trụ", 2),
             ("khí hậu", 2),
             ("lịch sử", 1),
+            ("số 0", 6),
+            ("số không", 5),
+            ("chữ số", 3),
+            ("zero", 5),
         ),
         "beat_sheet_8_10": (
             "- Cảnh 1 (**HOOK — 6–11 từ**): Nêu một hệ quả hoặc sự thật nhân quả gây tò mò ngay lập tức.\n"
@@ -215,6 +219,47 @@ NARRATIVE_MODELS: dict[str, dict[str, Any]] = {
         ),
         "outro_style": "Chốt hàm ý chiến lược gọn như kết luận một bản ghi nhớ điều hành (executive memo).",
     },
+    "visual_math_essay": {
+        "id": "visual_math_essay",
+        "name": "Visual Math Essay (3B1B Manim + Micro-History)",
+        "group": "documentary",
+        "group_label": "Phim Tài liệu / Edutainment / Kể chuyện",
+        "core_structure": "Câu đố đời thường (Hook) -> Thu gọn khung khái niệm -> Lịch sử phát minh (B&W Archival) -> Ẩn dụ hình học (Manim Dark-Mode + Gold) -> Bản đồ ứng dụng / Mẹo -> Thử thách kết",
+        "best_for": "Toán cao cấp (giải tích, đạo hàm, tích phân, ma trận), thuật toán, AI/ML, vật lý, xác suất, giải thích khái niệm trừu tượng bằng trực giác hình học & lịch sử ngắn",
+        "preferred_genres": ("science_nature", "tech_future", "history_culture", "economics_business"),
+        "phrase_signals": (
+            ("3blue1brown", 5),
+            ("manim", 5),
+            ("toán cao cấp", 5),
+            ("đạo hàm", 4),
+            ("tích phân", 4),
+            ("ma trận", 4),
+            ("giải tích", 4),
+            ("đại số tuyến tính", 5),
+            ("trực quan hóa", 4),
+            ("hình học", 3),
+            ("phương trình", 3),
+            ("thuật toán", 3),
+            ("gradient", 4),
+            ("công thức", 3),
+            ("xác suất", 3),
+            ("toán học", 3),
+            ("học để làm gì", 3),
+            ("dùng làm gì", 3),
+            ("ứng dụng ra sao", 3),
+            ("số nguyên tố", 4),
+        ),
+        "beat_sheet_8_10": (
+            "- Cảnh 1 (**HOOK — Câu đố đời thường, 6–11 từ**): Mở bằng bài toán thực tế sát sườn (tối ưu giá bán, tốc độ, điểm ảnh), tránh định nghĩa sách giáo khoa.\n"
+            "- Cảnh 2 (**THU GỌN KHUNG — Giảm áp lực nhận thức**): Gom chủ đề về 1–3 bức hình trực quan cốt lõi.\n"
+            "- Cảnh 3–4 (**MICRO-HISTORY — Bản thảo cổ tới Nobel**): Kể ngắn lịch sử phát minh kèm `real_photo` chân dung/bản thảo đen-trắng từ Wikimedia; cài Open Loop.\n"
+            "- Cảnh 5 & 7 (**ẨN DỤ HÌNH HỌC MANIM — 1 hình = 1 khái niệm**): Nền đen lưới mờ nhấn vàng hổ phách (cây thước độ dốc, lát cắt chữ nhật, bảng số điểm ảnh).\n"
+            "- Cảnh 6 (**TWIST — Lật bản chất 7–12 từ**): Câu ngắn gắt thu gọn cơ chế vào một tiêu điểm vàng rực.\n"
+            "- Cảnh 8–9 (**BẢN ĐỒ ỨNG DỤNG / MẸO**): Ánh xạ Kinh tế – Kỹ thuật – AI hoặc mẹo thực chiến bằng chấm trọng số vàng tối giản.\n"
+            "- Cảnh cuối (**CALLBACK & THỬ THÁCH — 10–14 từ**): Quay lại bài toán Cảnh 1 ở tầng nhận thức mới, hãm nhịp `--` và gài thử thách nhẹ."
+        ),
+        "outro_style": "Callback lại chính câu đố/hình ảnh mở đầu và đặt một thử thách tính toán nhỏ hoặc câu hỏi kiểm chứng.",
+    },
     # ═══════════════════════════════════════════════════════════════════════
     # B. NHÓM SHORT-FORM VIRAL (TIKTOK / REELS / SHORTS)
     # ═══════════════════════════════════════════════════════════════════════
@@ -276,6 +321,10 @@ NARRATIVE_MODELS: dict[str, dict[str, Any]] = {
             ("tuyệt chủng", 4),
             ("còn tồn tại", 4),
             ("có thật sự", 4),
+            ("forex", 3),
+            ("đường ma", 4),
+            ("trung bình động", 4),
+            ("chỉ báo", 3),
         ),
         "beat_sheet_8_10": (
             "- Cảnh 1 (**HOOK — Phủ định trực diện, 6–11 từ**): Bẻ gãy ngay định kiến phổ biến về chủ đề.\n"
@@ -457,7 +506,7 @@ VALID_NARRATIVE_MODELS = frozenset(NARRATIVE_MODELS.keys())
 
 
 def format_models_catalog_for_prompt() -> str:
-    """Xuất bảng rút gọn 12 mô hình kịch bản theo 3 nhóm để nhúng vào LLM prompt."""
+    """Xuất bảng rút gọn 13 mô hình kịch bản theo 3 nhóm để nhúng vào LLM prompt."""
     groups = (
         ("documentary", "A. Phim Tài liệu / Edutainment / Kể chuyện"),
         ("short_form_viral", "B. Short-Form Viral (TikTok / Reels / Shorts)"),
@@ -492,7 +541,7 @@ def select_optimal_narrative_model(
     preferred_model: str = "auto",
 ) -> dict[str, Any]:
     """
-    Chấm điểm tất cả 12 mô hình dựa trên nội dung chủ đề đầu vào (`user_request` + `source_context`)
+    Chấm điểm tất cả 13 mô hình dựa trên nội dung chủ đề đầu vào (`user_request` + `source_context`)
     và chọn mô hình tối ưu nhất. Hỗ trợ ép chọn thủ công qua `preferred_model`.
     """
     req_norm = preferred_model.strip().lower()
@@ -579,5 +628,483 @@ def select_optimal_narrative_model(
         "matched_signals": matched_by_model[best_id],
         "scores": scores,
         "runner_ups": runner_ups,
+    }
+
+
+DOMAIN_EXPERTS: dict[str, dict[str, Any]] = {
+    "military_historian": {
+        "id": "military_historian",
+        "role_title": "Nhà sử học quân sự & Chiến lược chiến trường",
+        "archetype": "Hovland Expertise · Jungian Sage/Outlaw",
+        "primary_genre": "history_war",
+        "domain_lens": (
+            "Phân tích địa hình, hậu cần, tương quan lực lượng và sai lầm chiến lược tại thực địa; "
+            "chỉ dùng mốc thời gian/quân số có kiểm chứng, bóc tách nguyên nhân thắng-bại thay vì kể sử sách giáo khoa."
+        ),
+        "phrase_signals": (
+            ("chiến tranh", 4),
+            ("chiến dịch", 4),
+            ("trận đánh", 4),
+            ("quân sự", 4),
+            ("đế chế", 3),
+            ("cách mạng", 3),
+            ("pháo", 3),
+            ("lính", 3),
+            ("tướng", 3),
+            ("hải quân", 4),
+            ("điện biên", 4),
+            ("đột kích", 3),
+            ("vũ khí", 3),
+            ("hậu cần", 4),
+        ),
+    },
+    "archaeologist_cultural_historian": {
+        "id": "archaeologist_cultural_historian",
+        "role_title": "Nhà khảo cổ học & Nhân học văn hóa",
+        "archetype": "Hovland Expertise · Jungian Sage",
+        "primary_genre": "history_culture",
+        "domain_lens": (
+            "Đọc lịch sử qua di vật vật chất, tầng địa chất, chữ khắc, nghi lễ và cấu trúc xã hội cổ đại; "
+            "đối chiếu giả thuyết truyền miệng với bằng chứng khảo cổ thực địa."
+        ),
+        "phrase_signals": (
+            ("maya", 5),
+            ("ai cập", 5),
+            ("kim tự tháp", 5),
+            ("khảo cổ", 5),
+            ("di tích", 4),
+            ("triều đại", 4),
+            ("cổ đại", 4),
+            ("văn minh", 4),
+            ("diệt vong", 4),
+            ("vương quốc", 3),
+            ("di sản", 3),
+            ("văn hóa", 3),
+            ("bị bỏ hoang", 3),
+            ("huyền thoại", 3),
+        ),
+    },
+    "macro_financial_analyst": {
+        "id": "macro_financial_analyst",
+        "role_title": "Chuyên gia kinh tế vĩ mô & Khủng hoảng tài chính",
+        "archetype": "Aristotle Logos · Hovland Trustworthiness",
+        "primary_genre": "economics_business",
+        "domain_lens": (
+            "Lần theo dòng tiền, đòn bẩy, lãi suất, cung-cầu và động cơ lợi ích ẩn; "
+            "quy đổi khái niệm tài chính trừu tượng thành vật thể đời thật (tờ tiền, hóa đơn, cảng biển, kho hàng)."
+        ),
+        "phrase_signals": (
+            ("lạm phát", 5),
+            ("tiền tệ", 5),
+            ("khủng hoảng", 4),
+            ("ngân hàng", 4),
+            ("chứng khoán", 4),
+            ("forex", 4),
+            ("tỷ giá", 4),
+            ("nợ công", 5),
+            ("phá sản", 4),
+            ("kinh tế", 3),
+            ("biên lợi nhuận", 4),
+            ("bong bóng", 4),
+            ("độc quyền", 3),
+            ("vàng", 3),
+        ),
+    },
+    "b2b_strategy_architect": {
+        "id": "b2b_strategy_architect",
+        "role_title": "Chuyên gia chiến lược doanh nghiệp & Chuyển đổi số B2B",
+        "archetype": "Aristotle Ethos-Logos · MoE Strategy",
+        "primary_genre": "economics_business",
+        "domain_lens": (
+            "Nhận diện nút thắt vận hành, chi phí ẩn, mô hình doanh thu và hiệu quả triển khai thực tế; "
+            "trình bày sắc gọn kiểu bản ghi nhớ điều hành, tuyệt đối tránh giọng quảng cáo truyền hình sáo rỗng."
+        ),
+        "phrase_signals": (
+            ("doanh nghiệp", 4),
+            ("chuyển đổi số", 5),
+            ("b2b", 5),
+            ("case study", 5),
+            ("mô hình kinh doanh", 5),
+            ("chuỗi cung ứng", 4),
+            ("tái cấu trúc", 4),
+            ("khách hàng", 3),
+            ("thị trường", 3),
+            ("sản phẩm", 3),
+            ("dịch vụ", 3),
+            ("chiến lược", 4),
+            ("landing page", 4),
+        ),
+    },
+    "astrophysicist_science_communicator": {
+        "id": "astrophysicist_science_communicator",
+        "role_title": "Nhà vật lý thiên văn & Truyền thông khoa học",
+        "archetype": "ELM Central · Jungian Magician",
+        "primary_genre": "science_nature",
+        "domain_lens": (
+            "Giải thích quy luật vật lý, vũ trụ và cơ chế tự nhiên bằng thí nghiệm trực quan hoặc vật thể quen thuộc; "
+            "giữ kỷ luật chính xác khoa học nhưng vẫn khơi cảm giác kỳ vĩ."
+        ),
+        "phrase_signals": (
+            ("vũ trụ", 5),
+            ("hố đen", 5),
+            ("hành tinh", 4),
+            ("mặt trời", 4),
+            ("trọng lực", 5),
+            ("lượng tử", 5),
+            ("vật lý", 4),
+            ("thiên văn", 5),
+            ("ánh sáng", 3),
+            ("tốc độ", 3),
+            ("nguyên tử", 4),
+            ("năng lượng", 3),
+        ),
+    },
+    "biologist_earth_scientist": {
+        "id": "biologist_earth_scientist",
+        "role_title": "Nhà sinh học tiến hóa & Khoa học Trái Đất",
+        "archetype": "ELM Central · Jungian Sage",
+        "primary_genre": "science_nature",
+        "domain_lens": (
+            "Phân tích cơ chế thích nghi, sinh thái, biến đổi khí hậu và phản ứng dây chuyền của tự nhiên; "
+            "Neo vào sinh vật, mẫu vật, tầng đất và hiện tượng quan sát được."
+        ),
+        "phrase_signals": (
+            ("tiến hóa", 5),
+            ("sinh học", 5),
+            ("tuyệt chủng", 4),
+            ("khí hậu", 4),
+            ("đại dương", 4),
+            ("rừng", 3),
+            ("động vật", 4),
+            ("vi khuẩn", 5),
+            ("virus", 5),
+            ("di truyền", 5),
+            ("trái đất", 4),
+            ("núi lửa", 4),
+            ("thiên nhiên", 3),
+        ),
+    },
+    "ai_cyber_architect": {
+        "id": "ai_cyber_architect",
+        "role_title": "Kiến trúc sư AI, Hạ tầng số & An ninh mạng",
+        "archetype": "ELM Central · Jungian Magician/Outlaw",
+        "primary_genre": "tech_future",
+        "domain_lens": (
+            "Bóc tách kiến trúc phần cứng, thuật toán, lỗ hổng bảo mật và mặt trái công nghệ bằng ví dụ vận hành đời thật; "
+            "cấm hình minh họa sci-fi sáo rỗng, ưu tiên phần cứng, server, thiết bị và thao tác thực."
+        ),
+        "phrase_signals": (
+            ("ai", 4),
+            ("trí tuệ nhân tạo", 5),
+            ("công nghệ", 4),
+            ("an ninh mạng", 5),
+            ("tấn công mạng", 5),
+            ("rò rỉ dữ liệu", 5),
+            ("lỗ hổng", 4),
+            ("cloud", 4),
+            ("chip", 4),
+            ("bán dẫn", 5),
+            ("robot", 4),
+            ("tự động hóa", 4),
+            ("phần mềm", 3),
+            ("tương lai", 3),
+        ),
+    },
+    "cognitive_psychologist": {
+        "id": "cognitive_psychologist",
+        "role_title": "Nhà tâm lý học nhận thức & Khoa học hành vi",
+        "archetype": "CAT Convergence · Jungian Caregiver/Sage",
+        "primary_genre": "psychology_philosophy",
+        "domain_lens": (
+            "Giải mã thiên kiến nhận thức, cơ chế dopamine, nỗi sợ và phản xạ vô thức qua các tình huống đời thường; "
+            "giọng điềm tĩnh, thấu cảm nhưng sắc bén, không phán xét."
+        ),
+        "phrase_signals": (
+            ("tâm lý", 5),
+            ("não bộ", 5),
+            ("thiên kiến", 5),
+            ("hiệu ứng", 4),
+            ("tiềm thức", 5),
+            ("thí nghiệm", 4),
+            ("hành vi", 4),
+            ("cảm xúc", 3),
+            ("trí nhớ", 4),
+            ("ảo giác", 4),
+            ("cô đơn", 3),
+            ("áp lực", 3),
+        ),
+    },
+    "practical_philosopher": {
+        "id": "practical_philosopher",
+        "role_title": "Nhà nghiên cứu triết học ứng dụng & Lịch sử tư tưởng",
+        "archetype": "Jungian Sage · Aristotle Ethos",
+        "primary_genre": "psychology_philosophy",
+        "domain_lens": (
+            "Đặt nghịch lý tồn sinh và tư tưởng kinh điển vào bối cảnh đời sống hiện đại bằng ẩn dụ vật thể cụ thể; "
+            "tuyệt đối tránh khẩu hiệu triết lý sáo rỗng."
+        ),
+        "phrase_signals": (
+            ("triết học", 5),
+            ("triết lý", 5),
+            ("khắc kỷ", 5),
+            ("nghịch lý", 4),
+            ("đạo đức", 4),
+            ("ý nghĩa", 3),
+            ("tự do", 3),
+            ("hạnh phúc", 3),
+            ("nhân sinh", 4),
+            ("tư tưởng", 4),
+        ),
+    },
+    "investigative_forensic_journalist": {
+        "id": "investigative_forensic_journalist",
+        "role_title": "Phóng viên điều tra hiện trường & Hồ sơ mật",
+        "archetype": "Aristotle Ethos-Pathos · Jungian Outlaw",
+        "primary_genre": "true_story_crime",
+        "domain_lens": (
+            "Dựng lại trình tự dấu vết, chứng cứ vật lý, lỗ hổng lời khai và động cơ ẩn theo chuẩn điều tra thực chứng; "
+            "cấm giật gân rẻ tiền hay suy diễn ngoài hồ sơ."
+        ),
+        "phrase_signals": (
+            ("vụ án", 5),
+            ("án mạng", 5),
+            ("tội phạm", 5),
+            ("mất tích", 5),
+            ("gián điệp", 5),
+            ("bí ẩn", 4),
+            ("điều tra", 4),
+            ("lừa đảo", 4),
+            ("pháp y", 5),
+            ("truy nã", 5),
+            ("hồ sơ", 3),
+        ),
+    },
+    "disaster_safety_engineer": {
+        "id": "disaster_safety_engineer",
+        "role_title": "Chuyên gia phân tích thảm họa & Điều tra sự cố kỹ thuật",
+        "archetype": "Cynefin Chaotic · Hovland Expertise",
+        "primary_genre": "true_story_crime",
+        "domain_lens": (
+            "Bóc tách chuỗi sai sót kỹ thuật (Swiss Cheese Model) dẫn đến thảm họa từ tín hiệu cảnh báo bị phớt lờ; "
+            "neo chặt vào thiết bị, buồng điều khiển, thời tiết và giây phút quyết định."
+        ),
+        "phrase_signals": (
+            ("thảm họa", 5),
+            ("chìm tàu", 5),
+            ("rơi máy bay", 5),
+            ("tai nạn", 4),
+            ("vụ nổ", 5),
+            ("hỏa hoạn", 4),
+            ("hạt nhân", 5),
+            ("sập cầu", 5),
+            ("sinh tồn", 4),
+            ("sự cố", 4),
+        ),
+    },
+    "behavioral_habit_coach": {
+        "id": "behavioral_habit_coach",
+        "role_title": "Chuyên gia khoa học thói quen & Hiệu suất cá nhân",
+        "archetype": "ELM Peripheral-Central · SUCCESs",
+        "primary_genre": "lifestyle_motivation",
+        "domain_lens": (
+            "Đưa ra cơ chế thực hành cụ thể (môi trường, tín hiệu, vòng lặp thói quen, kỷ luật đo lường được) "
+            "gắn với đời sống thường nhật; cấm văn mẫu truyền động lực sáo rỗng."
+        ),
+        "phrase_signals": (
+            ("thói quen", 5),
+            ("kỷ luật", 5),
+            ("năng suất", 4),
+            ("trì hoãn", 5),
+            ("tập trung", 4),
+            ("giấc ngủ", 5),
+            ("sức khỏe", 4),
+            ("3 sai lầm", 4),
+            ("3 cách", 4),
+            ("3 thói quen", 5),
+            ("bí quyết", 3),
+            ("đời thường", 3),
+        ),
+    },
+    "urban_travel_curator": {
+        "id": "urban_travel_curator",
+        "role_title": "Chuyên gia khảo cứu đô thị, Địa danh & Văn hóa bản địa",
+        "archetype": "UGT Affective · Jungian Explorer",
+        "primary_genre": "history_culture",
+        "domain_lens": (
+            "Kể chuyện không gian địa lý qua góc nhìn kiến trúc, nhịp sống địa phương, lịch sử ẩn sau từng địa điểm check-in "
+            "và kinh nghiệm thực địa hữu ích cho người xem."
+        ),
+        "phrase_signals": (
+            ("địa điểm", 4),
+            ("check-in", 5),
+            ("du lịch", 4),
+            ("thành phố", 3),
+            ("kiến trúc", 4),
+            ("quán", 3),
+            ("bảo tàng", 4),
+            ("phố cổ", 5),
+            ("bản địa", 4),
+            ("google maps", 5),
+        ),
+    },
+    "general_documentary_researcher": {
+        "id": "general_documentary_researcher",
+        "role_title": "Nhà nghiên cứu liên ngành & Khai phá sự thật thực chứng",
+        "archetype": "Hovland Credibility · Jungian Sage",
+        "primary_genre": "science_nature",
+        "domain_lens": (
+            "Tiếp cận đa chiều theo tinh thần báo chí điều tra dữ liệu (Vox / Johnny Harris): "
+            "đặt giả thuyết, kiểm chứng bằng vật thể thực tế và rút ra cơ chế cốt lõi."
+        ),
+        "phrase_signals": (),
+    },
+}
+
+_GENRE_DEFAULT_EXPERT: dict[str, str] = {
+    "history_war": "military_historian",
+    "history_culture": "archaeologist_cultural_historian",
+    "science_nature": "astrophysicist_science_communicator",
+    "economics_business": "macro_financial_analyst",
+    "psychology_philosophy": "cognitive_psychologist",
+    "true_story_crime": "investigative_forensic_journalist",
+    "tech_future": "ai_cyber_architect",
+    "lifestyle_motivation": "behavioral_habit_coach",
+}
+
+
+def select_domain_expert(
+    user_request: str,
+    source_context: str = "",
+    genre_hint: str = "",
+    narrative_model: str = "",
+    preferred_expert: str = "auto",
+) -> dict[str, Any]:
+    """
+    Chọn chuyên gia lĩnh vực tối ưu theo nội dung yêu cầu (`user_request` + `source_context`)
+    dựa trên cơ chế chấm điểm tín hiệu lĩnh vực + Hovland Credibility / Jungian Archetype.
+    """
+    req_norm = (preferred_expert or "auto").strip().lower()
+    if req_norm and req_norm != "auto":
+        if req_norm not in DOMAIN_EXPERTS:
+            valid = ", ".join(sorted(DOMAIN_EXPERTS))
+            raise ValueError(f"`preferred_expert` không hợp lệ: '{preferred_expert}'. Hợp lệ: {valid}.")
+        chosen = DOMAIN_EXPERTS[req_norm]
+        return {
+            "expert_id": req_norm,
+            "expert_role": chosen["role_title"],
+            "expert_archetype": chosen["archetype"],
+            "expert_lens": chosen["domain_lens"],
+            "primary_genre": chosen["primary_genre"],
+            "selection_mode": "manual",
+            "rationale": f"Áp dụng theo chỉ định chuyên gia lĩnh vực `{chosen['role_title']}`.",
+            "matched_signals": [],
+        }
+
+    req_lower = user_request.lower()
+    haystack = f"{user_request}\n{source_context}".lower()
+    scores: dict[str, int] = {}
+    matched_by_expert: dict[str, list[str]] = {}
+
+    for e_id, exp in DOMAIN_EXPERTS.items():
+        score = 0
+        hits: list[str] = []
+        for phrase, weight in exp["phrase_signals"]:
+            if re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", haystack):
+                boost = weight * 2 if phrase in req_lower else weight
+                score += boost
+                hits.append(phrase)
+        if genre_hint and genre_hint == exp["primary_genre"]:
+            score += 2
+            hits.append(f"genre:{genre_hint}")
+        if narrative_model in ("bab", "pas", "aida") and e_id == "b2b_strategy_architect":
+            score += 2
+        scores[e_id] = score
+        matched_by_expert[e_id] = hits
+
+    ranked = sorted(
+        DOMAIN_EXPERTS.keys(),
+        key=lambda k: (scores[k], len(matched_by_expert[k])),
+        reverse=True,
+    )
+    best_id = ranked[0]
+
+    if scores[best_id] == 0:
+        best_id = _GENRE_DEFAULT_EXPERT.get(genre_hint, "general_documentary_researcher")
+        chosen = DOMAIN_EXPERTS[best_id]
+        rationale = (
+            f"Chủ đề tổng quát, gán chuyên gia mặc định `{chosen['role_title']}` "
+            f"({chosen['archetype']})."
+        )
+    else:
+        chosen = DOMAIN_EXPERTS[best_id]
+        hits_str = ", ".join(matched_by_expert[best_id][:4])
+        rationale = (
+            f"Nội dung khớp lĩnh vực `{chosen['role_title']}` qua tín hiệu [{hits_str}] "
+            f"({chosen['archetype']})."
+        )
+
+    return {
+        "expert_id": best_id,
+        "expert_role": chosen["role_title"],
+        "expert_archetype": chosen["archetype"],
+        "expert_lens": chosen["domain_lens"],
+        "primary_genre": chosen["primary_genre"],
+        "selection_mode": "auto",
+        "rationale": rationale,
+        "matched_signals": matched_by_expert[best_id],
+    }
+
+
+_GENRE_AUDIO_DEFAULTS: dict[str, tuple[str, str]] = {
+    "history_war": ("nam_tram_am", "tense_epic"),
+    "history_culture": ("nam_tram_am", "solemn_cinematic"),
+    "science_nature": ("nam_tram_am", "wonder_ambient"),
+    "economics_business": ("nam_tram_am", "driving_modern"),
+    "psychology_philosophy": ("nu_truyen_cam", "reflective_piano"),
+    "true_story_crime": ("nam_tram_am", "suspense_dark"),
+    "tech_future": ("nu_hoat_ngon", "driving_modern"),
+    "lifestyle_motivation": ("nu_hoat_ngon", "uplifting_soft"),
+}
+
+
+def classify_topic_and_expert(
+    user_request: str,
+    source_context: str = "",
+    genre_hint: str = "",
+    narrative_model: str = "auto",
+    domain_expert: str = "auto",
+) -> dict[str, Any]:
+    """
+    Bộ định tuyến 2 tầng hợp nhất:
+    1) Chọn mô hình kịch bản tối ưu (`select_optimal_narrative_model`).
+    2) Chọn chuyên gia lĩnh vực (`select_domain_expert`) và gợi ý `genre`, `voice_profile`, `music_mood`.
+    """
+    model_sel = select_optimal_narrative_model(
+        user_request,
+        source_context=source_context,
+        genre_hint=genre_hint,
+        preferred_model=narrative_model,
+    )
+    expert_sel = select_domain_expert(
+        user_request,
+        source_context=source_context,
+        genre_hint=genre_hint,
+        narrative_model=model_sel["selected_model_id"],
+        preferred_expert=domain_expert,
+    )
+    rec_genre = genre_hint.strip() or expert_sel["primary_genre"]
+    rec_voice, rec_music = _GENRE_AUDIO_DEFAULTS.get(rec_genre, ("nam_tram_am", "solemn_cinematic"))
+    return {
+        "narrative_model": model_sel["selected_model_id"],
+        "narrative_model_name": model_sel["selected_model"]["name"],
+        "narrative_model_rationale": model_sel["rationale"],
+        "expert_id": expert_sel["expert_id"],
+        "expert_role": expert_sel["expert_role"],
+        "expert_archetype": expert_sel["expert_archetype"],
+        "expert_lens": expert_sel["expert_lens"],
+        "expert_rationale": expert_sel["rationale"],
+        "recommended_genre": rec_genre,
+        "recommended_voice_profile": rec_voice,
+        "recommended_music_mood": rec_music,
     }
 
