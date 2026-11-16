@@ -170,9 +170,8 @@ def bundle_scenes_for_flow(
         if cur_group:
             groups.append(cur_group)
 
-    no_human_suffix = ", no humans, no people, no faces" if intent_mode == "NO_HUMAN_BROLL" else ""
-    style = (style_anchor_en or "cinematic documentary photography, natural lighting").strip().rstrip(".")
-
+    is_stickman = "stickman" in intent_mode.lower() or "stickman" in style_anchor_en.lower() or "amber noir" in style_anchor_en.lower() or "a6" in style_anchor_en.lower()
+    
     blocks: List[Dict[str, Any]] = []
     t_cursor = 0.0
     for b_idx, idxs in enumerate(groups, 1):
@@ -184,26 +183,46 @@ def bundle_scenes_for_flow(
         scene_descs = []
         for pos, sc_idx in enumerate(idxs):
             sc = scenes[sc_idx]
-            cam = sc.get("camera", "zoom_in").replace("_", " ")
+            cam = (sc.get("camera_motion") or sc.get("camera") or "zoom_in").replace("_", " ")
             p = str(sc.get("image_prompt_en", "")).strip().rstrip(".")
+            # Dọn sạch các từ lặp không cần thiết trong mô tả hành động
+            p_clean = re.sub(r"^(A\s+|The\s+)?(minimalist\s+)?stickman(\s+character)?\s+(with\s+matte-black\s+round\s+head\s+)?", "stickman ", p, flags=re.I)
             if pos == 0:
-                scene_descs.append(f"({cam}) {p}")
+                scene_descs.append(f"({cam}) {p_clean}")
             else:
-                scene_descs.append(f"smoothly transitioning ({cam}) into {p}")
+                scene_descs.append(f"smoothly transitioning ({cam}) into {p_clean}")
         seq = "; ".join(scene_descs)
 
-        if b_idx == 1:
-            flow_prompt = (
-                f"9:16 vertical cinematic documentary shot, {style}. "
-                f"Continuous evolving camera sequence: {seq}. "
-                f"No text, no watermark{no_human_suffix}."
-            )
+        if is_stickman:
+            style_clean = "A6 Amber Noir 2D animation style, minimalist stickman with matte-black round head and signature vibrant orange hoodie, warm golden amber rim lighting, deep plum shadows, restrained cel shading"
+            constraints = "silent non-speaking actor, strictly 2D illustration, no 3D rendering, no realistic faces, no text, no watermark"
+            if b_idx == 1:
+                flow_prompt = (
+                    f"9:16 vertical, {style_clean}. "
+                    f"Continuous evolving camera sequence: {seq}. "
+                    f"{constraints}."
+                )
+            else:
+                flow_prompt = (
+                    f"9:16 vertical seamless continuation from the exact ending frame and lighting of previous shot, {style_clean}. "
+                    f"Continuous camera motion: {seq}. "
+                    f"Maintain identical amber-noir palette and atmosphere, no hard cut, {constraints}."
+                )
         else:
-            flow_prompt = (
-                f"9:16 vertical seamless continuation from the exact ending frame and lighting of the previous shot, {style}. "
-                f"Continuous camera motion: {seq}. "
-                f"Maintain identical color palette and atmosphere, no hard cut, no text, no watermark{no_human_suffix}."
-            )
+            style = (style_anchor_en or "cinematic documentary photography, natural lighting").strip().rstrip(".")
+            no_human_suffix = ", no humans, no people, no faces" if intent_mode == "NO_HUMAN_BROLL" else ""
+            if b_idx == 1:
+                flow_prompt = (
+                    f"9:16 vertical cinematic documentary shot, {style}. "
+                    f"Continuous evolving camera sequence: {seq}. "
+                    f"No text, no watermark{no_human_suffix}."
+                )
+            else:
+                flow_prompt = (
+                    f"9:16 vertical seamless continuation from the exact ending frame and lighting of the previous shot, {style}. "
+                    f"Continuous camera motion: {seq}. "
+                    f"Maintain identical color palette and atmosphere, no hard cut, no text, no watermark{no_human_suffix}."
+                )
 
         blocks.append(
             {
@@ -279,6 +298,10 @@ def prepare_flow_workspace(
         output_filename=run_dir / "audio_16k_mono.wav",
         sfx_cues=[str(s.get("sfx_cue", "none")) for s in scenes],
         music_mood=str(state.get("music_mood", "")),
+        engine=str(state.get("tts_engine", "")),
+        voice=str(state.get("tts_voice", "")),
+        rate=str(state.get("tts_rate", "")),
+        pitch=str(state.get("tts_pitch", "")),
     )
     hook = state.get("hook_and_context_vn", "") or scenes[0]["narration_vn"]
     deep = state.get("deep_explanation_vn", "") or " ".join(s["narration_vn"] for s in scenes[1:-1])
@@ -336,6 +359,7 @@ def prepare_flow_workspace(
 
     return {
         "run_dir": str(run_dir),
+        "workspace_dir": str(run_dir),
         "clips_dir": str(clips_dir),
         "manifest_path": str(manifest_path),
         "prompts_path": str(prompts_path),
@@ -359,10 +383,13 @@ def render_from_flow_clips(
     if not src_dir.exists():
         raise FileNotFoundError(f"Không tìm thấy thư mục chứa clip Google Flow: {src_dir}")
 
-    exts = {".mp4", ".mov", ".webm", ".mkv"}
+    exts = {".mp4", ".mov", ".webm", ".mkv", ".jpg", ".jpeg", ".png", ".webp"}
     found_clips = sorted([p for p in src_dir.iterdir() if p.is_file() and p.suffix.lower() in exts], key=_natural_sort_key)
     if not found_clips:
-        raise RuntimeError(f"Thư mục `{src_dir}` chưa có file video nào (.mp4/.mov/.webm).")
+        raise RuntimeError(
+            f"Thư mục `{src_dir}` chưa có file clip hoặc ảnh nào (.mp4/.mov/.webm/.jpg/.png).\n"
+            f"👉 Vui lòng chép các clip/ảnh tải về vào thư mục trên (đặt tên: 1.mp4, 2.mp4, 3.mp4, 4.mp4 hoặc 1.jpg, 2.jpg...) rồi chạy lại."
+        )
 
     blocks: List[Dict[str, Any]] = [dict(b) for b in manifest["blocks"]]
     scenes: List[Dict[str, Any]] = [dict(s) for s in manifest["scenes"]]
@@ -377,7 +404,8 @@ def render_from_flow_clips(
         for sc_num in blk["scene_indices"]:
             sc = scenes[sc_num - 1]
             sc["media_path"] = blk["media_path"]
-            sc["media_type"] = "video"
+            m_ext = Path(blk["media_path"]).suffix.lower()
+            sc["media_type"] = "image" if m_ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
             sc["media_source"] = f"google_flow({Path(blk['media_path']).name})"
 
     # Chỉ chạy ContinuityHarmonizer + đo kỹ thuật local (không dùng CLIP reject để tránh tốn credit Flow)
@@ -437,6 +465,7 @@ def render_from_flow_clips(
     )
 
     return {
+        "final_master_video_path": rendered["final_master_video_path"],
         "manifest": manifest,
         "rendered": rendered,
         "visual_scores": visual_scores,

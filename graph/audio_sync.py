@@ -16,7 +16,16 @@ import numpy as np
 import scipy.io.wavfile as wavfile
 import scipy.signal as signal
 
-from config.settings import OUTPUT_AUDIO_DIR, AUDIO_SAMPLE_RATE, VIDEO_FPS
+from config.settings import (
+    OUTPUT_AUDIO_DIR,
+    AUDIO_SAMPLE_RATE,
+    VIDEO_FPS,
+    TTS_ENGINE,
+    TTS_VOICE,
+    TTS_RATE,
+    TTS_PITCH,
+    VITS_SPEAKING_RATE,
+)
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -26,22 +35,30 @@ _VITS_MODEL = None
 _VITS_TOKENIZER = None
 
 
-def _get_local_vits_vietnamese_model():
+def _get_local_vits_vietnamese_model(speaking_rate: Optional[float] = None):
     """Khởi tạo và cache mô hình Neural VITS Tiếng Việt `facebook/mms-tts-vie` trên RAM."""
     global _VITS_MODEL, _VITS_TOKENIZER
     if _VITS_MODEL is not None and _VITS_TOKENIZER is not None:
+        if speaking_rate is not None:
+            _VITS_MODEL.speaking_rate = float(speaking_rate)
         return _VITS_MODEL, _VITS_TOKENIZER
 
     import torch
     from transformers import VitsModel, AutoTokenizer
 
-    _VITS_TOKENIZER = AutoTokenizer.from_pretrained("facebook/mms-tts-vie")
-    _VITS_MODEL = VitsModel.from_pretrained("facebook/mms-tts-vie")
+    model_id = "facebook/mms-tts-vie"
+    try:
+        _VITS_TOKENIZER = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
+        _VITS_MODEL = VitsModel.from_pretrained(model_id, local_files_only=True)
+    except Exception:
+        _VITS_TOKENIZER = AutoTokenizer.from_pretrained(model_id)
+        _VITS_MODEL = VitsModel.from_pretrained(model_id)
     _VITS_MODEL.eval()
-    # Tinh chỉnh tốc độ đọc và độ mượt thanh quản (Speaking Rate & Noise Scale) chuẩn Kể chuyện Điện ảnh
-    _VITS_MODEL.speaking_rate = 0.96
-    _VITS_MODEL.noise_scale = 0.36
-    _VITS_MODEL.noise_scale_duration = 0.45
+    # Tinh chỉnh tốc độ đọc và độ mượt thanh quản (Speaking Rate & Noise Scale)
+    target_rate = float(speaking_rate if speaking_rate is not None else VITS_SPEAKING_RATE)
+    _VITS_MODEL.speaking_rate = target_rate
+    _VITS_MODEL.noise_scale = 0.33
+    _VITS_MODEL.noise_scale_duration = 0.40
     return _VITS_MODEL, _VITS_TOKENIZER
 
 
@@ -124,41 +141,49 @@ def _generate_cinematic_ambient_bgm(
     return (pad * ducking_gain * fade_in * fade_out).astype(np.float32)
 
 
-def _apply_studio_broadcast_dsp(voice_wav: np.ndarray, sample_rate: int) -> np.ndarray:
+def _apply_studio_broadcast_dsp(voice_wav: np.ndarray, sample_rate: int, is_edge_tts: bool = False) -> np.ndarray:
     """
     Chuỗi DSP xử lý giọng đọc chuẩn Studio Podcast / Phim Tài Liệu:
-    1. High-pass 75Hz khử ù nền.
-    2. Warm Chest Boost (+3.5dB quanh 155Hz) giúp giọng nam dày và trầm ấm.
-    3. Clarity Presence (+2.0dB quanh 3100Hz) giúp phát âm tiếng Việt rõ nét.
-    4. Soft-Knee Dynamic Tanh Compressor + Subtle Studio Early Reflection.
+    1. High-pass 65Hz khử rumble và ù nền.
+    2. Warm Chest Boost giúp giọng dày và ấm.
+    3. Clarity Presence giúp phát âm tiếng Việt rõ nét.
+    4. Soft-Knee Dynamic Saturation / Normalization.
     """
     nyq = sample_rate * 0.5
-    # 1. High-pass 75Hz
-    sos_hp = signal.butter(2, 75.0 / nyq, btype="high", output="sos")
+    # 1. High-pass 65Hz
+    sos_hp = signal.butter(2, 65.0 / nyq, btype="high", output="sos")
     y = signal.sosfilt(sos_hp, voice_wav).astype(np.float32)
 
-    # 2. Warm Chest Bandpass Boost (110Hz - 240Hz)
+    if is_edge_tts:
+        # Edge TTS đã có âm sắc tự nhiên 24kHz, chỉ cần EQ nhẹ để hòa quyện
+        sos_warm = signal.butter(2, [120.0 / nyq, 220.0 / nyq], btype="band", output="sos")
+        y = y + 0.18 * signal.sosfilt(sos_warm, y).astype(np.float32)
+
+        sos_pres = signal.butter(2, [2800.0 / nyq, min(0.92, 4000.0 / nyq)], btype="band", output="sos")
+        y = y + 0.12 * signal.sosfilt(sos_pres, y).astype(np.float32)
+
+        # Gentle normalization
+        y = y / (np.max(np.abs(y)) + 1e-6)
+        y = np.tanh(y * 1.15) / np.tanh(1.15)
+        return y.astype(np.float32)
+
+    # 2. VITS Local:
     sos_warm = signal.butter(2, [110.0 / nyq, 240.0 / nyq], btype="band", output="sos")
     warm_band = signal.sosfilt(sos_warm, y).astype(np.float32)
-    y = y + 0.42 * warm_band
+    y = y + 0.38 * warm_band
 
-    # 3. Clarity Presence Band (2400Hz - 4200Hz)
     sos_pres = signal.butter(2, [2400.0 / nyq, min(0.92, 4200.0 / nyq)], btype="band", output="sos")
     pres_band = signal.sosfilt(sos_pres, y).astype(np.float32)
-    y = y + 0.22 * pres_band
+    y = y + 0.20 * pres_band
 
-    # 4. Subtle Studio Room Early Reflection (28ms & 54ms delay nhẹ 6%)
     d1 = int(0.028 * sample_rate)
-    d2 = int(0.054 * sample_rate)
     reverb = np.zeros_like(y)
-    if len(y) > d2:
-        reverb[d1:] += 0.055 * y[:-d1]
-        reverb[d2:] += 0.030 * y[:-d2]
+    if len(y) > d1:
+        reverb[d1:] += 0.045 * y[:-d1]
     y = y + reverb
 
-    # 5. Soft-Knee Broadcast Tube Saturation & Normalization
     y = y / (np.max(np.abs(y)) + 1e-6)
-    y = np.tanh(y * 1.35) / np.tanh(1.35)
+    y = np.tanh(y * 1.30) / np.tanh(1.30)
     return y.astype(np.float32)
 
 
@@ -238,7 +263,7 @@ def _vits_clause_audio(text: str, model, tokenizer, vits_sr: int, torch_mod) -> 
     with torch_mod.no_grad():
         for part in parts:
             if re.match(r"^[,.;:?!]+$", part):
-                pause_sec = 0.46 if any(ch in part for ch in ".?!") else 0.20
+                pause_sec = 0.22 if any(ch in part for ch in ".?!") else 0.09
                 chunks.append(np.zeros(int(pause_sec * vits_sr), dtype=np.float32))
                 continue
             clause_clean = part.lower().strip()
@@ -261,6 +286,107 @@ def _vits_clause_audio(text: str, model, tokenizer, vits_sr: int, torch_mod) -> 
                 out_wav[-fade_len:] *= np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
             chunks.append(out_wav)
     return np.concatenate(chunks) if chunks else np.zeros(int(0.3 * vits_sr), dtype=np.float32)
+
+
+async def _async_edge_tts_generate(
+    text: str,
+    voice: str = TTS_VOICE,
+    rate: str = TTS_RATE,
+    pitch: str = TTS_PITCH,
+    sample_rate: int = AUDIO_SAMPLE_RATE,
+) -> np.ndarray:
+    """Sinh giọng đọc trực tiếp bằng Microsoft Edge Neural TTS qua stream memory."""
+    import edge_tts
+    import imageio_ffmpeg
+    import subprocess
+
+    clean_text = text.strip()
+    if not clean_text:
+        return np.zeros(0, dtype=np.float32)
+
+    rate_str = (rate or "+10%").strip()
+    if not (rate_str.startswith("+") or rate_str.startswith("-")):
+        rate_str = f"+{rate_str}"
+    if not rate_str.endswith("%"):
+        rate_str = f"{rate_str}%"
+
+    tts_kwargs = {"rate": rate_str}
+    if pitch and pitch.strip() not in ("+0Hz", "-0Hz", "0Hz", ""):
+        tts_kwargs["pitch"] = pitch.strip()
+
+    communicate = edge_tts.Communicate(clean_text, voice, **tts_kwargs)
+    mp3_bytes = bytearray()
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            mp3_bytes.extend(chunk["data"])
+
+    if not mp3_bytes:
+        return np.zeros(0, dtype=np.float32)
+
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    proc = subprocess.Popen(
+        [
+            ffmpeg_exe,
+            "-v",
+            "error",
+            "-i",
+            "pipe:0",
+            "-f",
+            "s16le",
+            "-ac",
+            "1",
+            "-ar",
+            str(sample_rate),
+            "pipe:1",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, _ = proc.communicate(input=mp3_bytes)
+    if not stdout:
+        return np.zeros(0, dtype=np.float32)
+
+    wav_arr = np.frombuffer(stdout, dtype=np.int16).astype(np.float32) / 32768.0
+
+    # Cắt bỏ khoảng lặng đầu/cuối
+    non_silent = np.where(np.abs(wav_arr) > 0.008)[0]
+    if len(non_silent) > 10:
+        s_idx = max(0, int(non_silent[0]) - int(0.015 * sample_rate))
+        e_idx = min(len(wav_arr), int(non_silent[-1]) + int(0.025 * sample_rate))
+        wav_arr = wav_arr[s_idx:e_idx]
+
+    fade_len = min(int(0.008 * sample_rate), len(wav_arr) // 4)
+    if fade_len > 2:
+        wav_arr[:fade_len] *= np.linspace(0.0, 1.0, fade_len, dtype=np.float32)
+        wav_arr[-fade_len:] *= np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
+
+    return wav_arr
+
+
+def _synthesize_edge_tts_scene_audio(
+    text: str,
+    voice: str = TTS_VOICE,
+    rate: str = TTS_RATE,
+    pitch: str = TTS_PITCH,
+    sample_rate: int = AUDIO_SAMPLE_RATE,
+) -> np.ndarray:
+    """Wrapper đồng bộ an toàn để gọi Edge TTS từ bất kỳ luồng nào (kể cả trong FastAPI async event loop)."""
+    import asyncio
+    import concurrent.futures
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(
+                lambda: asyncio.run(_async_edge_tts_generate(text, voice, rate, pitch, sample_rate))
+            ).result()
+    else:
+        return asyncio.run(_async_edge_tts_generate(text, voice, rate, pitch, sample_rate))
 
 
 def _synth_sfx(cue: str, sr: int) -> np.ndarray:
@@ -354,21 +480,23 @@ def _normalize_loudness_lufs(wav_path: Path, sample_rate: int, target_lufs: floa
 
 def _master_and_mix(
     raw_voice: np.ndarray,
-    vits_sr: int,
+    voice_sr: int,
     sample_rate: int,
     wav_path: Path,
     sfx_events: Optional[List[Tuple[float, str]]] = None,
     music_mood: str = "",
+    is_edge_tts: bool = False,
+    tag: str = "",
 ) -> Path:
-    if vits_sr != sample_rate:
-        target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
+    if voice_sr != sample_rate:
+        target_len = int(len(raw_voice) * sample_rate / float(voice_sr))
         raw_voice = signal.resample(raw_voice, target_len).astype(np.float32)
 
-    mastered_voice = _apply_studio_broadcast_dsp(raw_voice, sample_rate)
+    mastered_voice = _apply_studio_broadcast_dsp(raw_voice, sample_rate, is_edge_tts=is_edge_tts)
     win_len = max(1, int(0.08 * sample_rate))
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
     bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env, music_mood=music_mood)
-    final_mix = mastered_voice * 0.86 + bgm
+    final_mix = mastered_voice * 0.88 + bgm
     if sfx_events:
         for t_sec, cue in sfx_events:
             sfx = _synth_sfx(cue, sample_rate)
@@ -381,7 +509,8 @@ def _master_and_mix(
     wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
     lufs_ok = _normalize_loudness_lufs(wav_path, sample_rate, target_lufs=-14.0)
     lufs_tag = " + -14 LUFS" if lufs_ok else ""
-    print(f"[TTS Neural VITS Studio] Đã sinh giọng đọc (`facebook/mms-tts-vie` + Studio EQ + BGM{lufs_tag}) -> {wav_path.name}")
+    engine_tag = tag or ("Edge-TTS" if is_edge_tts else "VITS Local")
+    print(f"[TTS Studio Engine] Đã sinh giọng đọc ({engine_tag} + Studio EQ + BGM{lufs_tag}) -> {wav_path.name}")
     return wav_path
 
 
@@ -396,22 +525,81 @@ def synthesize_scene_voiceover(
     scene_texts: List[str],
     output_filename: Any = "voiceover_studio.wav",
     sample_rate: int = AUDIO_SAMPLE_RATE,
-    scene_gap_sec: float = 0.18,
+    scene_gap_sec: float = 0.12,
     sfx_cues: Optional[List[str]] = None,
     music_mood: str = "",
+    engine: Optional[str] = None,
+    voice: Optional[str] = None,
+    rate: Optional[str] = None,
+    pitch: Optional[str] = None,
 ) -> Tuple[Path, List[Tuple[float, float]]]:
     """
     Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
-    Nhờ đó ảnh, chuyển cảnh và phụ đề từng từ khớp đúng thời điểm đọc (không ước lượng theo số ký tự).
-    Không có dự phòng "bíp sine": nếu VITS lỗi sẽ raise để người dùng biết.
+    Hỗ trợ 2 engine:
+      1. Microsoft Edge Neural TTS (`edge-tts`): Giọng tự nhiên phòng thu cao cấp (NamMinh / HoaiMy), tốc độ tùy biến linh hoạt.
+      2. Meta Neural VITS (`facebook/mms-tts-vie`): Chạy 100% offline không cần mạng, tự động fallback khi mất mạng.
     """
     wav_path = _resolve_wav_path(output_filename)
+    active_engine = (engine or TTS_ENGINE).strip().lower()
+    active_voice = (voice or TTS_VOICE).strip()
+    active_rate = (rate or TTS_RATE).strip()
+    active_pitch = (pitch or TTS_PITCH).strip()
+
+    if active_voice.lower() == "vits" or "vits" in active_engine:
+        active_engine = "vits"
+    elif active_voice not in ("vi-VN-NamMinhNeural", "vi-VN-HoaiMyNeural"):
+        active_voice = "vi-VN-NamMinhNeural"
+
+    # Thử chạy Edge-TTS nếu engine được yêu cầu là edge-tts
+    if active_engine in ("edge", "edge-tts", "edge_tts"):
+        try:
+            lead = 0.15
+            chunks: List[np.ndarray] = [np.zeros(int(lead * sample_rate), dtype=np.float32)]
+            cursor = lead
+            timings: List[Tuple[float, float]] = []
+            sfx_events: List[Tuple[float, str]] = []
+            for i, text in enumerate(scene_texts):
+                clean_txt = text.strip()
+                audio = _synthesize_edge_tts_scene_audio(
+                    clean_txt,
+                    voice=active_voice,
+                    rate=active_rate,
+                    pitch=active_pitch,
+                    sample_rate=sample_rate,
+                )
+                if len(audio) == 0:
+                    raise RuntimeError(f"Edge TTS không sinh được audio cho cảnh {i+1}")
+                dur = len(audio) / float(sample_rate)
+                timings.append((round(cursor, 3), round(cursor + dur, 3)))
+                if sfx_cues and i < len(sfx_cues):
+                    cue = str(sfx_cues[i] or "none").strip().lower()
+                    if cue != "none":
+                        sfx_events.append((max(0.0, cursor - 0.08), cue))
+                chunks.append(audio)
+                chunks.append(np.zeros(int(scene_gap_sec * sample_rate), dtype=np.float32))
+                cursor += dur + scene_gap_sec
+            chunks.append(np.zeros(int(0.35 * sample_rate), dtype=np.float32))
+            _master_and_mix(
+                np.concatenate(chunks),
+                sample_rate,
+                sample_rate,
+                wav_path,
+                sfx_events=sfx_events,
+                music_mood=music_mood,
+                is_edge_tts=True,
+                tag=f"Edge-TTS {active_voice} ({active_rate})",
+            )
+            return wav_path, timings
+        except Exception as exc:
+            print(f" [TTS Warning] Không thể kết nối Edge-TTS ({exc}). Tự động fallback sang Local VITS Tiếng Việt...")
+
+    # Chạy mô hình Local VITS Tiếng Việt (facebook/mms-tts-vie)
     import torch
 
     model, tokenizer = _get_local_vits_vietnamese_model()
     vits_sr = int(model.config.sampling_rate)
 
-    lead = 0.20
+    lead = 0.15
     chunks: List[np.ndarray] = [np.zeros(int(lead * vits_sr), dtype=np.float32)]
     cursor = lead
     timings: List[Tuple[float, float]] = []
@@ -427,9 +615,16 @@ def synthesize_scene_voiceover(
         chunks.append(audio)
         chunks.append(np.zeros(int(scene_gap_sec * vits_sr), dtype=np.float32))
         cursor += dur + scene_gap_sec
-    chunks.append(np.zeros(int(0.45 * vits_sr), dtype=np.float32))
+    chunks.append(np.zeros(int(0.35 * vits_sr), dtype=np.float32))
     _master_and_mix(
-        np.concatenate(chunks), vits_sr, sample_rate, wav_path, sfx_events=sfx_events, music_mood=music_mood
+        np.concatenate(chunks),
+        vits_sr,
+        sample_rate,
+        wav_path,
+        sfx_events=sfx_events,
+        music_mood=music_mood,
+        is_edge_tts=False,
+        tag=f"VITS Local MMS-Vie (rate={VITS_SPEAKING_RATE})",
     )
     return wav_path, timings
 

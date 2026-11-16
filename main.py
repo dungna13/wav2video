@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from config.settings import WORKSPACE_DIR
 from graph.book_rag import (
     get_chunk_by_idx,
     get_next_pending_chunk,
@@ -61,24 +62,39 @@ def _parse_args(argv) -> Dict[str, Any]:
         "block_sec": 14.0,
         "max_blocks": 4,
         "topic": "",
+        "voice": "",
+        "rate": "",
+        "engine": "",
+        "speed": 1.0,
+        "stickman": False,
+        "stickman_style": "",
     }
     words = []
-    it = iter(argv)
-    for a in it:
+    i = 0
+    n = len(argv)
+    while i < n:
+        a = argv[i]
         if a == "--mode":
-            opts["mode"] = next(it, "").strip().upper()
+            i += 1
+            opts["mode"] = argv[i].strip().upper() if i < n else ""
         elif a == "--model":
-            opts["model"] = next(it, "auto").strip().lower()
+            i += 1
+            opts["model"] = argv[i].strip().lower() if i < n else "auto"
         elif a == "--ingest":
-            opts["ingest"] = next(it, "").strip()
+            i += 1
+            opts["ingest"] = argv[i].strip() if i < n else ""
         elif a == "--list-book":
-            opts["list_book"] = next(it, "").strip()
+            i += 1
+            opts["list_book"] = argv[i].strip() if i < n else ""
         elif a == "--mine":
-            opts["mine"] = next(it, "").strip()
+            i += 1
+            opts["mine"] = argv[i].strip() if i < n else ""
         elif a == "--book":
-            opts["book"] = next(it, "").strip()
+            i += 1
+            opts["book"] = argv[i].strip() if i < n else ""
         elif a == "--chunk":
-            raw = next(it, "0").strip()
+            i += 1
+            raw = argv[i].strip() if i < n else "0"
             opts["chunk"] = int(raw) if raw.isdigit() else 0
         elif a == "--daily":
             opts["daily"] = True
@@ -87,31 +103,67 @@ def _parse_args(argv) -> Dict[str, Any]:
         elif a == "--flow-prep":
             opts["flow_prep"] = True
         elif a == "--flow-render":
-            opts["flow_render"] = next(it, "").strip()
+            if i + 1 < n and not argv[i + 1].startswith("--"):
+                i += 1
+                opts["flow_render"] = argv[i].strip()
+            else:
+                opts["flow_render"] = "latest"
         elif a in ("--hitl", "--review"):
-            opts["hitl"] = next(it, "").strip()
+            i += 1
+            opts["hitl"] = argv[i].strip() if i < n else ""
         elif a in ("--ui", "--web"):
             opts["ui"] = True
         elif a == "--port":
-            p = next(it, "8000").strip()
+            i += 1
+            p = argv[i].strip() if i < n else "8000"
             opts["port"] = int(p) if p.isdigit() else 8000
         elif a == "--clips-dir":
-            opts["clips_dir"] = next(it, "").strip()
+            i += 1
+            opts["clips_dir"] = argv[i].strip() if i < n else ""
         elif a == "--sub-mode":
-            opts["sub_mode"] = next(it, "narration_full").strip().lower()
+            i += 1
+            opts["sub_mode"] = argv[i].strip().lower() if i < n else "narration_full"
         elif a == "--no-sub":
             opts["sub_mode"] = "none"
         elif a == "--block-sec":
-            raw = next(it, "14").strip()
+            i += 1
+            raw = argv[i].strip() if i < n else "14"
             try:
                 opts["block_sec"] = max(4.0, float(raw))
             except ValueError:
                 opts["block_sec"] = 14.0
         elif a == "--blocks":
-            raw = next(it, "4").strip()
+            i += 1
+            raw = argv[i].strip() if i < n else "4"
             opts["max_blocks"] = max(1, int(raw)) if raw.isdigit() else 4
+        elif a == "--voice":
+            i += 1
+            opts["voice"] = argv[i].strip() if i < n else ""
+        elif a == "--rate":
+            i += 1
+            opts["rate"] = argv[i].strip() if i < n else ""
+        elif a == "--engine":
+            i += 1
+            opts["engine"] = argv[i].strip().lower() if i < n else ""
+        elif a in ("--speed", "--speed-factor"):
+            i += 1
+            if i < n and not argv[i].startswith("--"):
+                try:
+                    opts["speed"] = float(argv[i].strip())
+                except ValueError:
+                    opts["speed"] = 1.0
+            else:
+                opts["speed"] = 1.5
+        elif a in ("--stickman", "--stick"):
+            opts["stickman"] = True
+            if not opts.get("stickman_style"):
+                opts["stickman_style"] = "amber_noir"
+        elif a in ("--style", "--stickman-style"):
+            i += 1
+            opts["stickman_style"] = argv[i].strip().lower() if i < n else "amber_noir"
         else:
             words.append(a)
+        i += 1
     opts["topic"] = " ".join(words).strip()
     return opts
 
@@ -153,13 +205,53 @@ def main():
         start_server(port=opts["port"])
         return
 
+    if opts["flow_prep"] and (opts["stickman"] or opts.get("stickman_style") or opts.get("mode") in ("stickman", "amber_noir", "style6", "6")):
+        topic = opts["topic"] or "Chiến dịch Điện Biên Phủ 1954: Khi sự kiêu ngạo trả giá bằng đế chế"
+        from graph.stickman_director import prepare_stickman_flow_workspace
+        prepare_stickman_flow_workspace(
+            topic=topic,
+            style=opts.get("stickman_style") or "amber_noir",
+            voice=opts.get("voice") or None,
+            rate=opts.get("rate") or None,
+            speed_factor=opts.get("speed", 1.45),
+            target_block_sec=opts.get("block_sec", 7.0),
+            max_blocks=opts.get("max_blocks", 4),
+        )
+        return
+
+    if opts["stickman"]:
+        topic = opts["topic"] or "Quy luật 80/20: Vì sao 20% nỗ lực tạo ra 80% kết quả?"
+        from graph.stickman_director import run_stickman_pipeline
+        run_stickman_pipeline(
+            topic=topic,
+            style=opts.get("stickman_style", "modern_pop"),
+            voice=opts.get("voice") or None,
+            rate=opts.get("rate") or None,
+            speed_factor=opts.get("speed", 1.0),
+            sub_mode=opts.get("sub_mode", "narration_full"),
+        )
+        return
+
     if opts["hitl"]:
         run_hitl_cli(opts["hitl"], sub_mode=opts["sub_mode"])
         return
 
     if opts["flow_render"]:
+        flow_target = opts["flow_render"].strip()
+        if flow_target.lower() in ("latest", "last", "auto", "1", ""):
+            flows = sorted(WORKSPACE_DIR.glob("flow_*"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if not flows:
+                print("❌ Chưa có thư mục flow_* nào trong workspace! Vui lòng chạy `--flow-prep` trước.")
+                return
+            run_dir_path = flows[0]
+            print(f"[Flow Render] 📂 Đang tự động chọn dự án mới nhất: {run_dir_path.name}")
+        else:
+            run_dir_path = Path(flow_target)
+            if not run_dir_path.exists() and (WORKSPACE_DIR / flow_target).exists():
+                run_dir_path = WORKSPACE_DIR / flow_target
+
         res = render_from_flow_clips(
-            run_dir=Path(opts["flow_render"]),
+            run_dir=run_dir_path,
             clips_dir=Path(opts["clips_dir"]) if opts["clips_dir"] else None,
             sub_mode=opts["sub_mode"],
         )
@@ -167,10 +259,34 @@ def main():
         r = res["rendered"]
         v = res["visual_scores"]
         o = res["output_scores"]
+        final_video_path = Path(r["final_master_video_path"])
+
+        if opts.get("speed") and abs(opts["speed"] - 1.0) > 0.02:
+            sp = opts["speed"]
+            fast_path = final_video_path.parent / f"final_master_fast_{sp:.2f}x.mp4"
+            import imageio_ffmpeg
+            import subprocess
+            ff = imageio_ffmpeg.get_ffmpeg_exe()
+            cmd = [
+                ff, "-y", "-i", str(final_video_path),
+                "-filter_complex", f"[0:v]setpts=PTS/{sp}[v];[0:a]atempo={sp}[a]",
+                "-map", "[v]", "-map", "[a]",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+                "-c:a", "aac", "-b:a", "192k",
+                "-map_metadata", "-1",
+                "-metadata", "make=Sony",
+                "-metadata", "model=ILCE-7M4",
+                "-metadata", "encoder=Sony XAVC-S Video",
+                str(fast_path),
+            ]
+            r_sp = subprocess.run(cmd, capture_output=True, text=True)
+            if r_sp.returncode == 0 and fast_path.exists():
+                final_video_path = fast_path
+                print(f"[Flow Render] Đã tăng tốc video lên {sp:.2f}x -> {fast_path.name}")
         print("\n" + "=" * 96)
         print(f"FLOW RENDER HOÀN TẤT: {m['topic_title']}")
         print("=" * 96)
-        print(f" • Video        : {r['final_master_video_path']} ({m['audio_duration_sec']}s)")
+        print(f" • Video        : {final_video_path} ({m['audio_duration_sec']}s)")
         print(f" • Hình ảnh     : tổng={v['visual_total_score']} | nét={v['sharpness_score']} | liên tục màu={v['continuity_score']}")
         print(f" • Đầu ra       : tổng={o['output_total_score']} | lệch A/V={o['av_offset_frames']} frame | {res['tiktok_publish_status']}")
         print(f" • Caption      : {res['tiktok_caption']}")
@@ -240,14 +356,22 @@ def main():
         )
         print("=" * 96)
 
+        init_input = {
+            "user_request": topic,
+            "intent_mode": opts["mode"],
+            "preferred_narrative_model": opts["model"],
+            "book_id": book_id,
+            "book_chunk_idx": chunk_idx,
+        }
+        if opts.get("engine"):
+            init_input["tts_engine"] = opts["engine"]
+        if opts.get("voice"):
+            init_input["tts_voice"] = opts["voice"]
+        if opts.get("rate"):
+            init_input["tts_rate"] = opts["rate"]
+
         state = app.invoke(
-            {
-                "user_request": topic,
-                "intent_mode": opts["mode"],
-                "preferred_narrative_model": opts["model"],
-                "book_id": book_id,
-                "book_chunk_idx": chunk_idx,
-            },
+            init_input,
             config=config,
         )
 

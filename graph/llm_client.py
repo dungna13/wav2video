@@ -159,22 +159,85 @@ ANGLE_MINER_GEMINI_SCHEMA: Dict[str, Any] = {
 
 
 def _extract_json_object(raw_text: str) -> Optional[Dict[str, Any]]:
-    """Trích xuất JSON an toàn từ chuỗi phản hồi của LLM."""
+    """Trích xuất JSON an toàn từ chuỗi phản hồi của LLM (hỗ trợ markdown, trailing commas, unwrap nested)."""
     if not raw_text:
         return None
     text = raw_text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    try:
-        return json.loads(text)
-    except Exception:
-        match = re.search(r"\{[\s\S]*\}", text)
-        if match:
+
+    # 1. Tìm khối ```json ... ``` hoặc ``` ... ```
+    m_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    if m_block:
+        candidate = m_block.group(1).strip()
+        try:
+            res = json.loads(candidate)
+            if isinstance(res, dict):
+                return _unwrap_scenes_if_nested(res)
+        except Exception:
+            cleaned = re.sub(r",\s*([\]\}])", r"\1", candidate)
             try:
-                return json.loads(match.group(0))
+                res = json.loads(cleaned)
+                if isinstance(res, dict):
+                    return _unwrap_scenes_if_nested(res)
             except Exception:
-                return None
+                pass
+
+    # 2. Thử parse trực tiếp toàn bộ chuỗi
+    try:
+        res = json.loads(text)
+        if isinstance(res, dict):
+            return _unwrap_scenes_if_nested(res)
+    except Exception:
+        pass
+
+    # 3. Tìm vùng ngoặc nhọn lớn nhất { ... }
+    m_brace = re.search(r"(\{[\s\S]*\})", text)
+    if m_brace:
+        candidate = m_brace.group(1).strip()
+        try:
+            res = json.loads(candidate)
+            if isinstance(res, dict):
+                return _unwrap_scenes_if_nested(res)
+        except Exception:
+            cleaned = re.sub(r",\s*([\]\}])", r"\1", candidate)
+            try:
+                res = json.loads(cleaned)
+                if isinstance(res, dict):
+                    return _unwrap_scenes_if_nested(res)
+            except Exception:
+                pass
+
+    # 4. Tìm mảng [ ... ] nếu LLM trả về trực tiếp danh sách cảnh
+    m_arr = re.search(r"(\[[\s\S]*\])", text)
+    if m_arr:
+        candidate = m_arr.group(1).strip()
+        try:
+            arr = json.loads(candidate)
+            if isinstance(arr, list) and arr and isinstance(arr[0], dict):
+                return {"scenes": arr}
+        except Exception:
+            cleaned = re.sub(r",\s*([\]\}])", r"\1", candidate)
+            try:
+                arr = json.loads(cleaned)
+                if isinstance(arr, list) and arr and isinstance(arr[0], dict):
+                    return {"scenes": arr}
+            except Exception:
+                pass
+
     return None
+
+
+def _unwrap_scenes_if_nested(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Tự động unwrap nếu LLM lồng mảng scenes vào trong object con."""
+    if data.get("scenes") or data.get("angles"):
+        return data
+    for k in ["storyboard", "data", "result", "video", "output"]:
+        if isinstance(data.get(k), dict) and (data[k].get("scenes") or data[k].get("angles")):
+            return data[k]
+    for k in ["scene_list", "scenelist", "shots", "segments"]:
+        if isinstance(data.get(k), list):
+            data["scenes"] = data[k]
+            return data
+    return data
 
 
 def call_gemini_thinking_structured(
@@ -230,15 +293,20 @@ def call_gemini_thinking_structured(
                 print(f" [Gemini {model_name}] Lỗi: {e} -> Thử model dự phòng...")
                 continue
 
-    # Gọi Free LLM Reasoning Endpoint (OpenAI-compatible `openai-fast`) hoàn toàn miễn phí
+    # Gọi Free LLM Reasoning Endpoint (OpenAI-compatible) với danh sách dự phòng đa mô hình
     if FREE_LLM_ENDPOINT:
         required_keys = response_schema.get("required", [])
         schema_hint = (
-            f"\nReturn ONLY a single valid JSON object containing keys: {required_keys}. "
-            f"Nested arrays/objects described in the prompt (e.g. `scenes`) must be included in full. "
-            f"Keep reasoning brief and output valid JSON immediately."
+            f"\nIMPORTANT: Return ONLY a single valid JSON object containing keys: {required_keys}. "
+            f"All nested scenes and prompts must be fully populated. Output raw JSON only, no markdown, no explanation outside JSON."
         )
-        for model_name in [FREE_LLM_MODEL, "openai"] if FREE_LLM_MODEL != "openai" else ["openai"]:
+        # Danh sách mô hình miễn phí thử lần lượt để đảm bảo luôn có kết quả
+        candidate_free_models = [FREE_LLM_MODEL] if FREE_LLM_MODEL else []
+        for m in ["qwen", "openai-fast", "mistral", "openai", "gemini"]:
+            if m not in candidate_free_models:
+                candidate_free_models.append(m)
+
+        for model_name in candidate_free_models:
             try:
                 oa_payload = {
                     "model": model_name,
@@ -246,12 +314,13 @@ def call_gemini_thinking_structured(
                         {"role": "system", "content": system_instruction + schema_hint},
                         {"role": "user", "content": prompt},
                     ],
-                    "temperature": GEMINI_TEMPERATURE,
-                    "max_tokens": 8000,
+                    "temperature": 0.3,
+                    "response_format": {"type": "json_object"},
+                    "max_tokens": 4000,
                 }
-                resp = requests.post(FREE_LLM_ENDPOINT, json=oa_payload, timeout=FREE_LLM_TIMEOUT)
+                resp = requests.post(FREE_LLM_ENDPOINT, json=oa_payload, timeout=min(FREE_LLM_TIMEOUT, 60))
                 if resp.status_code != 200:
-                    print(f" [Free LLM {model_name}] HTTP {resp.status_code}: {resp.text[:160]}")
+                    print(f" [Free LLM {model_name}] HTTP {resp.status_code}: {resp.text[:120]}")
                     continue
                 data = resp.json()
                 choice = data["choices"][0]
@@ -259,18 +328,17 @@ def call_gemini_thinking_structured(
                 content = msg.get("content") or ""
                 reasoning = msg.get("reasoning") or ""
                 parsed = _extract_json_object(content) or _extract_json_object(reasoning)
-                if parsed:
+                if parsed and (parsed.get("scenes") or parsed.get("angles")):
                     if reasoning and not parsed.get("thinking_process"):
                         parsed["thinking_process"] = reasoning[:350]
                     print(f"[LLM Thinking ({model_name})] Đã suy luận & thiết kế kịch bản thành công!")
                     return parsed
                 print(
-                    f" [Free LLM {model_name}] Không có JSON hợp lệ (finish_reason={choice.get('finish_reason')}, "
-                    f"content={len(content)} ký tự, reasoning={len(reasoning)} ký tự)."
+                    f" [Free LLM {model_name}] JSON chưa hợp lệ (content={len(content)} chars, reasoning={len(reasoning)} chars) -> Thử model tiếp theo..."
                 )
             except Exception as e:
-                print(f" [Free LLM {model_name}] {type(e).__name__}: {str(e)[:140]}")
+                print(f" [Free LLM {model_name}] {type(e).__name__} -> Thử model tiếp theo...")
                 continue
-        print(" [LLM] Endpoint miễn phí lỗi/quá tải. Khuyến nghị: điền GEMINI_API_KEY (AIza...) vào .env để ổn định.")
+        print(" [LLM] Tất cả Free LLM endpoint đang quá tải.")
 
     return None

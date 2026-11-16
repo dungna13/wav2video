@@ -117,6 +117,10 @@ class ChristianVideoState(TypedDict):
     effective_intent_mode: str  # chế độ thực sự được render (LIPSYNC chưa hỗ trợ -> HUMAN_NO_LIPSYNC)
     intent_notes: str
     characters: Annotated[Dict[str, CharacterProfile], character_registry_reducer]
+    tts_engine: str
+    tts_voice: str
+    tts_rate: str
+    tts_pitch: str
 
     # Node 1 (`filter_context_node` + Book RAG QueryRewriter)
     book_id: str

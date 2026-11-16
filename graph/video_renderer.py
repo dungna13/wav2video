@@ -125,7 +125,6 @@ def build_ass(
     sub_mode: str = "narration_full",
 ) -> str:
     font_size = int(h * 0.046)
-    kicker_size = int(h * 0.030)
     lines = [
         "[Script Info]",
         f"Title: {title}",
@@ -136,21 +135,13 @@ def build_ass(
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Sub,DejaVu Sans,{font_size},&H0000D6FF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,{max(3, h // 220)},2,2,40,40,{int(h * 0.20)},1",
-        f"Style: Kicker,DejaVu Sans,{kicker_size},&H0000D6FF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,4,0,1,3,1,8,40,40,{int(h * 0.085)},1",
+        f"Style: Sub,Arial,{font_size},&H0000D6FF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,{max(3, h // 220)},2,2,40,40,{int(h * 0.20)},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
 
     for sc, (t0, t1), dur in zip(scenes, timings, durations):
-        kw = sc.get("overlay_keyword_vn", "").strip()
-        if kw:
-            k_start = t0
-            k_end = min(t1, k_start + 2.6)
-            lines.append(
-                f"Dialogue: 1,{_to_ass_time(k_start)},{_to_ass_time(k_end)},Kicker,,0,0,0,,{{\\fad(220,220)}}{kw}"
-            )
 
         if sub_mode == "narration_full":
             sub_text = str(sc.get("narration_vn", "")).strip()
@@ -344,18 +335,34 @@ def render_flow_video(
         harm = f",{blk['color_harm_vf']}" if blk.get("color_harm_vf") else ""
 
         out_clip = run_dir / f"flow_prep_clip_{i + 1}.mp4"
-        if 0.0 < src_dur < target_len and src_dur >= target_len * 0.65:
+        is_img = src_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+        if is_img:
+            cam_list = ["zoom_in", "zoom_out", "pan_left", "pan_right"]
+            cam = cam_list[i % len(cam_list)]
+            _make_scene_clip(
+                {"media_path": str(src_path), "media_type": "image", "camera": cam},
+                out_clip,
+                target_len,
+                w,
+                h,
+                fps,
+            )
+        elif 0.0 < src_dur < target_len and src_dur >= target_len * 0.65:
             ratio = target_len / src_dur
             vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},setpts={ratio:.4f}*PTS,fps={fps},setsar=1"
             cmd = [ff, "-y", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
+            cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
+            _run(cmd)
         elif 0.0 < src_dur < target_len * 0.65:
             vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
             cmd = [ff, "-y", "-stream_loop", "-1", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
+            cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
+            _run(cmd)
         else:
             vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
             cmd = [ff, "-y", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
-        cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
-        _run(cmd)
+            cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
+            _run(cmd)
         prep_clips.append(out_clip)
 
     merged = _merge_clips_xfade(prep_clips, block_durs, run_dir / "raw_visual_merged.mp4", fps)
