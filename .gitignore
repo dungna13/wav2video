@@ -38,3 +38,6 @@ env/
 .idea/
 .vscode/
 
+# Thư mục git ngoài
+external/
+

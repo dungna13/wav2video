@@ -28,9 +28,11 @@ WORKSPACE_DIR: Path = _resolve_path("WORKSPACE_DIR", "./workspace")
 OUTPUT_AUDIO_DIR: Path = WORKSPACE_DIR
 AUDIO_SAMPLE_RATE: int = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
 VIDEO_FPS: int = int(os.getenv("VIDEO_FPS", "30"))
+TTS_ENGINE: str = os.getenv("TTS_ENGINE", "edge-tts").strip().lower()
 TTS_VOICE: str = os.getenv("TTS_VOICE", "vi-VN-NamMinhNeural").strip()
-TTS_RATE: str = os.getenv("TTS_RATE", "-4%").strip()
-TTS_PITCH: str = os.getenv("TTS_PITCH", "-2Hz").strip()
+TTS_RATE: str = os.getenv("TTS_RATE", "+45%").strip()
+TTS_PITCH: str = os.getenv("TTS_PITCH", "+0Hz").strip()
+VITS_SPEAKING_RATE: float = float(os.getenv("VITS_SPEAKING_RATE", "1.45"))
 
 # =====================================================================
 # 2. CẤU HÌNH LLM THINKING API (ĐỌC TỪ `.env`)

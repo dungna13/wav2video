@@ -183,6 +183,10 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
         output_filename=run_dir / "audio_16k_mono.wav",
         sfx_cues=[str(s.get("sfx_cue", "none")) for s in scenes],
         music_mood=str(state.get("music_mood", "")),
+        engine=str(state.get("tts_engine", "")),
+        voice=str(state.get("tts_voice", "")),
+        rate=str(state.get("tts_rate", "")),
+        pitch=str(state.get("tts_pitch", "")),
     )
     hook = state.get("hook_and_context_vn", "") or scenes[0]["narration_vn"]
     deep = state.get("deep_explanation_vn", "") or " ".join(s["narration_vn"] for s in scenes[1:-1])
