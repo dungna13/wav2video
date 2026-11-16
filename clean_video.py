@@ -53,26 +53,15 @@ def clean_video_file(input_path: str, output_path: str = None, crf: int = 19) ->
         "format=yuv420p"
     )
 
-    # Filter âm thanh: làm ấm giọng & dịch tần số cực nhỏ (1.2%) phá nhận diện giọng TTS
-    af = (
-        "asetrate=r=16000*1.012,aresample=16000,"
-        "equalizer=f=120:width_type=o:w=1.0:g=2.2,"
-        "equalizer=f=3500:width_type=o:w=1.5:g=1.2,"
-        "acompressor=threshold=-18dB:ratio=2.5:attack=15:release=120"
-    )
-
     cmd = [
         FFMPEG_BIN, "-y",
         "-i", str(inp),
         "-vf", vf,
-        "-af", af,
         "-c:v", "libx264",
         "-preset", "medium",
         "-crf", str(crf),
         "-tune", "film",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-ar", "44100",
+        "-c:a", "copy",
         "-map_metadata", "-1",
         "-map_chapters", "-1",
         "-dn",

@@ -232,14 +232,6 @@ def _finalize_master_video(
         "noise=alls=7:allf=t+u"
     )
 
-    # Filter âm thanh: làm ấm giọng & dịch tần số cực nhỏ (1.2%) triệt tiêu nhận diện giọng TTS (Edge-TTS / Azure)
-    af = (
-        "asetrate=r=16000*1.012,aresample=16000,"
-        "equalizer=f=120:width_type=o:w=1.0:g=2.2,"
-        "equalizer=f=3500:width_type=o:w=1.5:g=1.2,"
-        "acompressor=threshold=-18dB:ratio=2.5:attack=15:release=120"
-    )
-
     vf = (
         f"{grade},{anti_synthid_filter},vignette=angle=PI/6,"
         f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.0, total_audio_sec - 0.6):.2f}:d=0.6"
@@ -250,7 +242,6 @@ def _finalize_master_video(
         [
             ff, "-y", "-i", merged.name if merged.parent == run_dir else str(merged), "-i", str(wav_path),
             "-vf", vf,
-            "-af", af,
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-tune", "film", "-maxrate", "8M", "-bufsize", "16M",
             "-pix_fmt", "yuv420p", "-r", str(fps),
