@@ -216,16 +216,20 @@ def _finalize_master_video(
 
     grade = GRADE_BY_GENRE.get(genre, "eq=contrast=1.04:brightness=0.01:saturation=1.03")
     sub_filter = ",ass=subtitles.ass" if burn_sub else ""
-    # Bộ lọc Anti-SynthID & Anti-AI Detector (Phá vỡ watermark tần số ẩn của Google Flow / Veo & TikTok AI scanner):
-    # 1. Spatial Resampling (scale 102.5% rồi crop lại): Phá hủy lưới tọa độ tần số ẩn không gian của Google SynthID
-    # 2. unsharp nhẹ: tái cấu trúc ma trận biên độ điểm ảnh tần số cao
-    # 3. noise alls=8:allf=t+u: phủ hạt phim động phá vỡ tính tương quan pha (phase-coherence) của AI watermark
+    # Bộ lọc Anti-SynthID & Anti-AI Detector:
+    # 1. Micro-Tilt 0.45° + Scale 1.03x + Crop: Làm xiên ma trận tần số DCT của Google SynthID, phá vỡ tính trực giao của watermark
+    # 2. setsar=1: Giữ đúng tỷ lệ khung hình chuẩn 1:1, DAR 9:16
+    # 3. unsharp + dynamic noise: Tái cấu trúc ma trận biên độ điểm ảnh tần số cao
+    w_zoomed = int(w * 1.03)
+    h_zoomed = int(h * 1.03)
     anti_synthid_filter = (
-        "scale=iw*1.025:ih*1.025:flags=lanczos,"
+        f"rotate=0.45*PI/180:ow={w}:oh={h},"
+        f"scale={w_zoomed}:{h_zoomed}:flags=lanczos,"
         f"crop={w}:{h},"
+        "setsar=1,"
         "eq=contrast=1.02:brightness=0.01:saturation=1.03,"
         "unsharp=lx=3:ly=3:la=0.6,"
-        "noise=alls=8:allf=t+u"
+        "noise=alls=7:allf=t+u"
     )
 
     # Filter âm thanh: làm ấm giọng & dịch tần số cực nhỏ (1.2%) triệt tiêu nhận diện giọng TTS (Edge-TTS / Azure)
@@ -252,19 +256,12 @@ def _finalize_master_video(
             "-pix_fmt", "yuv420p", "-r", str(fps),
             "-brand", "mp42",
             "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
-            # 1. XÓA BỎ 100% WATERMARK & METADATA GỐC (C2PA, SynthID, Google Flow tags, AI identifiers)
+            # XÓA SẠCH 100% METADATA (Không chèn tag CapCut giả để tránh bị bot CapCut của ByteDance quét)
             "-map_metadata", "-1",
             "-map_chapters", "-1",
             "-dn",
             "-sn",
             "-bitexact",
-            # 2. GIẢ LẬP SIÊU DỮ LIỆU CAMERA / CAPCUT THỰC TẾ (Apple iPhone 15 Pro / CapCut)
-            "-metadata", "make=Apple",
-            "-metadata", "model=iPhone 15 Pro",
-            "-metadata", "software=CapCut 4.2.0",
-            "-metadata:s:v:0", "rotate=0",
-            "-metadata:s:v:0", "handler_name=Core Media Video",
-            "-metadata:s:a:0", "handler_name=Core Media Audio",
             "-shortest", final_mp4.name,
         ],
         cwd=run_dir,

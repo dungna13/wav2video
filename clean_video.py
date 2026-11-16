@@ -39,16 +39,17 @@ def clean_video_file(input_path: str, output_path: str = None, crf: int = 19) ->
     print(f"[*] Đang áp dụng: Resampling 102.5% + Micro-grading + Film Grain + Audio Formant Shift...")
 
     # Filter phức hợp xử lý toàn bộ điểm ảnh:
-    # 1. scale 102.5% + crop lại kích thước gốc (phá lưới SynthID)
-    # 2. eq: chỉnh nhẹ màu sắc
-    # 3. unsharp: tái cấu trúc viền
-    # 4. noise: phủ hạt phim chuyển động ngẫu nhiên
+    # 1. rotate 0.45° + scale 103% + crop: làm xiên ma trận tần số DCT của Google SynthID
+    # 2. setsar=1: chuẩn hóa tỷ lệ điểm ảnh
+    # 3. eq + unsharp + dynamic noise: làm mới 100% histogram và tính tương quan pha
     vf = (
-        "scale=iw*1.025:ih*1.025:flags=lanczos,"
-        "crop=iw/1.025:ih/1.025,"
+        "rotate=0.45*PI/180:ow=iw:oh=ih,"
+        "scale=iw*1.03:ih*1.03:flags=lanczos,"
+        "crop=iw/1.03:ih/1.03,"
+        "setsar=1,"
         "eq=contrast=1.02:brightness=0.01:saturation=1.03,"
         "unsharp=lx=3:ly=3:la=0.6,"
-        "noise=alls=8:allf=t+u,"
+        "noise=alls=7:allf=t+u,"
         "format=yuv420p"
     )
 
@@ -78,11 +79,6 @@ def clean_video_file(input_path: str, output_path: str = None, crf: int = 19) ->
         "-sn",
         "-bitexact",
         "-brand", "mp42",
-        "-metadata", "make=Apple",
-        "-metadata", "model=iPhone 15 Pro",
-        "-metadata", "software=CapCut 4.2.0",
-        "-metadata:s:v:0", "handler_name=Core Media Video",
-        "-metadata:s:a:0", "handler_name=Core Media Audio",
         str(out)
     ]
 
