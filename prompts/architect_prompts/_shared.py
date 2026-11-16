@@ -40,25 +40,39 @@ Hình của cảnh N phải *nhìn thấy được* điều mà `narration_vn` c
 Câu nói về "pháo kéo qua đèo" → ảnh là pháo + đèo + bùn, KHÔNG phải ảnh "chiến tranh" chung chung, KHÔNG phải hình ẩn dụ.
 Khái niệm trừu tượng (xác suất, lạm phát, ký ức...) → tìm VẬT THỂ/ĐỊA ĐIỂM ĐỜI THẬT đại diện (đồng xu rơi trên bàn gỗ, tờ tiền mất giá chất đống, hành lang bệnh viện...).
 
-🔴 **RULE #2 — CẤM TUYỆT ĐỐI NGÔN NGỮ HÌNH ẢNH "TRẺ CON / SLIDE / HỌC ĐƯỜNG"**
+🔴 **RULE #2 — CẤM TUYỆT ĐỐI NGÔN NGỮ HÌNH ẢNH "TRẺ CON / SLIDE / HỌC ĐƯỜNG" (Trừ thể loại Stickman)**
 ⛔ Trong `image_prompt_en` KHÔNG được có: chart, graph, diagram, infographic, axis, equation, formula, UI, slide, presentation, cartoon, anime, Pixar, Disney, 3D render, illustration, clipart, vector, neon glow, magic particles, fireflies, text, caption, watermark, logo.
-⛔ Không nhân vật hoạt hình, không "người lữ hành áo choàng phát sáng", không bướm/bánh răng/đèn lồng bay lơ lửng — trừ khi chủ đề NÓI THẲNG về chúng.
-✅ Mọi cảnh là ảnh chụp tài liệu chân thực (photojournalism / documentary still / archival-style photograph).
+⛔ Không nhân vật hoạt hình, không "người lữ hành áo choàng phát sáng", không bướm/bánh răng/đèn lồng bay lơ lửng — trừ khi chủ đề NÓI THẲNG về chúng hoặc đang chọn thể loại `stickman_animation`.
+✅ Mọi cảnh phim tài liệu là ảnh chụp tài liệu chân thực (photojournalism / documentary still / archival-style photograph).
+🌟 RIÊNG NẾU THỂ LOẠI LÀ `stickman_animation`: Cho phép áp dụng phong cách Stickman Video Director (minimalist 2D animated stick figure, white hollow head, black stick limbs, dynamic physical acting, 2D continuous line animation).
 
 🔴 **RULE #3 — HOOK 3 GIÂY ĐẦU = "PATTERN INTERRUPT" & AUDITORY COLD OPEN**
 Cảnh 1: **6–11 từ** (đọc gọn dưới 3,0 giây), ưu tiên cấu trúc **"Staccato 2 nhịp"**: cụm đánh gắt 2–4 từ đầu câu (dứt bằng dấu chấm/gạch ngang) + mệnh đề bẻ ngược nhận thức (vd: *"Ba nghìn xác lính. Nhưng không một tiếng súng."*). Đánh thẳng vào con số sốc, nghịch lý hoặc khoảnh khắc giữa cơn bão.
 ⛔ Cấm mở bằng: "Bạn có biết", "Hôm nay", "Trong video này", "Hãy cùng khám phá", lời chào, tên kênh, định nghĩa sách giáo khoa.
 
-🔴 **RULE #4 — KỶ LUẬT SỰ THẬT (đặc biệt với lịch sử / khoa học / số liệu)**
-- Chỉ nêu tên, năm, số liệu khi bạn CHẮC CHẮN. Không chắc → nói khái quát ("giữa thập niên 1950", "hàng chục nghìn") hoặc bỏ.
-- ⛔ KHÔNG bịa trích dẫn, bịa số liệu, bịa nhân vật.
-- Mọi con số/mốc/tên riêng quan trọng bạn đã dùng → liệt kê ngắn gọn trong `claims_to_verify` để con người kiểm tra trước khi đăng.
+🔴 **RULE #4 — KỶ LUẬT SỰ THẬT & NGHIÊM CẤM BỊA ĐẶT NGOÀI NGUỒN RAG**
+
+⛔⛔ **TUYỆT ĐỐI KHÔNG BỊA — ĐÂY LÀ RULE CỨNG KHÔNG NGOẠI LỆ** ⛔⛔
+
+**4A — Chỉ được khai thác nội dung từ RAG chunk đã cung cấp trong `[TƯ LIỆU SÁCH ĐÃ TRUY XUẤT]`:**
+- Mọi tình tiết, nhân vật, số liệu, năm tháng, địa danh, trích dẫn trong kịch bản BẮT BUỘC phải có căn cứ trực tiếp từ đoạn sách RAG đã được cung cấp ở trên.
+- ⛔ KHÔNG được tự bổ sung kiến thức nền, không "nhớ" thêm thông tin ngoài đoạn RAG, không diễn giải vượt ra ngoài văn bản nguồn đã cấp.
+- ⛔ KHÔNG được "tổng hợp" hay "suy diễn" thông tin từ nhiều sách khác nhau — chỉ được dùng đúng chunk của sách đang được gọi trong phiên này.
+- Nếu RAG chunk KHÔNG có thông tin cụ thể nào đó → KHÔNG được bịa; thay bằng mô tả khái quát hoặc bỏ hẳn chi tiết đó.
+
+**4B — Kỷ luật số liệu & trích dẫn:**
+- Chỉ nêu tên, năm, số liệu khi CON SỐ/TÊN ĐÓ XUẤT HIỆN RÕ RÀNG trong đoạn RAG đã cung cấp. Không có trong RAG → nói khái quát ("giữa thập niên 1950", "hàng chục nghìn") hoặc bỏ.
+- ⛔ KHÔNG bịa trích dẫn, bịa số liệu, bịa nhân vật dù có vẻ hợp lý về mặt lịch sử.
+- Mọi con số/mốc/tên riêng quan trọng bạn đã dùng → liệt kê ngắn gọn trong `claims_to_verify` để con người đối chiếu lại với nguồn RAG trước khi đăng.
+
+**4C — Hình ảnh tư liệu thật:**
 - Với nhân vật lịch sử, địa danh, di tích, hiện vật, bản thảo có thật: khi dùng tư liệu ảnh thật (`visual_source_type: "real_photo"`), CHO PHÉP và KHUYẾN KHÍCH sử dụng chân dung/ảnh chụp thật của nhân vật, địa danh, di tích, bản thảo qua `real_media_query`; chỉ khi fallback sang `ai_photo` mới giữ quy tắc không vẽ cận khuôn mặt nhận diện được của nhân vật thật (dùng bóng lưng, đôi tay, di vật, bản đồ giấy, địa điểm, đám đông nhìn từ xa).
 
 🔴 **RULE #5 — GIỌNG ĐỌC LÀ TTS TIẾNG VIỆT → VIẾT ĐỂ TAI NGHE, KHÔNG PHẢI ĐỂ MẮT ĐỌC**
-- **Biến thiên nhịp câu (tránh đều giọng):**
+- **Độ dài và Biến thiên nhịp câu (Tối ưu short 25–35s):**
+  - Thời lượng chuẩn: **25–35 giây** (5–8 cảnh, tổng cộng 70–115 từ đọc nhanh, súc tích, vào thẳng vấn đề).
   - Cảnh 1 (Hook): **6–11 từ**, nhịp Staccato giật đanh (`punch_urgent`).
-  - Cảnh 2..Kế cuối: phần lớn **13–20 từ**, nhưng BẮT BUỘC có **1–2 cảnh ngắn gắt (7–12 từ)** tại điểm Twist/Cao trào để tạo nhịp nhấn. Cuối Cảnh 3 và Cảnh 5 ưu tiên đặt **Cầu nối níu tai (Auditory Open Loop)** — vế câu mở lửng buộc tai người nghe chờ giải mã ở cảnh kế tiếp.
+  - Cảnh 2..Kế cuối: câu ngắn gọn **10–16 từ/cảnh**, có **1 cảnh Twist ngắn gắt (6–10 từ)** tạo nhịp nhấn. Cuối Cảnh 3 và Cảnh 5 ưu tiên đặt **Cầu nối níu tai (Auditory Open Loop)** — vế câu mở lửng buộc tai người nghe chờ giải mã ở cảnh kế tiếp.
   - Cảnh cuối (Kết): **10–14 từ**, hãm nhịp dư âm (**Sonic Echo** — `solemn_slow`), đặt `--` ngay trước 3–4 từ đắt giá cuối cùng để câu chốt vang vọng.
 - **Nhạc tính thanh điệu & Động từ giác quan:**
   - Tránh chuỗi > 5 từ liên tiếp toàn thanh Bằng (ngang/huyền) gây tụng kinh ru ngủ; câu Twist ngắn gắt (7–12 từ) ưu tiên kết thúc bằng từ mang thanh **Trắc** (sắc/nặng/hỏi/ngã) cho âm sắc dứt khoát.
@@ -93,11 +107,13 @@ GENRE_DECISION_TABLE = """═══ BẢNG QUYẾT ĐỊNH THỂ LOẠI (tự ch
 | `psychology_philosophy` | tâm lý, thói quen, triết lý, xã hội | intimate documentary photograph, soft diffused light, muted palette, subjects seen from behind/side, quiet urban or domestic spaces | `nu_truyen_cam` | `reflective_piano` |
 | `true_story_crime` | vụ án, bí ẩn, thảm hoạ | dark noir documentary still, hard side light, wet streets, high contrast, grain, cold palette | `nam_tram_am` | `suspense_dark` |
 | `tech_future` | công nghệ, AI, phát minh | clean cinematic product-and-lab photography, cool neutral grade, practical lights, real hardware close-ups | `nu_hoat_ngon` | `driving_modern` |
-| `lifestyle_motivation` | kỷ luật, sức khoẻ, thói quen đời thường | natural-light lifestyle documentary photograph, golden-hour accents, handheld feel, authentic locations | `nu_hoat_ngon` | `uplifting_soft` |"""
+| `lifestyle_motivation` | kỷ luật, sức khoẻ, thói quen đời thường | natural-light lifestyle documentary photograph, golden-hour accents, handheld feel, authentic locations | `nu_hoat_ngon` | `uplifting_soft` |
+| `stickman_animation` | hoạt hình người que, giải thích hài hước, châm biếm, meme, tư duy logic tối giản | minimalist 2D animated stick figure line art, clean flat canvas, smooth fluid hand-drawn motion, high contrast monochrome with up to 3 vibrant accent colors, dynamic physical comedy, expressive stick character actions | `nam_tram_am` | `driving_modern` |"""
 
 INTENT_MODE_RULES_BLOCK = """═══ QUY TẮC THEO `intent_mode` ═══
 | intent_mode | Quy tắc hình ảnh |
 |---|---|
+| `STICKMAN` | Hoạt hình người que 2D (Style 1 Light / Stickman Video Director): nền trắng sáng sạch sẽ (flat pure white background), nhân vật người que da trắng / nét đen (white filled head with simple black contour, black stick limbs), có nét mặt biểu cảm ngộ nghĩnh (expressive cartoon line face with simple dot eyes, line mouth, funny reaction expressions), hành động tương tác năng động, kết hợp 1-3 màu nhấn tươi sáng. Tuyệt đối không dùng nền tối (dark), không vẽ người thật thực tế. |
 | `NO_HUMAN_BROLL` | ⛔ KHÔNG có người trong ảnh (kể cả bóng người xa). Chủ thể: địa hình, kiến trúc, vật thể, di vật, máy móc, bản đồ giấy, thiên nhiên, đồ vật đời thường. |
 | `HUMAN_NO_LIPSYNC` | ≥ 60% cảnh có người đang LÀM một hành động cụ thể (đi, kéo, viết, mở, chạy...), nhìn từ sau lưng / bên hông / chỉ thấy đôi tay / đám đông xa. ⛔ KHÔNG cận mặt nhìn thẳng ống kính (không có nhép môi). |
 | `HUMAN_WITH_LIPSYNC` | Hệ thống CHƯA hỗ trợ nhép môi → áp dụng đúng quy tắc `HUMAN_NO_LIPSYNC`. |"""
@@ -115,7 +131,8 @@ SCENE_FIELDS_BLOCK = """═══ TRƯỜNG CỦA TỪNG CẢNH ═══
 - `bgm_energy`: một trong `low`, `rise`, `peak`, `drop`, `calm`. Điều phối năng lượng nhạc theo CAM-WN (vd: Hook `rise`, Build `rise`/`peak`, Twist cắt nhịp đột ngột `drop` hoặc `peak`, Kết lắng `calm`).
 - `vocal_delivery`: một trong `punch_urgent` (Hook/cao trào nhanh gọn), `normal_story` (kể chuyện tự nhiên), `whisper_suspense` (chậm, trầm bí ẩn cho Twist), `solemn_slow` (hãm nhịp lắng đọng cho Lời kết đúc kết)."""
 
-BASE_SELF_CHECK_ITEMS = """☐ 8–10 cảnh, 130–185 từ tổng.   ☐ Hook 6–11 từ (Staccato 2 nhịp, đọc < 3s), có 1–2 cảnh Twist 7–12 từ (ưu tiên kết thanh Trắc), Cảnh cuối 10–14 từ có lời kết ngắn gọn (nhận xét + ý nghĩa + đúc kết, hãm nhịp `--`).
+BASE_SELF_CHECK_ITEMS = """☐ **[GROUNDING CHECK — RULE CỨNG]** Mọi tình tiết/số liệu/trích dẫn trong kịch bản có căn cứ trong RAG chunk đã cấp không? Không có trong RAG → đã xóa hoặc khái quát hóa chưa? Đã liệt kê vào `claims_to_verify` chưa?
+☐ 8–10 cảnh, 130–185 từ tổng.   ☐ Hook 6–11 từ (Staccato 2 nhịp, đọc < 3s), có 1–2 cảnh Twist 7–12 từ (ưu tiên kết thanh Trắc), Cảnh cuối 10–14 từ có lời kết ngắn gọn (nhận xét + ý nghĩa + đúc kết, hãm nhịp `--`).
 ☐ `narration_vn` sạch số/ký hiệu/tiếng Anh, ≥ 60% cảnh có động từ giác quan, tránh chuỗi > 5 âm Bằng liền kề; `subtitle_vn` gọn cho mắt đọc.
 ☐ `style_anchor_en` có bố cục safe-zone 9:16 (chừa 1/3 dưới thoáng tối).
 ☐ `overlay_keyword_vn` tối đa 3–4 cảnh; `sfx_cue` tối đa 2–3 cảnh; `bgm_energy` & `vocal_delivery` khớp cao trào/hạ nhịp (CAM-WN & LC4MP).
@@ -223,14 +240,27 @@ def build_model_prompt_template(
 
 
 def format_source_context_block(source_context: str) -> str:
-    """Định dạng khối RAG chunk đính kèm khi đầu vào có tư liệu nguồn."""
+    """Định dạng khối RAG chunk đính kèm khi đầu vào có tư liệu nguồn.
+
+    QUAN TRỌNG: Nếu source_context rỗng (không có RAG), hàm trả về chuỗi
+    cảnh báo bắt buộc — Architect chỉ được dùng kiến thức phổ quát đã kiểm chứng.
+    """
     if not source_context or not source_context.strip():
-        return ""
+        return (
+            "\n\n⚠️ [KHÔNG CÓ TƯ LIỆU SÁCH] Chủ đề được gọi không kèm RAG chunk cụ thể. "
+            "Chỉ được khai thác kiến thức phổ quát đã kiểm chứng rộng rãi (Wikipedia-level). "
+            "TUYỆT ĐỐI KHÔNG bịa số liệu, trích dẫn, tên nhân vật chưa rõ nguồn. "
+            "Mọi thông tin cụ thể PHẢI nằm trong `claims_to_verify`."
+        )
     return (
         "\n\n═══ TƯ LIỆU SÁCH ĐÃ TRUY XUẤT (RAG CHUNK — BẮT BUỘC BÁM SÁT) ═══\n"
         f"{source_context.strip()}\n"
-        "⚠️ Kỷ luật tư liệu: Bắt buộc khai thác đúng tình tiết, nhân vật, hình ảnh ẩn dụ hoặc câu thoại đắt giá từ đoạn sách trên; "
-        "KHÔNG bịa tình tiết mâu thuẫn với đoạn sách này, KHÔNG tóm tắt dàn trải cả cuốn sách."
+        "\n⛔ NGHIÊM CẤM BỊA ĐẶT NGOÀI NGUỒN NÀY — RULE CỨNG:\n"
+        "• Chỉ được dùng tình tiết, nhân vật, số liệu, địa danh CÓ TRONG đoạn sách trên.\n"
+        "• KHÔNG bổ sung kiến thức nền từ bên ngoài đoạn RAG này, dù tưởng chừng đúng.\n"
+        "• KHÔNG tổng hợp từ các sách/nguồn khác — chỉ đoạn sách này, phiên này.\n"
+        "• Thiếu thông tin → khái quát hóa hoặc bỏ; đừng bao giờ bịa để lấp chỗ trống.\n"
+        "• Toàn bộ số liệu/tên/mốc dùng trong kịch bản → liệt kê trong `claims_to_verify`."
     )
 
 

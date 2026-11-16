@@ -34,8 +34,11 @@ PROMPT_ANGLE_MINER_TEMPLATE = """[ROLE]: {domain_expert_role} — kiêm Trưởn
    - ⛔ Cấm góc chung chung kiểu "Tóm tắt bài học của chương...", "Giới thiệu về...".
 2. **Độ phủ không trùng lặp**:
    - Mỗi góc phải khai thác một nhân vật, sự kiện, cơ chế hoặc mâu thuẫn KHÁC NHAU trong đoạn tư liệu và không trùng với `{existing_topics}`.
-3. **Kỷ luật bám sát nguồn**:
+3. **Kỷ luật bám sát nguồn — RULE CỨNG KHÔNG NGOẠI LỆ**:
+   - ⛔⛔ TUYỆT ĐỐI CHỈ khai thác góc kể từ nội dung THỰC SỰ CÓ TRONG đoạn `{source_chunk}` đã cấp bên trên.
+   - ⛔ KHÔNG được "nhớ" thêm thông tin từ kiến thức nền, không bổ sung chi tiết từ phiên bản khác của sách, không tổng hợp từ các sách/nguồn khác.
    - Chỉ chọn góc có đủ dữ kiện cụ thể nằm ngay trong đoạn tư liệu; trích nguyên văn câu/chi tiết neo vào `key_evidence_quote`.
+   - Nếu chunk quá ngắn hoặc thiếu chi tiết → giảm số góc xuống, KHÔNG tự bịa thêm để đủ `{num_angles}` góc.
 4. **Sẵn sàng nạp cho `prompt_architect_node`**:
    - Mỗi góc phải sinh sẵn `user_request_for_architect` (1 câu đề bài sắc nét), `hook_idea_vn` (6–11 từ, pattern interrupt), `recommended_genre`, `recommended_intent_mode`, `recommended_narrative_model` (1 trong 12 ID ở danh mục bên dưới), `model_selection_reason` (1 câu ngắn giải thích vì sao mô hình đó hợp nhất với góc kể này), `recommended_domain_expert` (1 trong 14 ID chuyên gia ở danh mục bên dưới), cấu hình giọng đọc (`recommended_voice_profile`, `recommended_tts_voice`, `voice_selection_reason`) và cấu hình nhạc nền (`recommended_bgm_profile`, `bgm_affect_quadrant`, `bgm_alignment_mode`, `bgm_selection_reason`).
 5. **Lựa chọn giọng đọc phù hợp với nội dung (Bắt buộc đồng nhất 1 giọng/clip)**:

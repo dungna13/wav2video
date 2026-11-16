@@ -392,44 +392,193 @@ def _resolve_wav_path(output_filename: Any) -> Path:
     return wav_path
 
 
+VOICE_PROFILES = {
+    # 1. Giọng Nữ truyền cảm TikTok (Khuyên dùng - cực tự nhiên, biểu cảm sắc thái phong phú)
+    "hoai_my": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+0Hz",
+        "desc": "Nữ Hoài My truyền cảm, cuốn hút chuẩn TikTok",
+    },
+    "nu": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+0Hz",
+        "desc": "Nữ Hoài My truyền cảm",
+    },
+    "nu_nhe_nhang": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "-5Hz",
+        "desc": "Nữ nhẹ nhàng, sâu lắng, chill",
+    },
+    "nu_tre": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+8Hz",
+        "desc": "Nữ trẻ trung, sôi động",
+    },
+    # 2. Giọng Nam điện ảnh & trầm ấm
+    "nam_tram": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "-10Hz",
+        "desc": "Nam trầm ấm điện ảnh (dày dặn, uy quyền, phim tài liệu/bí ẩn)",
+    },
+    "tram": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "-10Hz",
+        "desc": "Nam trầm ấm điện ảnh",
+    },
+    "nam_tre": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "+6Hz",
+        "desc": "Nam trẻ trung, dứt khoát, hiện đại",
+    },
+    "nam_minh": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "+0Hz",
+        "desc": "Nam Minh nguyên bản",
+    },
+    "nam": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "-8Hz",
+        "desc": "Nam trầm tự nhiên",
+    },
+}
+
+
+def _generate_edge_tts_audio(
+    text: str,
+    voice: str = "vi-VN-NamMinhNeural",
+    rate_percent: int = 35,
+    pitch_str: str = "+0Hz",
+) -> Optional[np.ndarray]:
+    """
+    Sinh audio tiếng Việt bằng Edge-TTS chất lượng cao (hỗ trợ tốc độ rate_percent và cao độ pitch_str).
+    Trả về numpy array float32 ở sample rate 24000Hz (hoặc None nếu lỗi mạng).
+    """
+    try:
+        import asyncio
+        import edge_tts
+        import tempfile
+        import os
+        import subprocess
+        import imageio_ffmpeg
+        from scipy.io import wavfile
+
+        rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
+
+        async def _run():
+            com = edge_tts.Communicate(text, voice, rate=rate_str, pitch=pitch_str)
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
+                tmp_mp3 = f_mp3.name
+            await com.save(tmp_mp3)
+            return tmp_mp3
+
+        tmp_mp3 = asyncio.run(_run())
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
+            tmp_wav = f_wav.name
+
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        subprocess.run(
+            [ff, "-y", "-i", tmp_mp3, "-ar", "24000", "-ac", "1", tmp_wav],
+            check=True,
+            capture_output=True,
+        )
+
+        sr, data = wavfile.read(tmp_wav)
+        if os.path.exists(tmp_mp3):
+            os.remove(tmp_mp3)
+        if os.path.exists(tmp_wav):
+            os.remove(tmp_wav)
+
+        if data.dtype == np.int16:
+            data = data.astype(np.float32) / 32768.0
+        elif data.dtype == np.int32:
+            data = data.astype(np.float32) / 2147483648.0
+        return data.astype(np.float32)
+    except Exception as e:
+        print(f"[Edge-TTS Fallback Warning] {e} -> Tự động dùng Local VITS thay thế.")
+        return None
+
+
 def synthesize_scene_voiceover(
     scene_texts: List[str],
     output_filename: Any = "voiceover_studio.wav",
     sample_rate: int = AUDIO_SAMPLE_RATE,
-    scene_gap_sec: float = 0.18,
+    scene_gap_sec: float = 0.12,
     sfx_cues: Optional[List[str]] = None,
     music_mood: str = "",
+    voice_name: str = "hoai_my",  # hoai_my (Nữ TikTok truyền cảm) | nam_tram (Nam trầm điện ảnh) | nam_tre | nu_nhe_nhang
+    speed_rate: float = 1.35,      # 1.0 = chuẩn, 1.35 = 1.35x, 1.5 = 1.5x
 ) -> Tuple[Path, List[Tuple[float, float]]]:
     """
     Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
-    Nhờ đó ảnh, chuyển cảnh và phụ đề từng từ khớp đúng thời điểm đọc (không ước lượng theo số ký tự).
-    Không có dự phòng "bíp sine": nếu VITS lỗi sẽ raise để người dùng biết.
+    Mặc định sử dụng Edge-TTS `hoai_my` (giọng nữ truyền cảm cực tự nhiên) hoặc `nam_tram` (nam trầm điện ảnh).
+    Tự động fallback an toàn về Local VITS `facebook/mms-tts-vie` nếu offline.
     """
     wav_path = _resolve_wav_path(output_filename)
     import torch
 
-    model, tokenizer = _get_local_vits_vietnamese_model()
-    vits_sr = int(model.config.sampling_rate)
+    v_key = voice_name.lower().strip()
+    profile = VOICE_PROFILES.get(v_key, VOICE_PROFILES["hoai_my"])
+    edge_voice = profile["voice"]
+    pitch_str = profile["pitch"]
+    use_edge = v_key not in ("mms", "vits", "local")
+    rate_percent = int((speed_rate - 1.0) * 100) if speed_rate > 0 else 0
 
-    lead = 0.20
-    chunks: List[np.ndarray] = [np.zeros(int(lead * vits_sr), dtype=np.float32)]
-    cursor = lead
+    lead = 0.15
     timings: List[Tuple[float, float]] = []
     sfx_events: List[Tuple[float, str]] = []
-    for i, text in enumerate(scene_texts):
-        audio = _vits_clause_audio(normalize_vi_text_for_tts(text), model, tokenizer, vits_sr, torch)
-        dur = len(audio) / float(vits_sr)
-        timings.append((round(cursor, 3), round(cursor + dur, 3)))
-        if sfx_cues and i < len(sfx_cues):
-            cue = str(sfx_cues[i] or "none").strip().lower()
-            if cue != "none":
-                sfx_events.append((max(0.0, cursor - 0.08), cue))
-        chunks.append(audio)
-        chunks.append(np.zeros(int(scene_gap_sec * vits_sr), dtype=np.float32))
-        cursor += dur + scene_gap_sec
-    chunks.append(np.zeros(int(0.45 * vits_sr), dtype=np.float32))
+    chunks: List[np.ndarray] = []
+    working_sr = 24000
+
+    if use_edge:
+        cursor = lead
+        chunks.append(np.zeros(int(lead * working_sr), dtype=np.float32))
+        for i, text in enumerate(scene_texts):
+            norm_text = normalize_vi_text_for_tts(text)
+            audio = _generate_edge_tts_audio(
+                norm_text,
+                voice=edge_voice,
+                rate_percent=rate_percent,
+                pitch_str=pitch_str,
+            )
+            if audio is None:
+                use_edge = False
+                break
+            dur = len(audio) / float(working_sr)
+            timings.append((round(cursor, 3), round(cursor + dur, 3)))
+            if sfx_cues and i < len(sfx_cues):
+                cue = str(sfx_cues[i] or "none").strip().lower()
+                if cue != "none":
+                    sfx_events.append((max(0.0, cursor - 0.08), cue))
+            chunks.append(audio)
+            chunks.append(np.zeros(int(scene_gap_sec * working_sr), dtype=np.float32))
+            cursor += dur + scene_gap_sec
+
+    if not use_edge:
+        model, tokenizer = _get_local_vits_vietnamese_model()
+        vits_sr = int(model.config.sampling_rate)
+        working_sr = vits_sr
+        chunks = [np.zeros(int(lead * vits_sr), dtype=np.float32)]
+        cursor = lead
+        timings = []
+        sfx_events = []
+        for i, text in enumerate(scene_texts):
+            audio = _vits_clause_audio(normalize_vi_text_for_tts(text), model, tokenizer, vits_sr, torch)
+            if speed_rate > 1.05:
+                target_len = int(len(audio) / speed_rate)
+                audio = signal.resample(audio, target_len).astype(np.float32)
+            dur = len(audio) / float(vits_sr)
+            timings.append((round(cursor, 3), round(cursor + dur, 3)))
+            if sfx_cues and i < len(sfx_cues):
+                cue = str(sfx_cues[i] or "none").strip().lower()
+                if cue != "none":
+                    sfx_events.append((max(0.0, cursor - 0.08), cue))
+            chunks.append(audio)
+            chunks.append(np.zeros(int(scene_gap_sec * vits_sr), dtype=np.float32))
+            cursor += dur + scene_gap_sec
+
+    chunks.append(np.zeros(int(0.35 * working_sr), dtype=np.float32))
     _master_and_mix(
-        np.concatenate(chunks), vits_sr, sample_rate, wav_path, sfx_events=sfx_events, music_mood=music_mood
+        np.concatenate(chunks), working_sr, sample_rate, wav_path, sfx_events=sfx_events, music_mood=music_mood
     )
     return wav_path, timings
 

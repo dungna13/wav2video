@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""
+clean_video.py — Bộ công cụ làm sạch siêu dữ liệu (Metadata) & Biến điệu điểm ảnh (Pixel Re-encode)
+chống thuật toán tự động gắn nhãn "Contains AI-generated media" của TikTok / Facebook Reels / YouTube Shorts.
+
+Nguyên lý hoạt động:
+1. Spatial Resampling (Phá vỡ tọa độ SynthID): Scale 102.5% rồi crop lại kích thước gốc (720x1280 hoặc 1080x1920).
+2. Pixel Micro-Grading: Điều chỉnh 2% contrast, 1% brightness, 3% saturation, tái phân bố histogram màu.
+3. Temporal Film Grain: Phủ lớp hạt phim động (noise allf=t+u) phá vỡ tính tương quan pha (phase-coherence) của AI watermark.
+4. Edge Reshaping: Unsharp nhẹ để làm mới gradient viền điểm ảnh.
+5. Audio Formant & Resample: Dịch nhẹ tần số giọng đọc (1.2%) & EQ làm ấm giọng, triệt tiêu dấu vân tay âm thanh TTS (Edge-TTS / Azure).
+6. Total Metadata Cleansing: Gỡ bỏ toàn bộ atom C2PA, XMP, Google Veo / DeepMind tags, ngụy trang metadata chuẩn thiết bị thực tế (Apple iPhone 15 Pro / CapCut).
+"""
+
+import sys
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+try:
+    import imageio_ffmpeg
+    FFMPEG_BIN = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception:
+    FFMPEG_BIN = "ffmpeg"
+
+
+def clean_video_file(input_path: str, output_path: str = None, crf: int = 19) -> str:
+    inp = Path(input_path).resolve()
+    if not inp.exists():
+        raise FileNotFoundError(f"Không tìm thấy file video: {inp}")
+
+    if output_path is None:
+        out = inp.parent / f"{inp.stem}_clean{inp.suffix}"
+    else:
+        out = Path(output_path).resolve()
+
+    print(f"[*] Bắt đầu xử lý Anti-AI cho: {inp.name}")
+    print(f"[*] Đang áp dụng: Resampling 102.5% + Micro-grading + Film Grain + Audio Formant Shift...")
+
+    # Filter phức hợp xử lý toàn bộ điểm ảnh:
+    # 1. scale 102.5% + crop lại kích thước gốc (phá lưới SynthID)
+    # 2. eq: chỉnh nhẹ màu sắc
+    # 3. unsharp: tái cấu trúc viền
+    # 4. noise: phủ hạt phim chuyển động ngẫu nhiên
+    vf = (
+        "scale=iw*1.025:ih*1.025:flags=lanczos,"
+        "crop=iw/1.025:ih/1.025,"
+        "eq=contrast=1.02:brightness=0.01:saturation=1.03,"
+        "unsharp=lx=3:ly=3:la=0.6,"
+        "noise=alls=8:allf=t+u,"
+        "format=yuv420p"
+    )
+
+    # Filter âm thanh: làm ấm giọng & dịch tần số cực nhỏ (1.2%) phá nhận diện giọng TTS
+    af = (
+        "asetrate=r=16000*1.012,aresample=16000,"
+        "equalizer=f=120:width_type=o:w=1.0:g=2.2,"
+        "equalizer=f=3500:width_type=o:w=1.5:g=1.2,"
+        "acompressor=threshold=-18dB:ratio=2.5:attack=15:release=120"
+    )
+
+    cmd = [
+        FFMPEG_BIN, "-y",
+        "-i", str(inp),
+        "-vf", vf,
+        "-af", af,
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", str(crf),
+        "-tune", "film",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "44100",
+        "-map_metadata", "-1",
+        "-map_chapters", "-1",
+        "-dn",
+        "-sn",
+        "-bitexact",
+        "-brand", "mp42",
+        "-metadata", "make=Apple",
+        "-metadata", "model=iPhone 15 Pro",
+        "-metadata", "software=CapCut 4.2.0",
+        "-metadata:s:v:0", "handler_name=Core Media Video",
+        "-metadata:s:a:0", "handler_name=Core Media Audio",
+        str(out)
+    ]
+
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if res.returncode != 0:
+        raise RuntimeError(f"Lỗi khi re-encode video:\n{res.stderr}")
+
+    print(f"[+] Thành công! File sạch hoàn toàn metadata và mã hóa điểm ảnh mới tại:")
+    print(f"    {out}")
+    return str(out)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Cách dùng: python clean_video.py <input_video.mp4> [output_video.mp4]")
+        sys.exit(1)
+
+    in_f = sys.argv[1]
+    out_f = sys.argv[2] if len(sys.argv) > 2 else None
+    clean_video_file(in_f, out_f)
+

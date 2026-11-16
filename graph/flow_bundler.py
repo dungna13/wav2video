@@ -119,6 +119,8 @@ def _split_balanced_groups(durations: List[float], k: int) -> List[List[int]]:
     """Chia `durations` thành đúng `k` nhóm liên tiếp sao cho độ dài mỗi nhóm cân bằng nhất."""
     n = len(durations)
     k = max(1, min(k, n))
+    if k == 1:
+        return [[i for i in range(n)]]
     if k == n:
         return [[i] for i in range(n)]
     total = sum(durations)
@@ -170,8 +172,16 @@ def bundle_scenes_for_flow(
         if cur_group:
             groups.append(cur_group)
 
-    no_human_suffix = ", no humans, no people, no faces" if intent_mode == "NO_HUMAN_BROLL" else ""
-    style = (style_anchor_en or "cinematic documentary photography, natural lighting").strip().rstrip(".")
+    is_stickman = (intent_mode == "STICKMAN")
+    if is_stickman:
+        no_human_suffix = ", no photorealistic humans, no realistic 3D faces, no extra limbs"
+        if not style_anchor_en or "stick" not in style_anchor_en.lower():
+            style = "clean minimalist 2D animated stick figure line art, bright clean white background, expressive cartoon line face, simple black stick limbs, dynamic hand-drawn animation style, vibrant colorful accents"
+        else:
+            style = style_anchor_en.strip().rstrip(".")
+    else:
+        no_human_suffix = ", no humans, no people, no faces" if intent_mode == "NO_HUMAN_BROLL" else ""
+        style = (style_anchor_en or "cinematic documentary photography, natural lighting").strip().rstrip(".")
 
     blocks: List[Dict[str, Any]] = []
     t_cursor = 0.0
@@ -193,8 +203,9 @@ def bundle_scenes_for_flow(
         seq = "; ".join(scene_descs)
 
         if b_idx == 1:
+            shot_type = "9:16 vertical 2D stickman animation" if is_stickman else "9:16 vertical cinematic documentary shot"
             flow_prompt = (
-                f"9:16 vertical cinematic documentary shot, {style}. "
+                f"{shot_type}, {style}. "
                 f"Continuous evolving camera sequence: {seq}. "
                 f"No text, no watermark{no_human_suffix}."
             )
@@ -262,6 +273,8 @@ def prepare_flow_workspace(
     target_block_sec: float = 14.0,
     max_blocks: int = 4,
     base_dir: Optional[Path] = None,
+    speed_rate: float = 1.35,
+    voice_name: str = "hoai_my",
 ) -> Dict[str, Any]:
     """Chuẩn bị audio VITS (`-14 LUFS`), tính timeline từng cảnh, chia Block và xuất `flow_prompts.txt`."""
     topic_title = state.get("topic_title") or state.get("user_request", "Topic")[:40]
@@ -279,6 +292,8 @@ def prepare_flow_workspace(
         output_filename=run_dir / "audio_16k_mono.wav",
         sfx_cues=[str(s.get("sfx_cue", "none")) for s in scenes],
         music_mood=str(state.get("music_mood", "")),
+        voice_name=voice_name,
+        speed_rate=speed_rate,
     )
     hook = state.get("hook_and_context_vn", "") or scenes[0]["narration_vn"]
     deep = state.get("deep_explanation_vn", "") or " ".join(s["narration_vn"] for s in scenes[1:-1])

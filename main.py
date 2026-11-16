@@ -14,7 +14,8 @@ Chế độ Sách RAG & Đăng Hằng Ngày:
     python main.py --model myth_vs_reality "Bí ẩn văn minh Maya"
     python main.py --logs                      # xem checkpoint & error log gần nhất
 
-Chế độ (`--mode`): NO_HUMAN_BROLL (mặc định/tự suy ra) | HUMAN_NO_LIPSYNC | HUMAN_WITH_LIPSYNC (chưa có nhép môi).
+Chế độ (`--mode`): STICKMAN (người que 2D da trắng biểu cảm) | NO_HUMAN_BROLL | HUMAN_NO_LIPSYNC.
+Cờ `--stickman`: Bật chế độ hoạt hình người que vẽ tay 2D (Style 1 Light: nền sáng da trắng, có nét mặt biểu cảm vui nhộn).
 Luồng: filter_context (RAG nếu có --book) -> intent_router -> prompt_architect (kịch bản + cảnh)
        -> prompt_scorer (kiểm tra cứng + LLM critic) -> media_generator -> visual_judge.
 """
@@ -33,7 +34,6 @@ from graph.book_rag import (
 )
 from graph.flow_bundler import prepare_flow_workspace, render_from_flow_clips
 from graph.hitl_cli import run_hitl_cli
-from graph.web_app import start_server
 from graph.llm_client import ANGLE_MINER_GEMINI_SCHEMA, call_gemini_thinking_structured
 from graph.run_logger import print_diagnostics, start_run_log
 from graph.workflow import create_christian_short_video_app
@@ -44,6 +44,7 @@ def _parse_args(argv) -> Dict[str, Any]:
     opts: Dict[str, Any] = {
         "mode": "",
         "model": "auto",
+        "stickman": False,
         "ingest": "",
         "list_book": None,
         "mine": "",
@@ -53,19 +54,23 @@ def _parse_args(argv) -> Dict[str, Any]:
         "logs": False,
         "flow_prep": False,
         "flow_render": "",
+        "clean": "",
         "hitl": "",
-        "ui": False,
-        "port": 8000,
         "clips_dir": "",
         "sub_mode": "narration_full",
         "block_sec": 14.0,
-        "max_blocks": 4,
+        "max_blocks": 2,
+        "speed": 1.35,
+        "voice": "hoai_my",
         "topic": "",
     }
     words = []
     it = iter(argv)
     for a in it:
-        if a == "--mode":
+        if a in ("--stickman", "--stick"):
+            opts["stickman"] = True
+            opts["mode"] = "STICKMAN"
+        elif a == "--mode":
             opts["mode"] = next(it, "").strip().upper()
         elif a == "--model":
             opts["model"] = next(it, "auto").strip().lower()
@@ -88,13 +93,10 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["flow_prep"] = True
         elif a == "--flow-render":
             opts["flow_render"] = next(it, "").strip()
+        elif a in ("--clean", "--anti-ai", "--clean-video"):
+            opts["clean"] = next(it, "").strip()
         elif a in ("--hitl", "--review"):
             opts["hitl"] = next(it, "").strip()
-        elif a in ("--ui", "--web"):
-            opts["ui"] = True
-        elif a == "--port":
-            p = next(it, "8000").strip()
-            opts["port"] = int(p) if p.isdigit() else 8000
         elif a == "--clips-dir":
             opts["clips_dir"] = next(it, "").strip()
         elif a == "--sub-mode":
@@ -108,8 +110,16 @@ def _parse_args(argv) -> Dict[str, Any]:
             except ValueError:
                 opts["block_sec"] = 14.0
         elif a == "--blocks":
-            raw = next(it, "4").strip()
-            opts["max_blocks"] = max(1, int(raw)) if raw.isdigit() else 4
+            raw = next(it, "2").strip()
+            opts["max_blocks"] = max(1, int(raw)) if raw.isdigit() else 2
+        elif a in ("--speed", "--rate"):
+            raw = next(it, "1.35").strip()
+            try:
+                opts["speed"] = max(0.8, min(2.0, float(raw)))
+            except ValueError:
+                opts["speed"] = 1.35
+        elif a in ("--voice", "-v"):
+            opts["voice"] = next(it, "nam_minh").strip().lower()
         else:
             words.append(a)
     opts["topic"] = " ".join(words).strip()
@@ -149,10 +159,6 @@ def main():
         print_diagnostics()
         return
 
-    if opts["ui"]:
-        start_server(port=opts["port"])
-        return
-
     if opts["hitl"]:
         run_hitl_cli(opts["hitl"], sub_mode=opts["sub_mode"])
         return
@@ -175,6 +181,11 @@ def main():
         print(f" • Đầu ra       : tổng={o['output_total_score']} | lệch A/V={o['av_offset_frames']} frame | {res['tiktok_publish_status']}")
         print(f" • Caption      : {res['tiktok_caption']}")
         print("=" * 96)
+        return
+
+    if opts["clean"]:
+        from clean_video import clean_video_file
+        clean_video_file(opts["clean"])
         return
 
     if opts["mine"]:
@@ -256,6 +267,8 @@ def main():
                 state,
                 target_block_sec=opts["block_sec"],
                 max_blocks=opts["max_blocks"],
+                speed_rate=opts["speed"],
+                voice_name=opts["voice"],
             )
             print("\n" + "=" * 96)
             print(f"FLOW PREP SẴN SÀNG ({len(flow_info['blocks'])} BLOCK | Audio={flow_info['audio_duration_sec']:.2f}s)")
@@ -264,6 +277,14 @@ def main():
             print(f" • Thư mục thả clip Flow   : {flow_info['clips_dir']}")
             print(f" • Lệnh dựng sau khi tải  : python main.py --flow-render \"{flow_info['run_dir']}\"")
             print("=" * 96)
+            print("\n📋 NỘI DUNG PROMPTS GOOGLE FLOW (COPY TRỰC TIẾP TẠI ĐÂY):")
+            print("-" * 96)
+            try:
+                with open(flow_info['prompts_path'], 'r', encoding='utf-8') as pf:
+                    print(pf.read())
+            except Exception as pe:
+                print(f"[Không thể đọc file prompts: {pe}]")
+            print("-" * 96)
             return
 
         if opts["daily"] and active_chunk:

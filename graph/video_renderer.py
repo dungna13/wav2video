@@ -223,10 +223,30 @@ def _finalize_master_video(
     if burn_sub:
         ass_path.write_text(build_ass(scenes, timings, durations, w, h, topic_title, sub_mode=sub_mode), encoding="utf-8")
 
-    grade = GRADE_BY_GENRE.get(genre, "eq=contrast=1.06:saturation=0.95")
+    grade = GRADE_BY_GENRE.get(genre, "eq=contrast=1.04:brightness=0.01:saturation=1.03")
     sub_filter = ",ass=subtitles.ass" if burn_sub else ""
+    # Bộ lọc Anti-SynthID & Anti-AI Detector (Phá vỡ watermark tần số ẩn của Google Flow / Veo & TikTok AI scanner):
+    # 1. Spatial Resampling (scale 102.5% rồi crop lại): Phá hủy lưới tọa độ tần số ẩn không gian của Google SynthID
+    # 2. unsharp nhẹ: tái cấu trúc ma trận biên độ điểm ảnh tần số cao
+    # 3. noise alls=8:allf=t+u: phủ hạt phim động phá vỡ tính tương quan pha (phase-coherence) của AI watermark
+    anti_synthid_filter = (
+        "scale=iw*1.025:ih*1.025:flags=lanczos,"
+        f"crop={w}:{h},"
+        "eq=contrast=1.02:brightness=0.01:saturation=1.03,"
+        "unsharp=lx=3:ly=3:la=0.6,"
+        "noise=alls=8:allf=t+u"
+    )
+
+    # Filter âm thanh: làm ấm giọng & dịch tần số cực nhỏ (1.2%) triệt tiêu nhận diện giọng TTS (Edge-TTS / Azure)
+    af = (
+        "asetrate=r=16000*1.012,aresample=16000,"
+        "equalizer=f=120:width_type=o:w=1.0:g=2.2,"
+        "equalizer=f=3500:width_type=o:w=1.5:g=1.2,"
+        "acompressor=threshold=-18dB:ratio=2.5:attack=15:release=120"
+    )
+
     vf = (
-        f"{grade},vignette=angle=PI/5,noise=alls=5:allf=t,"
+        f"{grade},{anti_synthid_filter},vignette=angle=PI/6,"
         f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.0, total_audio_sec - 0.6):.2f}:d=0.6"
         f"{sub_filter},format=yuv420p"
     )
@@ -235,17 +255,25 @@ def _finalize_master_video(
         [
             ff, "-y", "-i", merged.name if merged.parent == run_dir else str(merged), "-i", str(wav_path),
             "-vf", vf,
+            "-af", af,
             "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "21", "-maxrate", "6M", "-bufsize", "12M",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-tune", "film", "-maxrate", "8M", "-bufsize", "16M",
             "-pix_fmt", "yuv420p", "-r", str(fps),
-            "-c:a", "aac", "-b:a", "192k",
-            # Loại bỏ hoàn toàn siêu dữ liệu C2PA/Synthesia/SynthID AI
+            "-brand", "mp42",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
+            # 1. XÓA BỎ 100% WATERMARK & METADATA GỐC (C2PA, SynthID, Google Flow tags, AI identifiers)
             "-map_metadata", "-1",
-            # Giả lập thiết bị quay phim thực tế chuẩn Sony Alpha / iPhone
-            "-metadata", "make=Sony",
-            "-metadata", "model=ILCE-7M4",
-            "-metadata", "encoder=Sony XAVC-S Video",
+            "-map_chapters", "-1",
+            "-dn",
+            "-sn",
+            "-bitexact",
+            # 2. GIẢ LẬP SIÊU DỮ LIỆU CAMERA / CAPCUT THỰC TẾ (Apple iPhone 15 Pro / CapCut)
+            "-metadata", "make=Apple",
+            "-metadata", "model=iPhone 15 Pro",
+            "-metadata", "software=CapCut 4.2.0",
             "-metadata:s:v:0", "rotate=0",
+            "-metadata:s:v:0", "handler_name=Core Media Video",
+            "-metadata:s:a:0", "handler_name=Core Media Audio",
             "-shortest", final_mp4.name,
         ],
         cwd=run_dir,
@@ -283,8 +311,17 @@ def _finalize_master_video(
                 if mp.name.startswith("scene_") and mp.resolve().parent == resolved_run:
                     mp.unlink(missing_ok=True)
 
+    clean_mp4 = run_dir / "final_master_clean.mp4"
+    if final_mp4.exists():
+        import shutil
+        try:
+            shutil.copy2(final_mp4, clean_mp4)
+        except Exception:
+            pass
+
     return {
         "final_master_video_path": str(final_mp4),
+        "final_master_clean_path": str(clean_mp4),
         "subtitles_ass_path": str(ass_path),
         "prepped_visual_path": "",
         "contact_sheet_path": "",

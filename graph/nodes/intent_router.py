@@ -14,14 +14,17 @@ from typing import Dict, Any
 
 from graph.state import ChristianVideoState
 
-VALID_MODES = ("NO_HUMAN_BROLL", "HUMAN_NO_LIPSYNC", "HUMAN_WITH_LIPSYNC")
+VALID_MODES = ("STICKMAN", "NO_HUMAN_BROLL", "HUMAN_NO_LIPSYNC", "HUMAN_WITH_LIPSYNC")
 
 _LIPSYNC_HINTS = ("mc dẫn", "người dẫn", "avatar", "nhép môi", "lipsync", "nói trực diện", "talking head", "host")
+_STICKMAN_HINTS = ("người que", "stickman", "stick man", "hoạt hình vẽ tay", "hoạt hình 2d", "vẽ nét", "doodle", "stick figure")
 _HUMAN_HINTS = ("chân dung", "người lính", "công nhân", "nông dân", "câu chuyện", "chàng trai", "cuộc đời", "cảm xúc", "gia đình", "nhân vật")
 
 
 def _infer_mode(topic: str) -> str:
     low = topic.lower()
+    if any(k in low for k in _STICKMAN_HINTS):
+        return "STICKMAN"
     if any(k in low for k in _LIPSYNC_HINTS):
         return "HUMAN_WITH_LIPSYNC"
     if any(k in low for k in _HUMAN_HINTS):

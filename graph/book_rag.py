@@ -726,6 +726,41 @@ def get_chunk_by_idx(
         conn.close()
 
 
+def list_all_book_ids(db_path: Path = BOOK_RAG_DB_PATH) -> List[str]:
+    """Trả về danh sách tất cả book_id đang có trong database (để xác nhận sách khi topic mơ hồ).
+
+    Dùng bởi `filter_context_node` để hiển thị cho người dùng khi topic không chỉ rõ sách.
+    """
+    if not db_path.exists():
+        return []
+    conn = _connect_db(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT book_id, title FROM books ORDER BY ingested_at DESC"
+        ).fetchall()
+        return [str(r["book_id"]) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def get_book_titles_map(db_path: Path = BOOK_RAG_DB_PATH) -> Dict[str, str]:
+    """Trả về dict {book_id: title} cho tất cả sách trong DB (để hiển thị tên đẹp khi hỏi người dùng)."""
+    if not db_path.exists():
+        return {}
+    conn = _connect_db(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT book_id, title FROM books ORDER BY ingested_at DESC"
+        ).fetchall()
+        return {str(r["book_id"]): str(r["title"]) for r in rows}
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+
+
 def get_next_pending_chunk(book_id: Optional[str] = None, db_path: Path = BOOK_RAG_DB_PATH) -> Optional[Dict[str, Any]]:
     """Lấy chunk `pending` tiếp theo theo thứ tự từ đầu đến cuối sách để đăng hằng ngày."""
     if not db_path.exists():
