@@ -1,77 +1,53 @@
-# 🎬 HƯỚNG DẪN DỰNG VIDEO TỰ ĐỘNG BẰNG DÒNG LỆNH (CLI)
+# 🎬 HƯỚNG DẪN QUY TRÌNH GOOGLE FLOW (NGƯỜI THẬT ĐIỆN ẢNH)
 
-Hệ thống hỗ trợ 2 chế độ dựng video dọc 9:16 cho **TikTok / YouTube Shorts / Reels**:
-1. ⭐ **Chế độ STICKMAN DIRECTOR (Khuyên dùng)**: Tự động hóa 100% từ A-Z, không cần mở web hay Google Flow.
-2. 🔄 **Chế độ FLOW RENDER**: Dành cho ai muốn tự tạo clip từ Google Flow / AI Video rồi ghép lại.
+> Hệ thống đã được **tinh gọn và thống nhất 100%** vào quy trình tạo video **Người Thật Điện Ảnh (Photorealistic Cinematic)** với Google Flow. Đã loại bỏ hoàn toàn các luồng cũ (router 3 chế độ và người que).
 
 ---
 
-## 🌟 PHẦN 1: CHẾ ĐỘ STICKMAN DIRECTOR (TỰ ĐỘNG 100%)
-*Lấy cảm hứng từ kiến trúc `kaomei/stickman-video-director`. Sử dụng hình tượng Người Que và ẩn dụ trực quan (Visual Metaphor) thông minh, dồn dập, cực kỳ viral.*
+## 🚀 QUY TRÌNH TẠO VIDEO 2 BƯỚC:
 
-### ⚡ Lệnh chạy ngay (Chỉ 1 câu lệnh duy nhất):
-```powershell
-python main.py --stickman "Quy luật 80/20: Vì sao 20% nỗ lực tạo ra 80% kết quả?"
+### BƯỚC 1: Tạo Prompt Google Flow & Audio Giọng Đọc
+Chỉ cần chạy lệnh với chủ đề bạn muốn làm:
+```bash
+cd /home/blue/Downloads/Projects/wav2video
+../.venv/bin/python main.py "Tư duy của người Do Thái giúp họ làm chủ đồng tiền" --voice hoai_my
 ```
+*(Hoặc chọn `--voice nam_tram` cho giọng nam trầm điện ảnh)*
 
-### 🤖 Hệ thống tự động làm toàn bộ:
-1. **Lên kịch bản đạo diễn**: Chia thành 5 - 7 cảnh người que sắc sảo kèm các đạo cụ ẩn dụ hài hước.
-2. **Thu âm giọng đọc 1.5x**: Sử dụng Microsoft Neural (Nam Minh) giọng đọc nhanh, cuốn hút, kèm nhạc nền BGM tự động hạ âm.
-3. **Tự động vẽ tranh Người Que**: AI tự động sinh bộ tranh người que vector chuẩn 9:16 cho từng cảnh.
-4. **Dựng video hoàn thiện**: Chèn hiệu ứng chuyển cảnh dứt khoát, âm thanh SFX (pop, thud, whoosh) và phụ đề nhảy chữ kiểu CapCut.
-5. **Xuất file video thành phẩm** ngay trong thư mục `workspace/stickman_<chủ_đề>_<thời_gian>/final_master.mp4`.
-
-### 🎨 Các Phong cách Chuẩn tích hợp trực tiếp từ repo `stickman-video-director`:
-* **`--style amber_noir`** *(Style 6 - Phong cách chính thức của video mẫu git `style-6-amber-noir-mcp.mp4`)*: Người que đầu tròn đen nhám, ánh sáng vàng hổ phách điện ảnh và bóng đổ mận chín huyền bí. Rất cuốn hút và sâu sắc.
-* **`--style modern_tech`**: Style 2A Apple Tech Studio, nền phẳng cao cấp, điểm xuyết holographic xanh cyan, cực kỳ hút mắt trên TikTok.
-* **`--style modern_story`**: Style 2B Người que Beanie Zeke phiêu lưu trong không gian điện ảnh màu sắc.
-* **`--style historical`**: Style 5 Lịch sử hào hùng / châm biếm, người que đội mũ nón và trang bị lịch sử đặc trưng.
-* **`--style classic_dark`**: Style 1 Dark nền đen tuyền, nét vẽ trắng nổi bật với điểm nhấn neon.
-* **`--style classic_light`**: Style 1 Light nền trắng tinh khiết, nét mực đen phong cách *MinutePhysics* / *Casually Explained*.
-* **`--style cozy`**: Style 4 Hoạt hình kể chuyện ấm áp, chiêm nghiệm cuộc sống.
-* **`--style prehistoric`**: Style 3 Hài hước châm biếm thời kỳ tiền sử.
+#### 🎯 Máy sẽ tự động làm:
+1. Viết kịch bản người thật điện ảnh, tối ưu câu mở đầu (Hook 3s) giật tít.
+2. Sinh audio giọng đọc chuẩn TikTok (`-14 LUFS`).
+3. Chia các Block vừa khít Google Flow, viết sẵn các Prompt chuyên sâu:
+   - Tỷ lệ dọc **9:16**.
+   - Phong cách **35mm film photography, 8k resolution, volumetric cinematic lighting, shallow depth of field**.
+   - Chi tiết da người, biểu cảm tự nhiên, hành động thật (không nhìn chằm chằm ống kính, không biến dạng tay).
+   - Tự động liên kết mượt mà từ frame cuối của block trước (Seamless continuation).
+4. In các prompt ra màn hình + lưu vào file `flow_prompts.txt`.
 
 ---
 
-## 🔄 PHẦN 2: CHẾ ĐỘ GOOGLE FLOW PROMPT (TẠO VIDEO MƯỢT NHƯ GIT)
-
-Để tạo video động mượt mà bằng Google Flow (model **Veo 3.1 Fast**) theo đúng chuẩn phong cách Người Que Amber Noir của git:
-
-### Bước 1: Chuẩn bị Prompt & Giọng đọc 1.5x cho BẤT KỲ chủ đề nào
-```powershell
-python main.py --flow-prep --stickman "Nhập bất kỳ chủ đề nào bạn muốn"
-```
-*(Nếu muốn chọn style khác: thêm `--style historical` hoặc `--style modern_tech`... Mặc định là `amber_noir` chuẩn git).*
-
-* Hệ thống tự động:
-  1. AI Đạo diễn lên kịch bản ẩn dụ trực quan riêng cho chủ đề đó.
-  2. Thu âm giọng đọc Studio 1.5x dồn dập + nhạc nền BGM.
-  3. Xuất file `flow_prompts.txt` chứa các đoạn prompt tiếng Anh chuẩn phong cách Amber Noir Stickman (9:16).
-
-### Bước 2: Dán prompt vào Google Flow
-* Mở Google Flow -> chọn tỷ lệ dọc **9:16** (model Veo 3.1 Fast).
-* Copy từng đoạn Prompt trong `flow_prompts.txt` vào Google Flow để tạo clip (Block 1 tạo mới, Block 2 trở đi bấm Extend).
-* Tải các video clip về thư mục: `workspace/flow_<tên_chủ_đề>/flow_clips/` (đặt tên `1.mp4`, `2.mp4`...).
-
-### Bước 3: Dựng thành video hoàn chỉnh
-```powershell
-python main.py --flow-render latest
-```
-* Hệ thống sẽ tự động ghép các clip mượt mà, hòa âm giọng đọc 1.5x, nhạc nền, SFX và phụ đề karaoke CapCut ở dưới cùng (khung hình trên sạch bóng 100%).
-```
-*(Thêm `--speed 1.5` nếu muốn tăng tốc).*
+### BƯỚC 2: Dán vào Google Flow & Tải Clip
+1. Mở web **Google Flow**.
+2. Copy từng Block Prompt dán vào để tạo video.
+3. Tải các file video `.mp4` lưu vào thư mục `flow_clips/` mà máy vừa in ra (ví dụ: `1.mp4`, `2.mp4`).
 
 ---
 
-## ⚙️ CẤU HÌNH TRONG FILE `.env`
-
-```ini
-# Giọng đọc Microsoft Edge Neural Studio
-TTS_ENGINE=edge-tts
-TTS_VOICE=vi-VN-NamMinhNeural
-TTS_RATE=+45%
-TTS_PITCH=+0Hz
-
-# Giọng đọc dự phòng Offline
-VITS_SPEAKING_RATE=1.45
+### BƯỚC 3: Ráp Video Hoàn Chỉnh & Làm Sạch Anti-AI
+Chạy đúng 1 lệnh render (đường dẫn thư mục đã được in sẵn ở cuối Bước 1):
+```bash
+../.venv/bin/python main.py --flow-render "workspace/flow_Tu_duy_cua_nguoi_Do_Thai_xxxx"
 ```
+
+#### 📦 Kết quả nhận được ngay trong thư mục:
+- 🎬 `final_master_clean.mp4`: Video hoàn chỉnh đã khớp audio, thêm phụ đề TikTok Safe Zone (viền đen chữ vàng không bị nút like/share che), phủ vi hạt film grain và micro-tilt phá mã AI SynthID.
+- 🖼️ `cover.jpg`: Ảnh bìa TikTok 9:16 có tiêu đề giật tít đặt đúng tâm lưới trang cá nhân.
+- 📋 `post_info.txt`: Tiêu đề + Caption gợi ý + 7 Hashtags xu hướng + Hướng dẫn đăng điện thoại 100% không bị gán nhãn AI.
+
+---
+
+## 🎙️ DANH SÁCH GIỌNG ĐỌC:
+- `hoai_my` (Mặc định): Nữ truyền cảm chuẩn TikTok
+- `nam_tram`: Nam trầm ấm điện ảnh (phim tài liệu, lịch sử, tài chính)
+- `nu_nhe_nhang`: Nữ nhẹ nhàng, sâu lắng, chill
+- `nam_tre`: Nam trẻ trung, dứt khoát
