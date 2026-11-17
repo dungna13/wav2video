@@ -172,16 +172,14 @@ def bundle_scenes_for_flow(
         if cur_group:
             groups.append(cur_group)
 
-    is_stickman = (intent_mode == "STICKMAN") or "stickman" in intent_mode.lower()
-    if is_stickman:
-        no_human_suffix = ", no photorealistic humans, no realistic 3D faces, no extra limbs"
-        if not style_anchor_en or "stick" not in style_anchor_en.lower():
-            style = "clean minimalist 2D animated stick figure line art, bright clean white background, expressive cartoon line face, simple black stick limbs, dynamic hand-drawn animation style, vibrant colorful accents"
-        else:
-            style = style_anchor_en.strip().rstrip(".")
-    else:
-        no_human_suffix = ", no humans, no people, no faces" if intent_mode == "NO_HUMAN_BROLL" else ""
-        style = (style_anchor_en or "cinematic documentary photography, natural lighting").strip().rstrip(".")
+    no_human_suffix = ", no cartoon, no 3D animation, no anime, no plastic doll skin, no distorted fingers, no text, no watermark"
+    human_cinematic_dna = (
+        "hyper-realistic 35mm film photography, 8k resolution, authentic detailed human skin pores, subtle candid expression, "
+        "volumetric cinematic lighting, shallow depth of field, natural candid motion blur, master documentary shot"
+    )
+    base_style = style_anchor_en.strip().rstrip(".") if style_anchor_en else "cinematic human documentary"
+    style = f"{base_style}, {human_cinematic_dna}"
+
     blocks: List[Dict[str, Any]] = []
     t_cursor = 0.0
     for b_idx, idxs in enumerate(groups, 1):
@@ -195,8 +193,7 @@ def bundle_scenes_for_flow(
             sc = scenes[sc_idx]
             cam = (sc.get("camera_motion") or sc.get("camera") or "zoom_in").replace("_", " ")
             p = str(sc.get("image_prompt_en", "")).strip().rstrip(".")
-            # Dọn sạch các từ lặp không cần thiết trong mô tả hành động
-            p_clean = re.sub(r"^(A\s+|The\s+)?(minimalist\s+)?stickman(\s+character)?\s+(with\s+matte-black\s+round\s+head\s+)?", "stickman ", p, flags=re.I)
+            p_clean = re.sub(r"^(A\s+|The\s+)?(minimalist\s+)?stickman(\s+character)?\s+(with\s+matte-black\s+round\s+head\s+)?", "person ", p, flags=re.I)
             if pos == 0:
                 scene_descs.append(f"({cam}) {p_clean}")
             else:
@@ -204,7 +201,7 @@ def bundle_scenes_for_flow(
         seq = "; ".join(scene_descs)
 
         if b_idx == 1:
-            shot_type = "9:16 vertical 2D stickman animation" if is_stickman else "9:16 vertical cinematic documentary shot"
+            shot_type = "9:16 vertical photorealistic cinematic human documentary footage, 35mm film"
             flow_prompt = (
                 f"{shot_type}, {style}. "
                 f"Continuous evolving camera sequence: {seq}. "
@@ -214,7 +211,7 @@ def bundle_scenes_for_flow(
             flow_prompt = (
                 f"9:16 vertical seamless continuation from the exact ending frame and lighting of previous shot, {style}. "
                 f"Continuous camera motion: {seq}. "
-                f"Maintain identical visual palette and atmosphere, no hard cut, no text, no watermark{no_human_suffix}."
+                f"Maintain identical human characters, clothing, visual palette and atmosphere, no hard cut{no_human_suffix}."
             )
 
         blocks.append(

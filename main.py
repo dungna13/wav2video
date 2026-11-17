@@ -42,9 +42,8 @@ from prompts.angle_miner_prompt import render_angle_miner_prompt
 
 def _parse_args(argv) -> Dict[str, Any]:
     opts: Dict[str, Any] = {
-        "mode": "",
+        "mode": "FLOW_CINEMATIC",
         "model": "auto",
-        "stickman": False,
         "ingest": "",
         "list_book": None,
         "mine": "",
@@ -52,7 +51,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "chunk": 0,
         "daily": False,
         "logs": False,
-        "flow_prep": False,
+        "flow_prep": True,
         "flow_render": "",
         "clean": "",
         "hitl": "",
@@ -72,11 +71,6 @@ def _parse_args(argv) -> Dict[str, Any]:
     for a in it:
         if a in ("--list-voices", "--voices"):
             opts["list_voices"] = True
-        elif a in ("--stickman", "--stick"):
-            opts["stickman"] = True
-            opts["mode"] = "STICKMAN"
-        elif a == "--mode":
-            opts["mode"] = next(it, "").strip().upper()
         elif a == "--model":
             opts["model"] = next(it, "auto").strip().lower()
         elif a in ("--batch", "--queue"):
@@ -100,10 +94,13 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["flow_prep"] = True
         elif a == "--flow-render":
             opts["flow_render"] = next(it, "").strip()
+            opts["flow_prep"] = False
         elif a in ("--clean", "--anti-ai", "--clean-video"):
             opts["clean"] = next(it, "").strip()
+            opts["flow_prep"] = False
         elif a in ("--hitl", "--review"):
             opts["hitl"] = next(it, "").strip()
+            opts["flow_prep"] = False
         elif a == "--clips-dir":
             opts["clips_dir"] = next(it, "").strip()
         elif a == "--sub-mode":
@@ -177,35 +174,16 @@ def run_batch_topics(batch_file: str, opts: Dict[str, Any]) -> None:
         sub_opts["batch"] = ""
         sub_opts["topic"] = t
         try:
-            if sub_opts["stickman"] and not sub_opts["flow_prep"]:
-                from graph.stickman_director import run_stickman_pipeline
-                res = run_stickman_pipeline(
-                    topic=t,
-                    style="modern_tech",
-                    voice=sub_opts["voice"],
-                    speed_factor=sub_opts["speed"],
-                    sub_mode=sub_opts["sub_mode"],
-                    sub_style=sub_opts["sub_style"],
-                )
-                vid_path = Path(res["final_master_video_path"])
-            else:
-                # Documentary LangGraph pipeline
-                res_state = execute_documentary_run(sub_opts, t)
-                vid_path = Path(res_state.get("final_master_video_path", ""))
-
-            if vid_path and vid_path.exists():
-                dest_sub = ready_dir / f"{idx:02d}_{vid_path.parent.name}"
-                dest_sub.mkdir(parents=True, exist_ok=True)
-                import shutil
-                clean_src = vid_path.parent / "final_master_clean.mp4"
-                src_to_copy = clean_src if clean_src.exists() else vid_path
-                shutil.copy2(src_to_copy, dest_sub / "video_tiktok.mp4")
-                if (vid_path.parent / "cover.jpg").exists():
-                    shutil.copy2(vid_path.parent / "cover.jpg", dest_sub / "cover.jpg")
-                if (vid_path.parent / "post_info.txt").exists():
-                    shutil.copy2(vid_path.parent / "post_info.txt", dest_sub / "post_info.txt")
-                print(f"   └─ ✅ Đã gom video & thông tin đăng vào: {dest_sub}")
-            success_list.append((idx, t, "THÀNH CÔNG"))
+            res_state = execute_documentary_run(sub_opts, t)
+            flow_info = prepare_flow_workspace(
+                res_state,
+                target_block_sec=sub_opts["block_sec"],
+                max_blocks=sub_opts["max_blocks"],
+                speed_rate=sub_opts["speed"],
+                voice_name=sub_opts["voice"],
+            )
+            print(f"   └─ ✅ Đã tạo prompt Google Flow & Audio: {flow_info['run_dir']}")
+            success_list.append((idx, t, "SẴN SÀNG"))
         except Exception as e:
             print(f"❌ Lỗi khi render chủ đề '{t}': {e}")
             success_list.append((idx, t, f"LỖI: {e}"))
@@ -343,18 +321,6 @@ def main():
 
     if not topic:
         topic = "Chiến dịch Điện Biên Phủ 1954: 56 ngày đêm thay đổi cục diện"
-
-    if opts["stickman"] and not opts["flow_prep"]:
-        from graph.stickman_director import run_stickman_pipeline
-        res = run_stickman_pipeline(
-            topic=topic,
-            style="modern_tech",
-            voice=opts["voice"],
-            speed_factor=opts["speed"],
-            sub_mode=opts["sub_mode"],
-            sub_style=opts["sub_style"],
-        )
-        return
 
     log_path, stop_log = start_run_log(book_id or topic[:24])
     try:

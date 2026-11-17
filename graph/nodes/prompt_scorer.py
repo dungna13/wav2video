@@ -147,10 +147,6 @@ def rule_check(
         rmq = str(s.get("real_media_query", "") or "").strip()
         if vst == "real_photo" and not rmq:
             soft.append(f"Cảnh {i}: visual_source_type là 'real_photo' nhưng thiếu real_media_query.")
-        has_human = _has_word(img, HUMAN_WORDS)
-        human_scenes += int(has_human)
-        if intent_mode == "NO_HUMAN_BROLL" and has_human and vst != "real_photo":
-            hard.append(f"Cảnh {i}: chế độ NO_HUMAN_BROLL nhưng ảnh có người; đổi sang vật thể/địa điểm.")
 
     if n >= 5 and short_twist_count == 0:
         soft.append("Thiếu biến thiên nhịp câu: chưa có cảnh Twist ngắn gắt (7–12 từ) ở giữa phim.")
@@ -158,9 +154,6 @@ def rule_check(
         soft.append(f"Có {overlay_count} cảnh gắn overlay_keyword_vn (chỉ nên 3–4 cảnh neo).")
     if sfx_count > 3:
         soft.append(f"Có {sfx_count} cảnh gắn sfx_cue (chỉ nên 2–3 điểm chuyển nhịp).")
-
-    if intent_mode != "NO_HUMAN_BROLL" and n and human_scenes / n < 0.6:
-        hard.append(f"Chế độ có người nhưng chỉ {human_scenes}/{n} cảnh có người (cần ≥ 60%).")
 
     if scenes:
         hook = scenes[0]["narration_vn"]
@@ -190,7 +183,7 @@ def _scenes_block(scenes: List[Dict[str, Any]]) -> str:
 
 def prompt_scorer_node(state: ChristianVideoState) -> Dict[str, Any]:
     scenes = state.get("scenes") or []
-    mode = state.get("effective_intent_mode") or state.get("intent_mode") or "NO_HUMAN_BROLL"
+    mode = "FLOW_CINEMATIC"
     retry_count = state.get("retry", 0)
     narrative_model = str(state.get("narrative_model", "abt") or "abt").strip().lower()
 

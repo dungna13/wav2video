@@ -110,13 +110,12 @@ GENRE_DECISION_TABLE = """═══ BẢNG QUYẾT ĐỊNH THỂ LOẠI (tự ch
 | `lifestyle_motivation` | kỷ luật, sức khoẻ, thói quen đời thường | natural-light lifestyle documentary photograph, golden-hour accents, handheld feel, authentic locations | `nu_hoat_ngon` | `uplifting_soft` |
 | `stickman_animation` | hoạt hình người que, giải thích hài hước, châm biếm, meme, tư duy logic tối giản | minimalist 2D animated stick figure line art, clean flat canvas, smooth fluid hand-drawn motion, high contrast monochrome with up to 3 vibrant accent colors, dynamic physical comedy, expressive stick character actions | `nam_tram_am` | `driving_modern` |"""
 
-INTENT_MODE_RULES_BLOCK = """═══ QUY TẮC THEO `intent_mode` ═══
-| intent_mode | Quy tắc hình ảnh |
-|---|---|
-| `STICKMAN` | Hoạt hình người que 2D (Style 1 Light / Stickman Video Director): nền trắng sáng sạch sẽ (flat pure white background), nhân vật người que da trắng / nét đen (white filled head with simple black contour, black stick limbs), có nét mặt biểu cảm ngộ nghĩnh (expressive cartoon line face with simple dot eyes, line mouth, funny reaction expressions), hành động tương tác năng động, kết hợp 1-3 màu nhấn tươi sáng. Tuyệt đối không dùng nền tối (dark), không vẽ người thật thực tế. |
-| `NO_HUMAN_BROLL` | ⛔ KHÔNG có người trong ảnh (kể cả bóng người xa). Chủ thể: địa hình, kiến trúc, vật thể, di vật, máy móc, bản đồ giấy, thiên nhiên, đồ vật đời thường. |
-| `HUMAN_NO_LIPSYNC` | ≥ 60% cảnh có người đang LÀM một hành động cụ thể (đi, kéo, viết, mở, chạy...), nhìn từ sau lưng / bên hông / chỉ thấy đôi tay / đám đông xa. ⛔ KHÔNG cận mặt nhìn thẳng ống kính (không có nhép môi). |
-| `HUMAN_WITH_LIPSYNC` | Hệ thống CHƯA hỗ trợ nhép môi → áp dụng đúng quy tắc `HUMAN_NO_LIPSYNC`. |"""
+INTENT_MODE_RULES_BLOCK = """═══ QUY TẮC THIẾT KẾ HÌNH ẢNH GOOGLE FLOW (CINEMATIC HUMAN DOCUMENTARY) ═══
+- Chuẩn khung hình: Video dọc 9:16 chuyên dụng cho Google Flow / TikTok.
+- Phong cách chủ đạo: Điện ảnh 35mm film chân thực, ánh sáng tự nhiên có chiều sâu, kết cấu da người chân thực (pores, candid expressions), độ sâu trường ảnh nông (shallow depth of field).
+- Nhân vật & Hành động: Nhân vật người thật đang thực hiện các hành động cụ thể, tự nhiên (bước đi, mở sách, viết lách, ngắm nhìn, làm việc, suy tư...). Tránh tạo dáng nhìn chằm chằm vào ống kính như chụp ảnh thẻ.
+- Chuyển động máy quay: Máy quay trôi êm theo chuyển động (zoom, pan, tracking), liền mạch giữa các cảnh.
+- ⛔ Tuyệt đối: KHÔNG vẽ hoạt hình 2D, KHÔNG cartoon, KHÔNG 3D game CGI, KHÔNG chèn chữ/text/watermark vào ảnh."""
 
 SCENE_FIELDS_BLOCK = """═══ TRƯỜNG CỦA TỪNG CẢNH ═══
 - `narration_vn`: lời bình tiếng Việt thuần chữ cho TTS đọc theo RULE #5.

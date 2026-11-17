@@ -182,7 +182,7 @@ def _build_smart_fallback_scenes(topic: str, intent_mode: str) -> Dict[str, Any]
 
 def prompt_architect_node(state: ChristianVideoState) -> Dict[str, Any]:
     user_request = state.get("user_request", "").strip()
-    intent_mode = state.get("effective_intent_mode") or state.get("intent_mode") or "NO_HUMAN_BROLL"
+    intent_mode = "FLOW_CINEMATIC"
 
     rag_context = str(state.get("retrieved_scripture", "") or "").strip()
     preferred_model = str(state.get("preferred_narrative_model", "") or "auto").strip() or "auto"
