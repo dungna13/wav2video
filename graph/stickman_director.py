@@ -308,7 +308,7 @@ def run_stickman_pipeline(
     print("=" * 96)
     print(f"🎬 STICKMAN VIDEO DIRECTOR: {topic}")
     print(f"🎨 Phong cách: {style_info['name']}")
-    print(f"📁 Tích hợp trực tiếp từ kho: external/stickman-video-director")
+    print(f"📁 Tài nguyên Người Que: assets/stickman/")
     print(f"📦 Sử dụng nguyên bản: Character Pose Sheet, Archivo Black font & Hand-Drawn Props")
     print("=" * 96)
 
