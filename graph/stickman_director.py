@@ -123,7 +123,7 @@ def _generate_dynamic_storyboard(topic: str, style: str = "amber_noir") -> Dict[
     scenes = [
         {
             "scene_idx": 1,
-            "narration_vn": f"Bạn có bao giờ tự hỏi điều gì thực sự đứng sau {clean_topic}?",
+            "narration_vn": f"Sự thật trớ trêu đằng sau {clean_topic} mà 99% chúng ta đều hiểu sai.",
             "visual_concept": f"Mở đầu tò mò về {clean_topic}",
             "stickman_action": "Stickman character with matte-black head and orange hoodie looking thoughtfully at a glowing golden amber artifact",
             "image_prompt_en": theme["prop_1"],
@@ -287,6 +287,7 @@ def run_stickman_pipeline(
     rate: Optional[str] = None,
     speed_factor: float = 1.0,
     sub_mode: str = "narration_full",
+    sub_style: str = "tiktok_yellow",
     base_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
@@ -408,6 +409,7 @@ def run_stickman_pipeline(
         clips_to_clean=clips,
         delete_scene_media=False,
         sub_mode=sub_mode,
+        sub_style=sub_style,
     )
 
     final_video = Path(rendered["final_master_video_path"])

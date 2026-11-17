@@ -77,6 +77,24 @@ def clean_video_file(input_path: str, output_path: str = None, crf: int = 19) ->
 
     print(f"[+] Thành công! File sạch hoàn toàn metadata và mã hóa điểm ảnh mới tại:")
     print(f"    {out}")
+
+    # Tự động tạo ảnh bìa TikTok Cover & File thông tin đăng nếu chưa có
+    try:
+        from graph.video_renderer import generate_tiktok_cover, export_post_info
+        cover_file = out.parent / "cover.jpg"
+        clean_title = inp.parent.name.replace("flow_", "").replace("run_", "").replace("stickman_", "").replace("_", " ").strip()
+        if not clean_title or clean_title == "workspace":
+            clean_title = inp.stem.replace("final_master", "").replace("_clean", "").replace("_", " ").strip() or "SỰ THẬT BẤT NGỜ"
+
+        if not cover_file.exists():
+            generate_tiktok_cover(out, clean_title, cover_file)
+
+        post_info_file = out.parent / "post_info.txt"
+        if not post_info_file.exists():
+            export_post_info(out.parent, clean_title, [], 30.0, out)
+    except Exception as ex:
+        pass
+
     return str(out)
 
 

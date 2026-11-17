@@ -178,13 +178,14 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Giọng đọc theo cảnh + mốc thời gian thật (+ sfx_cue, music_mood, -14 LUFS)
+    selected_voice = str(state.get("tts_voice", "") or "hoai_my")
     wav_path, timings = synthesize_scene_voiceover(
         [s["narration_vn"] for s in scenes],
         output_filename=run_dir / "audio_16k_mono.wav",
         sfx_cues=[str(s.get("sfx_cue", "none")) for s in scenes],
         music_mood=str(state.get("music_mood", "")),
         engine=str(state.get("tts_engine", "")),
-        voice=str(state.get("tts_voice", "")),
+        voice=selected_voice,
         rate=str(state.get("tts_rate", "")),
         pitch=str(state.get("tts_pitch", "")),
     )
@@ -233,6 +234,8 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
     )
 
     # 4. Dựng phim
+    sub_mode = str(state.get("sub_mode", "narration_full") or "narration_full")
+    sub_style = str(state.get("sub_style", "tiktok_yellow") or "tiktok_yellow")
     rendered = render_documentary_video(
         run_dir=run_dir,
         wav_path=wav_path,
@@ -241,6 +244,8 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
         total_audio_sec=total_audio_sec,
         topic_title=topic_title,
         genre=genre,
+        sub_mode=sub_mode,
+        sub_style=sub_style,
     )
 
     clip_tag = f" | CLIP={visual_scores['clip_prompt_score']}" if visual_scores.get("clip_prompt_score") is not None else ""

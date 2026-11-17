@@ -443,6 +443,29 @@ VOICE_PROFILES = {
 }
 
 
+def list_available_voices() -> Dict[str, Dict[str, str]]:
+    """Trả về danh sách các profile giọng đọc chuẩn TikTok có sẵn."""
+    return {k: dict(v) for k, v in VOICE_PROFILES.items()}
+
+
+def print_voices_table() -> None:
+    """In bảng tra cứu giọng đọc thân thiện ra terminal."""
+    print("=" * 72)
+    print("🎙️ DANH SÁCH GIỌNG ĐỌC TIẾNG VIỆT CHUẨN TIKTOK (EDGE-TTS / LOCAL VITS)")
+    print("=" * 72)
+    print(f"{'MÃ GIỌNG (--voice)':<18} | {'PITCH':<7} | {'MÔ TẢ PHONG CÁCH'}")
+    print("-" * 72)
+    for code, info in VOICE_PROFILES.items():
+        is_default = " ⭐ (Mặc định)" if code == "hoai_my" else ""
+        print(f"{code:<18} | {info['pitch']:<7} | {info['desc']}{is_default}")
+    print("-" * 72)
+    print("💡 Mẹo: Sử dụng lệnh:")
+    print("   python main.py --voice hoai_my \"Chủ đề của bạn\"   (Nữ truyền cảm)")
+    print("   python main.py --voice nam_tram \"Chủ đề của bạn\"  (Nam trầm điện ảnh)")
+    print("   python main.py --voice nu_nhe_nhang \"Chủ đề...\"   (Nữ nhẹ nhàng, sách)")
+    print("=" * 72)
+
+
 def _generate_edge_tts_audio(
     text: str,
     voice: str = "vi-VN-NamMinhNeural",

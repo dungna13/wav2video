@@ -365,6 +365,7 @@ def render_from_flow_clips(
     run_dir: Path,
     clips_dir: Optional[Path] = None,
     sub_mode: str = "narration_full",
+    sub_style: str = "tiktok_yellow",
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các clip Google Flow (không reject/bắt tạo lại clip)."""
     manifest_path = run_dir / "flow_manifest.json"
@@ -442,6 +443,7 @@ def render_from_flow_clips(
         topic_title=manifest["topic_title"],
         genre=manifest.get("genre", ""),
         sub_mode=sub_mode,
+        sub_style=sub_style,
     )
 
     judge_state = visual_judge_and_update_registry_node(

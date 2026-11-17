@@ -58,6 +58,9 @@ def _parse_args(argv) -> Dict[str, Any]:
         "hitl": "",
         "clips_dir": "",
         "sub_mode": "narration_full",
+        "sub_style": "tiktok_yellow",
+        "batch": "",
+        "list_voices": False,
         "block_sec": 14.0,
         "max_blocks": 2,
         "speed": 1.35,
@@ -67,13 +70,17 @@ def _parse_args(argv) -> Dict[str, Any]:
     words = []
     it = iter(argv)
     for a in it:
-        if a in ("--stickman", "--stick"):
+        if a in ("--list-voices", "--voices"):
+            opts["list_voices"] = True
+        elif a in ("--stickman", "--stick"):
             opts["stickman"] = True
             opts["mode"] = "STICKMAN"
         elif a == "--mode":
             opts["mode"] = next(it, "").strip().upper()
         elif a == "--model":
             opts["model"] = next(it, "auto").strip().lower()
+        elif a in ("--batch", "--queue"):
+            opts["batch"] = next(it, "").strip()
         elif a == "--ingest":
             opts["ingest"] = next(it, "").strip()
         elif a == "--list-book":
@@ -101,6 +108,8 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["clips_dir"] = next(it, "").strip()
         elif a == "--sub-mode":
             opts["sub_mode"] = next(it, "narration_full").strip().lower()
+        elif a in ("--sub-style", "--style-sub", "--caption-style"):
+            opts["sub_style"] = next(it, "tiktok_yellow").strip().lower()
         elif a == "--no-sub":
             opts["sub_mode"] = "none"
         elif a == "--block-sec":
@@ -119,7 +128,7 @@ def _parse_args(argv) -> Dict[str, Any]:
             except ValueError:
                 opts["speed"] = 1.35
         elif a in ("--voice", "-v"):
-            opts["voice"] = next(it, "nam_minh").strip().lower()
+            opts["voice"] = next(it, "hoai_my").strip().lower()
         else:
             words.append(a)
     opts["topic"] = " ".join(words).strip()
@@ -142,8 +151,106 @@ def _print_book_queue(book_id: str) -> None:
         print(f" ... và {len(rows) - 30} chunk nữa.")
 
 
+def run_batch_topics(batch_file: str, opts: Dict[str, Any]) -> None:
+    p = Path(batch_file)
+    if not p.exists():
+        print(f"❌ Không tìm thấy file danh sách chủ đề: {batch_file}")
+        return
+    lines = [line.strip() for line in p.read_text(encoding="utf-8").splitlines()]
+    topics = [line for line in lines if line and not line.startswith("#")]
+    if not topics:
+        print(f"❌ File {batch_file} không có chủ đề nào hợp lệ.")
+        return
+
+    ready_dir = Path("workspace/ready_to_post")
+    ready_dir.mkdir(parents=True, exist_ok=True)
+
+    print("=" * 96)
+    print(f"🚀 BẮT ĐẦU BATCH PROCESSING: {len(topics)} CHỦ ĐỀ TIKTOK")
+    print(f"📁 Thư mục gom video sẵn sàng đăng: {ready_dir.resolve()}")
+    print("=" * 96)
+
+    success_list = []
+    for idx, t in enumerate(topics, 1):
+        print(f"\n[{idx}/{len(topics)}] Đang xử lý: '{t}'...")
+        sub_opts = dict(opts)
+        sub_opts["batch"] = ""
+        sub_opts["topic"] = t
+        try:
+            if sub_opts["stickman"] and not sub_opts["flow_prep"]:
+                from graph.stickman_director import run_stickman_pipeline
+                res = run_stickman_pipeline(
+                    topic=t,
+                    style="modern_tech",
+                    voice=sub_opts["voice"],
+                    speed_factor=sub_opts["speed"],
+                    sub_mode=sub_opts["sub_mode"],
+                    sub_style=sub_opts["sub_style"],
+                )
+                vid_path = Path(res["final_master_video_path"])
+            else:
+                # Documentary LangGraph pipeline
+                res_state = execute_documentary_run(sub_opts, t)
+                vid_path = Path(res_state.get("final_master_video_path", ""))
+
+            if vid_path and vid_path.exists():
+                dest_sub = ready_dir / f"{idx:02d}_{vid_path.parent.name}"
+                dest_sub.mkdir(parents=True, exist_ok=True)
+                import shutil
+                clean_src = vid_path.parent / "final_master_clean.mp4"
+                src_to_copy = clean_src if clean_src.exists() else vid_path
+                shutil.copy2(src_to_copy, dest_sub / "video_tiktok.mp4")
+                if (vid_path.parent / "cover.jpg").exists():
+                    shutil.copy2(vid_path.parent / "cover.jpg", dest_sub / "cover.jpg")
+                if (vid_path.parent / "post_info.txt").exists():
+                    shutil.copy2(vid_path.parent / "post_info.txt", dest_sub / "post_info.txt")
+                print(f"   └─ ✅ Đã gom video & thông tin đăng vào: {dest_sub}")
+            success_list.append((idx, t, "THÀNH CÔNG"))
+        except Exception as e:
+            print(f"❌ Lỗi khi render chủ đề '{t}': {e}")
+            success_list.append((idx, t, f"LỖI: {e}"))
+
+    print("\n" + "=" * 96)
+    print(f"🏁 TỔNG KẾT BATCH PROCESSING ({len(success_list)} CHỦ ĐỀ)")
+    print("=" * 96)
+    for idx, t, status in success_list:
+        print(f" [{idx:02d}] {status:<12} | {t[:60]}")
+    print(f"\n👉 Toàn bộ video thành phẩm + cover + post_info đã sẵn sàng trong: {ready_dir}")
+    print("=" * 96)
+
+
+def execute_documentary_run(opts: Dict[str, Any], topic: str) -> Dict[str, Any]:
+    book_id = opts["book"]
+    chunk_idx = opts["chunk"]
+    app = create_christian_short_video_app(stop_after_tier1=opts["flow_prep"])
+    config = {"configurable": {"thread_id": f"topic_to_video_{int(time.time())}"}}
+    state = app.invoke(
+        {
+            "user_request": topic,
+            "intent_mode": opts["mode"],
+            "preferred_narrative_model": opts["model"],
+            "book_id": book_id,
+            "book_chunk_idx": chunk_idx,
+            "tts_voice": opts["voice"],
+            "sub_mode": opts["sub_mode"],
+            "sub_style": opts["sub_style"],
+        },
+        config=config,
+    )
+    return state
+
+
 def main():
     opts = _parse_args(sys.argv[1:])
+
+    if opts["list_voices"]:
+        from graph.audio_sync import print_voices_table
+        print_voices_table()
+        return
+
+    if opts["batch"]:
+        run_batch_topics(opts["batch"], opts)
+        return
 
     if opts["ingest"]:
         info = ingest_book(opts["ingest"])
@@ -168,6 +275,7 @@ def main():
             run_dir=Path(opts["flow_render"]),
             clips_dir=Path(opts["clips_dir"]) if opts["clips_dir"] else None,
             sub_mode=opts["sub_mode"],
+            sub_style=opts["sub_style"],
         )
         m = res["manifest"]
         r = res["rendered"]
@@ -236,6 +344,18 @@ def main():
     if not topic:
         topic = "Chiến dịch Điện Biên Phủ 1954: 56 ngày đêm thay đổi cục diện"
 
+    if opts["stickman"] and not opts["flow_prep"]:
+        from graph.stickman_director import run_stickman_pipeline
+        res = run_stickman_pipeline(
+            topic=topic,
+            style="modern_tech",
+            voice=opts["voice"],
+            speed_factor=opts["speed"],
+            sub_mode=opts["sub_mode"],
+            sub_style=opts["sub_style"],
+        )
+        return
+
     log_path, stop_log = start_run_log(book_id or topic[:24])
     try:
         app = create_christian_short_video_app(stop_after_tier1=opts["flow_prep"])
@@ -247,6 +367,8 @@ def main():
             + (f" | BOOK: {book_id}" if book_id else "")
             + (f" (chunk #{chunk_idx})" if chunk_idx else "")
             + (f" | MODE: {opts['mode']}" if opts["mode"] else "")
+            + (f" | VOICE: {opts['voice']}" if opts["voice"] else "")
+            + (f" | SUB-STYLE: {opts['sub_style']}" if opts["sub_style"] else "")
             + (f" | FLOW-PREP ({opts['block_sec']:.0f}s/block)" if opts["flow_prep"] else "")
         )
         print("=" * 96)
@@ -258,6 +380,9 @@ def main():
                 "preferred_narrative_model": opts["model"],
                 "book_id": book_id,
                 "book_chunk_idx": chunk_idx,
+                "tts_voice": opts["voice"],
+                "sub_mode": opts["sub_mode"],
+                "sub_style": opts["sub_style"],
             },
             config=config,
         )

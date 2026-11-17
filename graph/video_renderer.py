@@ -13,8 +13,10 @@ Khác biệt so với bản cũ (1 ảnh lưới 2x2 cắt 4 mảnh + vẽ vecto
 import json
 import re
 import subprocess
+import time
+import textwrap
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 from config.settings import IMAGE_WIDTH, IMAGE_HEIGHT, VIDEO_FPS
 
@@ -115,6 +117,34 @@ def _word_weights(words: List[str]) -> List[float]:
     return out
 
 
+SUBTITLE_STYLES: Dict[str, Dict[str, Any]] = {
+    "tiktok_yellow": {
+        "primary": "&H0000E5FF",   # Vàng rực TikTok (BGR: FF E5 00)
+        "secondary": "&H00FFFFFF", # Trắng tinh khi chưa highlight
+        "outline": "&H00000000",   # Đen tuyền tương phản cao
+        "back": "&H90000000",
+        "outline_px": 5,
+        "shadow_px": 2,
+    },
+    "tiktok_white": {
+        "primary": "&H00FFFFFF",   # Trắng tinh nổi bật
+        "secondary": "&H0000E5FF", # Vàng highlight khi đọc tới
+        "outline": "&H00000000",   # Đen tuyền
+        "back": "&H90000000",
+        "outline_px": 5,
+        "shadow_px": 2,
+    },
+    "tiktok_cyan": {
+        "primary": "&H00FFFF00",   # Cyan neon hiện đại
+        "secondary": "&H00FFFFFF",
+        "outline": "&H00000000",
+        "back": "&H90000000",
+        "outline_px": 5,
+        "shadow_px": 2,
+    },
+}
+
+
 def build_ass(
     scenes: List[Dict[str, Any]],
     timings: List[Tuple[float, float]],
@@ -123,8 +153,14 @@ def build_ass(
     h: int,
     title: str,
     sub_mode: str = "narration_full",
+    sub_style: str = "tiktok_yellow",
 ) -> str:
-    font_size = int(h * 0.046)
+    style_cfg = SUBTITLE_STYLES.get(sub_style.lower().strip(), SUBTITLE_STYLES["tiktok_yellow"])
+    font_size = int(h * 0.048)  # ~61px cho 1280h
+    outline_px = max(style_cfg["outline_px"], h // 220)
+    shadow_px = style_cfg["shadow_px"]
+    margin_v = int(h * 0.22)  # TikTok Safe Zone: 280px từ đáy lên, tránh nút like/share & caption
+
     lines = [
         "[Script Info]",
         f"Title: {title}",
@@ -135,7 +171,7 @@ def build_ass(
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Sub,Arial,{font_size},&H0000D6FF,&H00FFFFFF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,{max(3, h // 220)},2,2,40,40,{int(h * 0.20)},1",
+        f"Style: Sub,Arial,{font_size},{style_cfg['primary']},{style_cfg['secondary']},{style_cfg['outline']},{style_cfg['back']},-1,0,0,0,100,100,0,0,1,{outline_px},{shadow_px},2,55,55,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -190,6 +226,181 @@ def _probe_clip_duration(video_path: Path) -> float:
     return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
 
 
+def generate_tiktok_cover(
+    video_path: Path,
+    title: str,
+    out_path: Path,
+    time_offset_sec: float = 1.0,
+) -> Optional[Path]:
+    """
+    Trích xuất frame từ video thành phẩm và vẽ tiêu đề dạng giật tít lớn
+    nằm chính giữa khu vực Safe Zone (1:1 TikTok Profile Grid).
+    """
+    if not video_path.exists():
+        return None
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        ff = _ffmpeg()
+        tmp_frame = out_path.parent / f"_raw_frame_{int(time.time())}.jpg"
+        cmd = [
+            ff, "-y",
+            "-ss", f"{time_offset_sec:.2f}",
+            "-i", str(video_path),
+            "-vframes", "1",
+            "-q:v", "2",
+            str(tmp_frame),
+        ]
+        subprocess.run(cmd, capture_output=True, text=True)
+        if not tmp_frame.exists() or tmp_frame.stat().st_size == 0:
+            subprocess.run([ff, "-y", "-i", str(video_path), "-vframes", "1", "-q:v", "2", str(tmp_frame)], capture_output=True)
+
+        if not tmp_frame.exists():
+            return None
+
+        im = Image.open(tmp_frame).convert("RGB")
+        tmp_frame.unlink(missing_ok=True)
+        w, h = im.size
+
+        # Tìm font chữ hỗ trợ tiếng Việt
+        font_candidates = [
+            Path(__file__).resolve().parent.parent / "assets" / "stickman" / "fonts" / "NotoSans.ttf",
+            Path(__file__).resolve().parent.parent / "assets" / "stickman" / "fonts" / "Nunito.ttf",
+            Path(__file__).resolve().parent.parent / "assets" / "stickman" / "fonts" / "ArchivoBlack.ttf",
+        ]
+        font_path = None
+        for fc in font_candidates:
+            if fc.exists():
+                font_path = str(fc)
+                break
+
+        font_size = int(w * 0.072)  # ~52px
+        font = ImageFont.truetype(font_path, font_size) if font_path else ImageFont.load_default()
+        badge_font = ImageFont.truetype(font_path, int(font_size * 0.52)) if font_path else ImageFont.load_default()
+
+        # Wrap text tối đa 18 ký tự mỗi dòng
+        clean_title = title.strip().upper()
+        lines = textwrap.wrap(clean_title, width=18)
+        if len(lines) > 3:
+            lines = lines[:3]
+
+        draw = ImageDraw.Draw(im)
+
+        # Trung tâm vùng Safe 1:1 của TikTok (y từ 350 đến 850 trên tổng chiều cao 1280)
+        center_y = int(h * 0.44)
+        line_height = int(font_size * 1.35)
+        total_text_h = len(lines) * line_height + 45
+        start_y = center_y - (total_text_h // 2)
+
+        # Vẽ banner đen bán trong suốt phía sau tiêu đề để chữ cực nổi trên mọi nền
+        banner_top = max(0, start_y - 25)
+        banner_bot = min(h, start_y + total_text_h + 25)
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ov_draw = ImageDraw.Draw(overlay)
+        ov_draw.rectangle([0, banner_top, w, banner_bot], fill=(0, 0, 0, 160))
+        ov_draw.line([(0, banner_top), (w, banner_top)], fill=(255, 214, 0, 230), width=3)
+        ov_draw.line([(0, banner_bot), (w, banner_bot)], fill=(255, 214, 0, 230), width=3)
+        im = Image.alpha_composite(im.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(im)
+
+        # Badge nhỏ bên trên: "⚡ SỰ THẬT BẤT NGỜ"
+        badge_text = "⚡ SỰ THẬT BẤT NGỜ"
+        badge_w = int(draw.textlength(badge_text, font=badge_font)) if hasattr(draw, "textlength") else 160
+        badge_x = (w - badge_w) // 2
+        badge_y = start_y
+        draw.text((badge_x, badge_y), badge_text, fill=(255, 220, 0), font=badge_font)
+
+        # Vẽ tiêu đề chính
+        curr_y = start_y + 40
+        for line in lines:
+            line_w = int(draw.textlength(line, font=font)) if hasattr(draw, "textlength") else (len(line) * font_size // 2)
+            lx = (w - line_w) // 2
+            # Viền đen dày 3px
+            for ox in [-3, -2, -1, 0, 1, 2, 3]:
+                for oy in [-3, -2, -1, 0, 1, 2, 3]:
+                    if ox != 0 or oy != 0:
+                        draw.text((lx + ox, curr_y + oy), line, font=font, fill=(0, 0, 0))
+            # Chữ vàng sáng
+            draw.text((lx, curr_y), line, font=font, fill=(255, 245, 100))
+            curr_y += line_height
+
+        im.save(out_path, format="JPEG", quality=95)
+        print(f"   └─ 🖼️ Đã tạo ảnh bìa TikTok Cover chuẩn Safe Zone: {out_path.name}")
+        return out_path
+    except Exception as e:
+        print(f"   [Cover Info] Không thể tạo thumbnail: {e}")
+        return None
+
+
+def export_post_info(
+    run_dir: Path,
+    topic_title: str,
+    scenes: List[Dict[str, Any]],
+    total_audio_sec: float,
+    video_path: Path,
+    story_moral: str = "",
+) -> Path:
+    """Tự động xuất file text chứa Caption, Hashtags và hướng dẫn đăng TikTok bằng điện thoại."""
+    post_file = run_dir / "post_info.txt"
+    first_narration = scenes[0].get("narration_vn", "") if scenes else ""
+    first_scene_words = len(first_narration.split())
+
+    low = (topic_title + " " + story_moral).lower()
+    custom_tags = ["#learnontiktok", "#kienthuc", "#xuhuong"]
+    if any(k in low for k in ["sách", "nha_gia_kim", "đọc sách", "tác giả", "chunk"]):
+        custom_tags.extend(["#sachhay", "#docsach", "#baihoccuocsong", "#phattrienbanthan"])
+    elif any(k in low for k in ["lịch sử", "chiến dịch", "chiến tranh", "điện biên", "việt nam"]):
+        custom_tags.extend(["#lichsu", "#lichsuvietnam", "#khampha", "#chientranh"])
+    elif any(k in low for k in ["kinh tế", "tiền", "làm giàu", "tài chính", "đầu tư", "do thái"]):
+        custom_tags.extend(["#kinhte", "#taichinh", "#kiemtien", "#tuduytriphu"])
+    else:
+        custom_tags.extend(["#trietly", "#tuduy", "#suthat", "#gocnhin"])
+
+    hashtags_str = " ".join(dict.fromkeys(custom_tags))
+
+    caption = (
+        f"{topic_title}! {first_narration[:80]}...\n\n"
+        f"Bạn nghĩ sao về điều này? Hãy để lại bình luận bên dưới nhé 👇\n\n"
+        f"{hashtags_str}"
+    )
+
+    content = f"""================================================================================
+📱 THÔNG TIN ĐĂNG TIKTOK (COPY & PASTE KHI ĐĂNG BẰNG ĐIỆN THOẠI)
+================================================================================
+
+📌 TIÊU ĐỀ:
+{topic_title}
+
+📝 CAPTION GỢI Ý (ĐÃ KÈM HASHTAG CHUẨN XU HƯỚNG):
+{caption}
+
+🎯 HOOK 3 GIÂY ĐẦU TIÊN (GIỮ CHÂN NGƯỜI XEM):
+"{first_narration}" ({first_scene_words} từ)
+
+⏱️ THỜI LƯỢNG VIDEO: {total_audio_sec:.1f} giây
+🎬 FILE VIDEO ĐĂNG: {video_path.name}
+🖼️ ẢNH BÌA GỢI Ý: cover.jpg (đã căn chuẩn Safe Zone lưới profile TikTok)
+
+--------------------------------------------------------------------------------
+💡 MẸO ĐĂNG TRÊN ĐIỆN THOẠI ĐỂ 100% KHÔNG BỊ GẮN NHÃN AI & KHÔNG FLOP:
+--------------------------------------------------------------------------------
+1. Chuyển video `{video_path.name}` (và file cover.jpg nếu muốn) sang điện thoại qua:
+   Telegram (gửi dạng File) / Airdrop / Google Drive.
+2. Mở ứng dụng TikTok trên điện thoại -> Bấm dấu (+) để tải video lên.
+3. Bấm 'Chọn ảnh bìa' -> Chọn frame đầu hoặc tải ảnh `cover.jpg` lên.
+4. Bấm 'Thêm âm thanh' (Add Sound) trên TikTok -> Chọn một bài nhạc xu hướng bất kỳ:
+   -> Vào mục 'Âm lượng' -> Kéo âm lượng nhạc xu hướng xuống mức 2% hoặc 3%
+   (Điều này giúp thuật toán TikTok đẩy video vào luồng âm thanh thịnh hành mà không lấn át giọng đọc).
+5. Kiểm tra cài đặt trước khi bấm Đăng:
+   -> Đảm bảo nút gạt 'Nội dung do AI tạo' (AI-generated content) đang TẮT (OFF).
+6. Dán Caption & Hashtags ở trên vào rồi bấm ĐĂNG!
+================================================================================
+"""
+    post_file.write_text(content, encoding="utf-8")
+    print(f"   └─ 📋 Đã xuất thông tin đăng TikTok: {post_file.name}")
+    return post_file
+
+
 def _finalize_master_video(
     run_dir: Path,
     merged: Path,
@@ -207,12 +418,13 @@ def _finalize_master_video(
     clips_to_clean: List[Path],
     delete_scene_media: bool = True,
     sub_mode: str = "narration_full",
+    sub_style: str = "tiktok_yellow",
 ) -> Dict[str, Any]:
     ff = _ffmpeg()
     ass_path = run_dir / "subtitles.ass"
     burn_sub = (sub_mode != "none")
     if burn_sub:
-        ass_path.write_text(build_ass(scenes, timings, durations, w, h, topic_title, sub_mode=sub_mode), encoding="utf-8")
+        ass_path.write_text(build_ass(scenes, timings, durations, w, h, topic_title, sub_mode=sub_mode, sub_style=sub_style), encoding="utf-8")
 
     grade = GRADE_BY_GENRE.get(genre, "eq=contrast=1.04:brightness=0.01:saturation=1.03")
     sub_filter = ",ass=subtitles.ass" if burn_sub else ""
@@ -298,9 +510,15 @@ def _finalize_master_video(
         except Exception:
             pass
 
+    target_video = clean_mp4 if clean_mp4.exists() else final_mp4
+    cover_path = generate_tiktok_cover(target_video, topic_title, run_dir / "cover.jpg")
+    post_info_path = export_post_info(run_dir, topic_title, scenes, total_audio_sec, target_video)
+
     return {
         "final_master_video_path": str(final_mp4),
         "final_master_clean_path": str(clean_mp4),
+        "cover_image_path": str(cover_path) if cover_path else "",
+        "post_info_path": str(post_info_path),
         "subtitles_ass_path": str(ass_path),
         "prepped_visual_path": "",
         "contact_sheet_path": "",
@@ -342,6 +560,7 @@ def render_flow_video(
     fps: int = VIDEO_FPS,
     cleanup_intermediates: bool = True,
     sub_mode: str = "narration_full",
+    sub_style: str = "tiktok_yellow",
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các clip liền mạch (Google Flow) giữ nguyên mạch chạy của từng Block."""
     w, h = IMAGE_WIDTH, IMAGE_HEIGHT
@@ -408,6 +627,7 @@ def render_flow_video(
         clips_to_clean=prep_clips,
         delete_scene_media=False,
         sub_mode=sub_mode,
+        sub_style=sub_style,
     )
 
 
@@ -422,6 +642,7 @@ def render_documentary_video(
     fps: int = VIDEO_FPS,
     cleanup_intermediates: bool = True,
     sub_mode: str = "narration_full",
+    sub_style: str = "tiktok_yellow",
 ) -> Dict[str, Any]:
     """Dựng `final_master.mp4` từ các cảnh đã có `media_path`, `camera`, `narration_vn`."""
     w, h = IMAGE_WIDTH, IMAGE_HEIGHT
@@ -453,4 +674,5 @@ def render_documentary_video(
         clips_to_clean=clips,
         delete_scene_media=True,
         sub_mode=sub_mode,
+        sub_style=sub_style,
     )

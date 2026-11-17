@@ -121,6 +121,8 @@ class ChristianVideoState(TypedDict):
     tts_voice: str
     tts_rate: str
     tts_pitch: str
+    sub_mode: str
+    sub_style: str
 
     # Node 1 (`filter_context_node` + Book RAG QueryRewriter)
     book_id: str
