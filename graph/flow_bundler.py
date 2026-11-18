@@ -261,11 +261,15 @@ def bundle_scenes_for_flow(
     )
     base_style = _clean_for_omni(style_anchor_en) if style_anchor_en else "cinematic human documentary"
     style = f"{base_style}, {human_cinematic_dna}"
+    clean_style = _clean_for_omni(style)
 
-    negative_directive = (
-        "Textless video with a clean frame. Strictly no on-screen text, no titles, "
-        "no subtitles, no captions, no typography, no words, no letters, no symbols, "
-        "no watermark, no markdown syntax, no cartoon, no 3D animation, no plastic doll skin"
+    # Đối với Gemini Omni 1.2 (Multimodal LLM): Tuyệt đối KHÔNG đưa các từ như 'text', 'markdown',
+    # 'subtitles', 'titles' vào prompt (kể cả câu phủ định 'no text, no markdown'), vì cơ chế Attention
+    # của LLM sẽ chú ý vào các token đó và tự động sinh ra Markdown / Title đè lên video!
+    # Thay vào đó chỉ dùng các từ mô tả hình ảnh điện ảnh thuần túy:
+    aesthetic_dna = (
+        "clean visual frame, natural cinematic lighting, authentic human skin texture, "
+        "shallow depth of field, photorealistic 35mm motion picture"
     )
 
     blocks: List[Dict[str, Any]] = []
@@ -289,18 +293,18 @@ def bundle_scenes_for_flow(
         seq = ", ".join(scene_descs)
 
         if b_idx == 1:
-            shot_type = "Vertical 9:16 photorealistic cinematic human documentary footage, 35mm film"
+            shot_type = "Vertical 9:16 photorealistic cinematic documentary footage, 35mm film"
             flow_prompt = (
-                f"{shot_type}, {style}. "
+                f"{shot_type}, {clean_style}. "
                 f"{seq}. "
-                f"{negative_directive}."
+                f"{aesthetic_dna}."
             )
         else:
             flow_prompt = (
-                f"Vertical 9:16 seamless continuation from the exact ending frame and lighting of previous shot, {style}. "
+                f"Vertical 9:16 seamless continuation from the exact ending frame and lighting of previous shot, {clean_style}. "
                 f"Continuous camera motion: {seq}. "
                 f"Maintain identical human characters, clothing, visual palette and atmosphere, no hard cuts. "
-                f"{negative_directive}."
+                f"{aesthetic_dna}."
             )
 
         # Đảm bảo toàn bộ prompt không còn một ký tự markdown hay ngoặc nào
@@ -330,24 +334,28 @@ def format_flow_prompts_txt(
 ) -> str:
     lines = [
         "=" * 88,
-        f"GOOGLE FLOW PROMPTS (OMNI 1.2 & VEO) — {topic_title}",
+        f"GOOGLE FLOW PROMPTS (VEO 3.1-LITE & GEMINI OMNI 1.2) — {topic_title}",
         f"Mode: {intent_mode} | Tổng audio: {total_audio_sec:.2f}s | Số block: {len(blocks)} | Tỷ lệ: 9:16 dọc",
         "=" * 88,
-        "HƯỚNG DẪN TẠO VIDEO VỚI GEMINI OMNI 1.2 FLASH (KHÔNG BỊ DÍNH CHỮ / MARKDOWN):",
-        "  1. Tại Google Flow (hoặc Google Labs Video):",
-        "     - Model: Chọn 'Gemini Omni 1.2 Flash' (chất lượng hình người & độ nét vượt trội so với Veo).",
-        "     - Tỷ lệ khung hình: Chọn 9:16 (dọc chuẩn TikTok/Reels).",
-        "  2. Cách copy prompt:",
-        "     - CHỈ COPY NỘI DUNG NẰM GIỮA HAI DÒNG KẺ GẠCH ĐỨT '>>> BẮT ĐẦU COPY PROMPT <<<'",
-        "     - Tuyệt đối không copy tiêu đề Block, không copy lời bình tiếng Việt.",
-        "  3. Quy trình ghép liên hoàn (Seamless Chain):",
-        "     - Block 1: Bấm tạo clip mới bằng Prompt Block 1.",
-        "     - Block 2, 3, 4: Bấm nút EXTEND trên clip trước đó (hoặc dùng frame cuối làm Start Frame),",
-        "       rồi dán Prompt của Block tương ứng để nhân vật, góc máy và ánh sáng nối tiếp 100%.",
-        f"  4. Sau khi tải các clip về:",
-        f"     - Lưu toàn bộ file mp4 vào: {clips_dir}",
-        f"     - Đặt tên theo thứ tự: 1.mp4, 2.mp4, ... (hoặc 1 file dài duy nhất nếu bạn Extend liên hoàn).",
-        f"  5. Dựng video hoàn chỉnh:",
+        "SO SÁNH & HƯỚNG DẪN CHỌN MODEL TRÊN GOOGLE FLOW:",
+        "  ⭐ MODEL KHUYÊN DÙNG SỐ 1: VEO 3.1-LITE (hoặc Veo 2 / Veo 3.1)",
+        "     - Là mô hình Video Diffusion thuần túy. 100% KHÔNG BAO GIỜ bị dính chữ, markdown hay phụ đề.",
+        "     - Giữ chuyển động máy và ánh sáng cực kỳ mượt mà, độ ổn định cao nhất.",
+        "",
+        "  ✨ MODEL GEMINI OMNI 1.2 FLASH:",
+        "     - Cho chi tiết khuôn mặt người và da cực nét, nhưng là mô hình Multimodal LLM.",
+        "     - Prompt bên dưới đã được lọc sạch 100% ký hiệu markdown, ngoặc, và loại bỏ hoàn toàn các từ",
+        "       nhạy cảm (như 'text', 'markdown', 'subtitles') để tránh kích hoạt cơ chế in chữ của LLM.",
+        "",
+        "  QUY TRÌNH TẠO VIDEO (SEAMLESS CHAIN):",
+        "  1. Tỷ lệ khung hình: Chọn 9:16 (dọc chuẩn TikTok/Reels).",
+        "  2. Thao tác copy: CHỈ COPY NỘI DUNG NẰM GIỮA HAI DÒNG KẺ GẠCH ĐỨT '>>> BẮT ĐẦU COPY PROMPT <<<'",
+        "  3. Block 1: Tạo clip mới bằng Prompt Block 1.",
+        "  4. Block 2, 3, 4: Bấm nút EXTEND trên clip trước đó (hoặc dùng frame cuối làm Start Frame),",
+        "     rồi dán Prompt của Block tương ứng để nhân vật, góc máy và ánh sáng nối tiếp 100%.",
+        f"  5. Tải các clip về thư mục: {clips_dir}",
+        "     Đặt tên theo thứ tự: 1.mp4, 2.mp4, ... (hoặc 1 file dài duy nhất nếu bạn Extend liên hoàn).",
+        f"  6. Dựng video hoàn chỉnh:",
         f"     python main.py --flow-render \"{run_dir}\"",
         "=" * 88,
         "",

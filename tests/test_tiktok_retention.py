@@ -249,11 +249,11 @@ class TestOmniFlowPromptSanitization(unittest.TestCase):
         self.assertNotIn("`", prompt)
         self.assertNotIn("#", prompt)
 
-        # Chứa chỉ thị chống vẽ chữ lên màn hình cho Omni 1.2
-        self.assertIn("Textless video", prompt)
-        self.assertIn("no on-screen text", prompt)
-        self.assertIn("no subtitles", prompt)
-        self.assertIn("no markdown syntax", prompt)
+        # Tuyệt đối không chứa các từ ngữ nhạy cảm kích hoạt attention in chữ của LLM Omni
+        self.assertNotIn("markdown", prompt.lower())
+        self.assertNotIn("subtitles", prompt.lower())
+        self.assertNotIn("typography", prompt.lower())
+        self.assertIn("photorealistic 35mm motion picture", prompt)
 
 
 if __name__ == "__main__":
