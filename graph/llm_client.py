@@ -257,9 +257,9 @@ def call_gemini_thinking_structured(
         return None
 
     if GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIza"):
-        candidate_models = [GEMINI_MODEL]
-        for fallback_m in ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-2.5-flash"]:
-            if fallback_m not in candidate_models:
+        candidate_models = []
+        for fallback_m in [GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"]:
+            if fallback_m and fallback_m not in candidate_models:
                 candidate_models.append(fallback_m)
 
         for model_name in candidate_models:

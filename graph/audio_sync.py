@@ -616,14 +616,17 @@ def synthesize_scene_voiceover(
     scene_gap_sec: float = 0.12,
     sfx_cues: Optional[List[str]] = None,
     music_mood: str = "",
-    voice_name: str = "hoai_my",  # hoai_my (Nữ TikTok truyền cảm) | nam_tram (Nam trầm điện ảnh) | nam_tre | nu_nhe_nhang
-    speed_rate: float = 1.35,      # 1.0 = chuẩn, 1.35 = 1.35x, 1.5 = 1.5x
+    voice_name: str = "review_phim",  # Mặc định giọng Nữ Review Phim cuốn hút chuẩn TikTok
+    speed_rate: float = 1.35,          # 1.0 = chuẩn, 1.35 = 1.35x, 1.42 = 1.42x
+    **kwargs: Any,
 ) -> Tuple[Path, List[Tuple[float, float]]]:
     """
     Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
-    Mặc định sử dụng Edge-TTS `hoai_my` (giọng nữ truyền cảm cực tự nhiên) hoặc `nam_tram` (nam trầm điện ảnh).
+    Mặc định sử dụng Edge-TTS `review_phim` (giọng nữ dồn dập kịch tính) hoặc `nam_review` (nam review hiện đại).
     Tự động fallback an toàn về Local VITS `facebook/mms-tts-vie` nếu offline.
     """
+    if "voice" in kwargs and kwargs["voice"]:
+        voice_name = str(kwargs["voice"])
     wav_path = _resolve_wav_path(output_filename)
     import torch
 
