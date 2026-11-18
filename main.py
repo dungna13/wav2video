@@ -62,8 +62,8 @@ def _parse_args(argv) -> Dict[str, Any]:
         "list_voices": False,
         "block_sec": 14.0,
         "max_blocks": 2,
-        "speed": 1.42,
-        "voice": "review_phim",  # MẶC ĐỊNH GIỌNG NỮ REVIEW PHIM DỒN DẬP 1.42x CUỐN HÚT NHƯ TIKTOK VANTHANHTHU09
+        "speed": 1.35,
+        "voice": "vanthanhthu",  # MẶC ĐỊNH GIỌNG NAM KHOA HỌC VŨ TRỤ DỒN DẬP 1.35x CUỐN HÚT CHUẨN TIKTOK VANTHANHTHU09
         "topic": "",
     }
     words = []

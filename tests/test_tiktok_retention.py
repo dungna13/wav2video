@@ -192,7 +192,7 @@ class TestCliArgsParsing(unittest.TestCase):
     def test_default_auto_web_mode(self):
         opts = _parse_args(["Chủ đề"])
         self.assertFalse(opts["flow_prep"], "Mặc định phải là tự động tạo từ A-Z (không dừng lại ở Flow prep)")
-        self.assertEqual(opts["voice"], "review_phim", "Mặc định giọng Nữ Review Phim 1.42x dồn dập như TikTok")
+        self.assertEqual(opts["voice"], "vanthanhthu", "Mặc định giọng Nam Khoa Học Vũ Trụ 1.35x dồn dập như TikTok vanthanhthu09")
 
 
 class TestOmniFlowPromptSanitization(unittest.TestCase):

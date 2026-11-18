@@ -124,8 +124,8 @@ def _generate_cinematic_ambient_bgm(
         pad = signal.sosfilt(sos_lp, pad).astype(np.float32)
         pad = pad / (np.max(np.abs(pad)) + 1e-6)
 
-    # Auto-Ducking chuẩn Studio: khi có giọng đọc thì hạ xuống 9%; khi nghỉ câu thì ngân lên 18%
-    ducking_gain = 0.18 - 0.09 * np.clip(voice_env * 2.5, 0.0, 1.0)
+    # Auto-Ducking chuẩn TikTok: khi có giọng đọc thì hạ xuống 15%; khi nghỉ câu thì ngân dồn dập lên 30%
+    ducking_gain = 0.30 - 0.15 * np.clip(voice_env * 2.5, 0.0, 1.0)
     fade_in = np.minimum(1.0, t / 1.0)
     fade_out = np.minimum(1.0, (t[-1] - t) / 1.5) if len(t) > 1 else 1.0
     return (pad * ducking_gain * fade_in * fade_out).astype(np.float32)
@@ -405,10 +405,24 @@ VOICE_PROFILES = {
     # ── NHÓM 1: CÁC PHONG CÁCH TIKTOK TRENDY HIỆN ĐẠI (MỚI) ───────────────
     "review_phim": {
         "voice": "vi-VN-HoaiMyNeural",
-        "pitch": "+4Hz",
-        "default_speed": 1.42,
+        "pitch": "+0Hz",
+        "default_speed": 1.40,
         "scene_gap": 0.05,
-        "desc": "Nữ Review Phim: Tốc độ cao 1.42x, dứt khoát, ngắt nhịp punchy cực cuốn",
+        "desc": "Nữ Review Phim: Tốc độ cao 1.40x, dứt khoát, ngắt nhịp punchy cực cuốn",
+    },
+    "vanthanhthu": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "+0Hz",
+        "default_speed": 1.34,
+        "scene_gap": 0.06,
+        "desc": "Nam Khoa Học Vũ Trụ / vanthanhthu09 (chuẩn video tham chiếu: Nam thanh niên miền Bắc, dứt khoát, nhanh 1.34x) ⭐",
+    },
+    "khoa_hoc": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "+0Hz",
+        "default_speed": 1.34,
+        "scene_gap": 0.06,
+        "desc": "Nam Khoa Học Vũ Trụ / vanthanhthu09",
     },
     "review": {
         "voice": "vi-VN-HoaiMyNeural",
@@ -534,7 +548,7 @@ def print_voices_table() -> None:
     print("-" * 84)
     print(f"{'MÃ GIỌNG (--voice)':<18} | {'TỐC ĐỘ':<7} | {'PITCH':<7} | {'MÔ TẢ PHONG CÁCH'}")
     print("-" * 84)
-    new_styles = ["review_phim", "gen_z", "giat_gan", "nam_review"]
+    new_styles = ["vanthanhthu", "review_phim", "gen_z", "giat_gan", "nam_review"]
     for code in new_styles:
         info = VOICE_PROFILES[code]
         spd = f"{info['default_speed']:.2f}x"
@@ -563,28 +577,85 @@ def _generate_edge_tts_audio(
     pitch_str: str = "+0Hz",
 ) -> Optional[np.ndarray]:
     """
-    Sinh audio tiếng Việt bằng Edge-TTS chất lượng cao (hỗ trợ tốc độ rate_percent và cao độ pitch_str).
-    Trả về numpy array float32 ở sample rate 24000Hz (hoặc None nếu lỗi mạng).
+    Sinh audio tiếng Việt bằng Edge-TTS chất lượng cao (hỗ trợ tốc độ rate_percent).
+    Tự động phòng vệ:
+    - Làm sạch các từ dễ bị lỗi filter của Azure (tích cóp -> tích góp, gỡ dấu ngoặc).
+    - Tự động bỏ pitch nếu pitch gây lỗi NoAudioReceived.
+    - Dự phòng sang gTTS (Chị Google chuẩn) nếu Edge-TTS bị nghẽn mạng để không bao giờ bị rơi về VITS robot thô ráp.
     """
-    try:
-        import asyncio
-        import edge_tts
-        import tempfile
-        import os
-        import subprocess
-        import imageio_ffmpeg
-        from scipy.io import wavfile
+    import asyncio
+    import edge_tts
+    import tempfile
+    import os
+    import re
+    import subprocess
+    import imageio_ffmpeg
+    from scipy.io import wavfile
 
-        rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
+    # 1. Chuẩn hóa & thay thế từ an toàn
+    t = text.strip()
+    t = re.sub(r'[\"“”()\[\]*#_~^<>|]', '', t)
+    t = t.replace('tích cóp', 'tích góp')
 
-        async def _run():
-            com = edge_tts.Communicate(text, voice, rate=rate_str, pitch=pitch_str)
+    rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
+    tmp_mp3 = None
+
+    # 2. Thử Edge-TTS với streaming
+    for attempt in range(2):
+        kwargs = {"rate": rate_str}
+        if pitch_str and pitch_str.startswith("-"):
+            kwargs["pitch"] = pitch_str
+        try:
+            com = edge_tts.Communicate(t, voice, **kwargs)
+            chunks = []
+            async def _collect():
+                async for chunk in com.stream():
+                    if chunk["type"] == "audio":
+                        chunks.append(chunk["data"])
+            asyncio.run(_collect())
+            if chunks:
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
+                    for c in chunks:
+                        f_mp3.write(c)
+                    tmp_mp3 = f_mp3.name
+                break
+        except Exception:
+            pass
+
+    # 3. Nếu Edge-TTS bị lỗi mạng/từ chối, dùng gTTS (giọng Chị Google cực tự nhiên, không bao giờ dùng VITS robot)
+    if not tmp_mp3:
+        try:
+            from gtts import gTTS
+            tts = gTTS(t, lang="vi")
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
                 tmp_mp3 = f_mp3.name
-            await com.save(tmp_mp3)
-            return tmp_mp3
+            tts.save(tmp_mp3)
+            atempo_val = max(0.5, min(2.0, 1.0 + rate_percent / 100.0))
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
+                tmp_wav = f_wav.name
+            ff = imageio_ffmpeg.get_ffmpeg_exe()
+            subprocess.run(
+                [ff, "-y", "-i", tmp_mp3, "-filter:a", f"atempo={atempo_val:.2f}", "-ar", "24000", "-ac", "1", tmp_wav],
+                check=True,
+                capture_output=True,
+            )
+            sr, data = wavfile.read(tmp_wav)
+            if os.path.exists(tmp_mp3):
+                os.remove(tmp_mp3)
+            if os.path.exists(tmp_wav):
+                os.remove(tmp_wav)
+            if data.dtype == np.int16:
+                return (data.astype(np.float32) / 32768.0).astype(np.float32)
+            elif data.dtype == np.int32:
+                return (data.astype(np.float32) / 2147483648.0).astype(np.float32)
+            return data.astype(np.float32)
+        except Exception as e_gtts:
+            print(f"[TTS Fallback Warning] {e_gtts}")
 
-        tmp_mp3 = asyncio.run(_run())
+    if not tmp_mp3:
+        return None
+
+    try:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
             tmp_wav = f_wav.name
 
@@ -606,8 +677,7 @@ def _generate_edge_tts_audio(
         elif data.dtype == np.int32:
             data = data.astype(np.float32) / 2147483648.0
         return data.astype(np.float32)
-    except Exception as e:
-        print(f"[Edge-TTS Fallback Warning] {e} -> Tự động dùng Local VITS thay thế.")
+    except Exception:
         return None
 
 
