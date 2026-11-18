@@ -366,6 +366,7 @@ def _master_and_mix(
     wav_path: Path,
     sfx_events: Optional[List[Tuple[float, str]]] = None,
     music_mood: str = "",
+    engine_name: str = "Edge-TTS Studio",
 ) -> Path:
     if vits_sr != sample_rate:
         target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
@@ -390,7 +391,7 @@ def _master_and_mix(
     wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
     lufs_ok = _normalize_loudness_lufs(wav_path, sample_rate, target_lufs=-14.0)
     lufs_tag = " + -14 LUFS" if lufs_ok else ""
-    print(f"[TTS Neural VITS Studio] Đã sinh giọng đọc (`facebook/mms-tts-vie` + Studio EQ + BGM{lufs_tag}) -> {wav_path.name}")
+    print(f"[TTS Studio Master] Đã sinh giọng đọc (`{engine_name}` + Studio EQ + BGM{lufs_tag}) -> {wav_path.name}")
     return wav_path
 
 
@@ -767,7 +768,13 @@ def synthesize_scene_voiceover(
 
     chunks.append(np.zeros(int(0.35 * working_sr), dtype=np.float32))
     _master_and_mix(
-        np.concatenate(chunks), working_sr, sample_rate, wav_path, sfx_events=sfx_events, music_mood=music_mood
+        np.concatenate(chunks),
+        working_sr,
+        sample_rate,
+        wav_path,
+        sfx_events=sfx_events,
+        music_mood=music_mood,
+        engine_name=f"Edge-TTS {edge_voice}" if use_edge else "facebook/mms-tts-vie",
     )
     return wav_path, timings
 
