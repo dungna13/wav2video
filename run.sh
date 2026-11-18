@@ -8,3 +8,4 @@ if [ -f "$PYTHON_BIN" ]; then
 else
     exec python3 "$SCRIPT_DIR/main.py" "$@"
 fi
+

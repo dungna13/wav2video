@@ -385,6 +385,8 @@ def _master_and_mix(
                 if end > idx:
                     final_mix[idx:end] += sfx[: end - idx]
     final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.90
+    wav_path = Path(wav_path)
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
     wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
     lufs_ok = _normalize_loudness_lufs(wav_path, sample_rate, target_lufs=-14.0)
     lufs_tag = " + -14 LUFS" if lufs_ok else ""
@@ -628,6 +630,7 @@ def synthesize_scene_voiceover(
     if "voice" in kwargs and kwargs["voice"]:
         voice_name = str(kwargs["voice"])
     wav_path = _resolve_wav_path(output_filename)
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
     import torch
 
     v_key = voice_name.lower().strip()
