@@ -146,6 +146,89 @@ def _split_balanced_groups(durations: List[float], k: int) -> List[List[int]]:
     return groups
 
 
+def _camera_to_natural_prose(cam_str: str, is_first: bool = True) -> str:
+    """
+    Chuyển đổi hướng chuyển động camera thành câu văn tiếng Anh tự nhiên.
+    Tránh tuyệt đối dùng ngoặc như `(zoom in)` khiến Gemini Omni 1.2 in chữ lên video.
+    """
+    c = cam_str.lower().replace("-", " ").replace("_", " ").strip()
+    if is_first:
+        if "zoom in" in c:
+            return "The camera slowly zooms in toward"
+        elif "zoom out" in c:
+            return "The camera slowly pulls back revealing"
+        elif "pan left" in c:
+            return "The camera smoothly pans left across"
+        elif "pan right" in c:
+            return "The camera smoothly pans right across"
+        elif "tilt up" in c:
+            return "The camera tilts upward showing"
+        elif "tilt down" in c:
+            return "The camera tilts downward showing"
+        elif "track" in c:
+            return "The camera smoothly tracks alongside"
+        elif "static" in c or "steady" in c:
+            return "A steady cinematic shot captures"
+        elif "close" in c:
+            return "An intimate close-up shot captures"
+        elif "wide" in c:
+            return "A wide cinematic establishing shot captures"
+        return "The camera smoothly moves toward"
+    else:
+        if "zoom in" in c:
+            return "smoothly zooming in toward"
+        elif "zoom out" in c:
+            return "smoothly pulling back to reveal"
+        elif "pan left" in c:
+            return "smoothly panning left across"
+        elif "pan right" in c:
+            return "smoothly panning right across"
+        elif "tilt up" in c:
+            return "smoothly tilting upward showing"
+        elif "tilt down" in c:
+            return "smoothly tilting downward showing"
+        elif "track" in c:
+            return "smoothly tracking alongside"
+        elif "static" in c or "steady" in c:
+            return "holding a steady shot of"
+        elif "close" in c:
+            return "cutting smoothly to an intimate close-up of"
+        elif "wide" in c:
+            return "smoothly expanding to a wider shot of"
+        return "smoothly transitioning toward"
+
+
+def _clean_for_omni(text: str) -> str:
+    """
+    Làm sạch 100% cú pháp markdown, ngoặc đơn/kép, dấu nháy, và các ký tự đặc biệt
+    khiến Gemini Omni 1.2 (mô hình multimodal có khả năng in chữ) lầm tưởng là phụ đề/tiêu đề cần vẽ lên video.
+    """
+    if not text:
+        return ""
+    # Thay thế tàn dư stickman thành person nếu có
+    text = re.sub(
+        r"\b(a\s+|the\s+)?(minimalist\s+)?stickman(\s+character)?\s*(with\s+matte-black\s+round\s+head\s*)?",
+        "person ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # Xóa ký tự markdown: *, _, `, #, ~, >, |, \
+    text = re.sub(r"[*_`#~>|\\]", " ", text)
+    # Xóa toàn bộ các loại ngoặc (), [], {}, <>
+    text = re.sub(r"[\(\)\[\]\{\}<>]", " ", text)
+    # Xóa nháy kép, nháy đơn gây hiểu lầm là text cần in
+    text = text.replace('"', " ").replace("'", " ")
+    # Xóa dấu chấm phẩy, dấu hai chấm liên tiếp
+    text = text.replace(";", ", ")
+    text = re.sub(r":{2,}", " ", text)
+    # Xóa các cụm từ camera trùng lặp ở đầu prompt nếu có
+    text = re.sub(r"^(the\s+camera\s+|camera\s+)", "", text, flags=re.IGNORECASE).strip()
+    # Chuẩn hóa khoảng trắng và dấu phẩy liên tiếp
+    text = re.sub(r",\s*,+", ", ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text.strip(" ,.")
+
+
 def bundle_scenes_for_flow(
     scenes: List[Dict[str, Any]],
     durations: List[float],
@@ -172,13 +255,18 @@ def bundle_scenes_for_flow(
         if cur_group:
             groups.append(cur_group)
 
-    no_human_suffix = ", no cartoon, no 3D animation, no anime, no plastic doll skin, no distorted fingers, no text, no watermark"
     human_cinematic_dna = (
         "hyper-realistic 35mm film photography, 8k resolution, authentic detailed human skin pores, subtle candid expression, "
         "volumetric cinematic lighting, shallow depth of field, natural candid motion blur, master documentary shot"
     )
-    base_style = style_anchor_en.strip().rstrip(".") if style_anchor_en else "cinematic human documentary"
+    base_style = _clean_for_omni(style_anchor_en) if style_anchor_en else "cinematic human documentary"
     style = f"{base_style}, {human_cinematic_dna}"
+
+    negative_directive = (
+        "Textless video with a clean frame. Strictly no on-screen text, no titles, "
+        "no subtitles, no captions, no typography, no words, no letters, no symbols, "
+        "no watermark, no markdown syntax, no cartoon, no 3D animation, no plastic doll skin"
+    )
 
     blocks: List[Dict[str, Any]] = []
     t_cursor = 0.0
@@ -191,28 +279,32 @@ def bundle_scenes_for_flow(
         scene_descs = []
         for pos, sc_idx in enumerate(idxs):
             sc = scenes[sc_idx]
-            cam = (sc.get("camera_motion") or sc.get("camera") or "zoom_in").replace("_", " ")
-            p = str(sc.get("image_prompt_en", "")).strip().rstrip(".")
-            p_clean = re.sub(r"^(A\s+|The\s+)?(minimalist\s+)?stickman(\s+character)?\s+(with\s+matte-black\s+round\s+head\s+)?", "person ", p, flags=re.I)
+            raw_cam = str(sc.get("camera_motion") or sc.get("camera") or "zoom_in")
+            p_clean = _clean_for_omni(str(sc.get("image_prompt_en", "")))
+            cam_phrase = _camera_to_natural_prose(raw_cam, is_first=(pos == 0))
             if pos == 0:
-                scene_descs.append(f"({cam}) {p_clean}")
+                scene_descs.append(f"{cam_phrase} {p_clean}")
             else:
-                scene_descs.append(f"smoothly transitioning ({cam}) into {p_clean}")
-        seq = "; ".join(scene_descs)
+                scene_descs.append(f"then {cam_phrase} {p_clean}")
+        seq = ", ".join(scene_descs)
 
         if b_idx == 1:
-            shot_type = "9:16 vertical photorealistic cinematic human documentary footage, 35mm film"
+            shot_type = "Vertical 9:16 photorealistic cinematic human documentary footage, 35mm film"
             flow_prompt = (
                 f"{shot_type}, {style}. "
-                f"Continuous evolving camera sequence: {seq}. "
-                f"No text, no watermark{no_human_suffix}."
+                f"{seq}. "
+                f"{negative_directive}."
             )
         else:
             flow_prompt = (
-                f"9:16 vertical seamless continuation from the exact ending frame and lighting of previous shot, {style}. "
+                f"Vertical 9:16 seamless continuation from the exact ending frame and lighting of previous shot, {style}. "
                 f"Continuous camera motion: {seq}. "
-                f"Maintain identical human characters, clothing, visual palette and atmosphere, no hard cut{no_human_suffix}."
+                f"Maintain identical human characters, clothing, visual palette and atmosphere, no hard cuts. "
+                f"{negative_directive}."
             )
+
+        # Đảm bảo toàn bộ prompt không còn một ký tự markdown hay ngoặc nào
+        flow_prompt = _clean_for_omni(flow_prompt) + "."
 
         blocks.append(
             {
@@ -238,17 +330,24 @@ def format_flow_prompts_txt(
 ) -> str:
     lines = [
         "=" * 88,
-        f"GOOGLE FLOW PROMPTS — {topic_title}",
-        f"Mode: {intent_mode} | Tổng audio: {total_audio_sec:.2f}s | Số block: {len(blocks)}",
+        f"GOOGLE FLOW PROMPTS (OMNI 1.2 & VEO) — {topic_title}",
+        f"Mode: {intent_mode} | Tổng audio: {total_audio_sec:.2f}s | Số block: {len(blocks)} | Tỷ lệ: 9:16 dọc",
         "=" * 88,
-        "HƯỚNG DẪN:",
-        f"  1. Mở Google Flow -> chọn tỷ lệ dọc 9:16.",
-        f"  2. Block 1: tạo clip mới bằng Prompt Block 1.",
-        f"  3. Từ Block 2 trở đi: bấm EXTEND trên clip trước (hoặc dùng frame cuối làm Start Frame)",
-        f"     rồi dán Prompt Block tương ứng để giữ chuyển động liền mạch không vết cắt.",
-        f"  4. Tải các clip về thư mục: {clips_dir}",
-        f"     Đặt tên theo thứ tự: 1.mp4, 2.mp4, ... (hoặc 1 file dài duy nhất nếu bạn Extend liên hoàn).",
-        f"  5. Chạy lệnh dựng phim:",
+        "HƯỚNG DẪN TẠO VIDEO VỚI GEMINI OMNI 1.2 FLASH (KHÔNG BỊ DÍNH CHỮ / MARKDOWN):",
+        "  1. Tại Google Flow (hoặc Google Labs Video):",
+        "     - Model: Chọn 'Gemini Omni 1.2 Flash' (chất lượng hình người & độ nét vượt trội so với Veo).",
+        "     - Tỷ lệ khung hình: Chọn 9:16 (dọc chuẩn TikTok/Reels).",
+        "  2. Cách copy prompt:",
+        "     - CHỈ COPY NỘI DUNG NẰM GIỮA HAI DÒNG KẺ GẠCH ĐỨT '>>> BẮT ĐẦU COPY PROMPT <<<'",
+        "     - Tuyệt đối không copy tiêu đề Block, không copy lời bình tiếng Việt.",
+        "  3. Quy trình ghép liên hoàn (Seamless Chain):",
+        "     - Block 1: Bấm tạo clip mới bằng Prompt Block 1.",
+        "     - Block 2, 3, 4: Bấm nút EXTEND trên clip trước đó (hoặc dùng frame cuối làm Start Frame),",
+        "       rồi dán Prompt của Block tương ứng để nhân vật, góc máy và ánh sáng nối tiếp 100%.",
+        f"  4. Sau khi tải các clip về:",
+        f"     - Lưu toàn bộ file mp4 vào: {clips_dir}",
+        f"     - Đặt tên theo thứ tự: 1.mp4, 2.mp4, ... (hoặc 1 file dài duy nhất nếu bạn Extend liên hoàn).",
+        f"  5. Dựng video hoàn chỉnh:",
         f"     python main.py --flow-render \"{run_dir}\"",
         "=" * 88,
         "",
@@ -257,10 +356,12 @@ def format_flow_prompts_txt(
         sc_range = f"Cảnh {b['scene_indices'][0]}" if len(b["scene_indices"]) == 1 else f"Cảnh {b['scene_indices'][0]}–{b['scene_indices'][-1]}"
         action = "TẠO CLIP MỚI" if b["block_index"] == 1 else "BẤM EXTEND / START FRAME TỪ CLIP TRƯỚC"
         lines += [
-            f"--- BLOCK {b['block_index']}/{len(blocks)} | {sc_range} | Cần: {b['duration_sec']:.2f}s ({b['start_sec']}s -> {b['end_sec']}s) | [{action}] ---",
-            f"Lời đọc: {b['narration_vn']}",
-            "PROMPT COPY:",
+            "━" * 80,
+            f"BLOCK {b['block_index']}/{len(blocks)} | {sc_range} | Cần: {b['duration_sec']:.2f}s ({b['start_sec']}s -> {b['end_sec']}s) | [{action}]",
+            f"Lời bình VN: {b['narration_vn']}",
+            f"----------------- >>> BẮT ĐẦU COPY PROMPT BLOCK {b['block_index']} (DÁN VÀO FLOW) <<< -----------------",
             b["flow_prompt"],
+            f"----------------- >>> HẾT PROMPT BLOCK {b['block_index']} <<< -----------------",
             "",
         ]
     return "\n".join(lines)

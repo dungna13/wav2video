@@ -190,6 +190,72 @@ class TestCliArgsParsing(unittest.TestCase):
         self.assertTrue(opts["flow_prep"])
 
 
+class TestOmniFlowPromptSanitization(unittest.TestCase):
+    """Kiểm tra bộ lọc prompt cho Google Flow (Gemini Omni 1.2 Flash) chống dính markdown / chữ lên video."""
+
+    def test_strip_markdown_and_parentheses(self):
+        from graph.flow_bundler import _clean_for_omni, _camera_to_natural_prose
+
+        raw_text = "**cinematic** photo of (zoom in) [sharp focus] `a businessman` talking #startup."
+        clean = _clean_for_omni(raw_text)
+        self.assertNotIn("*", clean)
+        self.assertNotIn("(", clean)
+        self.assertNotIn(")", clean)
+        self.assertNotIn("[", clean)
+        self.assertNotIn("]", clean)
+        self.assertNotIn("`", clean)
+        self.assertNotIn("#", clean)
+
+        cam_first = _camera_to_natural_prose("zoom_in", is_first=True)
+        self.assertIn("The camera slowly zooms in", cam_first)
+        self.assertNotIn("(", cam_first)
+
+        cam_next = _camera_to_natural_prose("pan_right", is_first=False)
+        self.assertIn("smoothly panning right", cam_next)
+        self.assertNotIn("(", cam_next)
+
+    def test_bundle_scenes_pure_natural_prose(self):
+        from graph.flow_bundler import bundle_scenes_for_flow
+
+        scenes = [
+            {
+                "narration_vn": "Năm 1954 tại lòng chảo Điện Biên Phủ.",
+                "image_prompt_en": "**historical** trenches with (smoke) under overcast sky",
+                "camera": "zoom_in",
+            },
+            {
+                "narration_vn": "Những khẩu đại pháo được kéo qua dốc núi.",
+                "image_prompt_en": "soldiers hauling heavy artillery through deep mud",
+                "camera": "pan_right",
+            },
+        ]
+        durations = [7.0, 7.0]
+        blocks = bundle_scenes_for_flow(
+            scenes=scenes,
+            durations=durations,
+            style_anchor_en="35mm documentary photography",
+            max_blocks=1,
+        )
+
+        self.assertEqual(len(blocks), 1)
+        prompt = blocks[0]["flow_prompt"]
+
+        # Tuyệt đối không chứa ký tự markdown
+        self.assertNotIn("*", prompt)
+        self.assertNotIn("(", prompt)
+        self.assertNotIn(")", prompt)
+        self.assertNotIn("[", prompt)
+        self.assertNotIn("]", prompt)
+        self.assertNotIn("`", prompt)
+        self.assertNotIn("#", prompt)
+
+        # Chứa chỉ thị chống vẽ chữ lên màn hình cho Omni 1.2
+        self.assertIn("Textless video", prompt)
+        self.assertIn("no on-screen text", prompt)
+        self.assertIn("no subtitles", prompt)
+        self.assertIn("no markdown syntax", prompt)
+
+
 if __name__ == "__main__":
     unittest.main()
 
