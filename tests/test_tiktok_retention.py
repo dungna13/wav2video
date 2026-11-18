@@ -185,9 +185,14 @@ class TestCliArgsParsing(unittest.TestCase):
         self.assertEqual(opts["sub_style"], "tiktok_white")
 
     def test_batch_flag(self):
-        opts = _parse_args(["--batch", "my_topics.txt", "--sub-style", "tiktok_yellow"])
+        opts = _parse_args(["--batch", "my_topics.txt", "--sub-style", "tiktok_yellow", "--flow-prep"])
         self.assertEqual(opts["batch"], "my_topics.txt")
         self.assertTrue(opts["flow_prep"])
+
+    def test_default_auto_web_mode(self):
+        opts = _parse_args(["Chủ đề"])
+        self.assertFalse(opts["flow_prep"], "Mặc định phải là tự động tạo từ A-Z (không dừng lại ở Flow prep)")
+        self.assertEqual(opts["voice"], "review_phim", "Mặc định giọng Nữ Review Phim 1.42x dồn dập như TikTok")
 
 
 class TestOmniFlowPromptSanitization(unittest.TestCase):

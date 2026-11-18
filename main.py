@@ -42,7 +42,7 @@ from prompts.angle_miner_prompt import render_angle_miner_prompt
 
 def _parse_args(argv) -> Dict[str, Any]:
     opts: Dict[str, Any] = {
-        "mode": "FLOW_CINEMATIC",
+        "mode": "WEB_CINEMATIC",
         "model": "auto",
         "ingest": "",
         "list_book": None,
@@ -51,7 +51,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "chunk": 0,
         "daily": False,
         "logs": False,
-        "flow_prep": True,
+        "flow_prep": False,  # MẶC ĐỊNH FALSE: TỰ ĐỘNG KÉO VIDEO TỪ WEB VÀ DỰNG HOÀN CHỈNH TỪ A-Z (KHÔNG CẦN QUA FLOW)
         "flow_render": "",
         "clean": "",
         "hitl": "",
@@ -62,8 +62,8 @@ def _parse_args(argv) -> Dict[str, Any]:
         "list_voices": False,
         "block_sec": 14.0,
         "max_blocks": 2,
-        "speed": 1.35,
-        "voice": "hoai_my",
+        "speed": 1.42,
+        "voice": "review_phim",  # MẶC ĐỊNH GIỌNG NỮ REVIEW PHIM DỒN DẬP 1.42x CUỐN HÚT NHƯ TIKTOK VANTHANHTHU09
         "topic": "",
     }
     words = []
@@ -90,7 +90,7 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["daily"] = True
         elif a == "--logs":
             opts["logs"] = True
-        elif a == "--flow-prep":
+        elif a in ("--flow-prep", "--flow"):
             opts["flow_prep"] = True
         elif a == "--flow-render":
             opts["flow_render"] = next(it, "").strip()

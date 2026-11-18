@@ -47,12 +47,19 @@ def _get_local_vits_vietnamese_model():
 
 def _resolve_bgm_file(music_mood: str = "") -> Optional[Path]:
     bgm_dir = Path(__file__).resolve().parent.parent / "assets" / "bgm"
-    if music_mood and bgm_dir.exists():
+    if not bgm_dir.exists():
+        return None
+    # Nếu có mood khớp tên file cụ thể
+    if music_mood:
         slug = re.sub(r"[^a-z0-9]+", "_", music_mood.lower()).strip("_")
         for candidate in (f"{slug}.mp3", f"{slug}.wav"):
             p = bgm_dir / candidate
             if p.exists():
                 return p
+    # Mặc định ưu tiên bản nhạc Dark Mystery Suspense đập bass kịch tính chuẩn phong cách review TikTok cuốn hút
+    suspense_bgm = bgm_dir / "cinematic_mystery_suspense.mp3"
+    if suspense_bgm.exists():
+        return suspense_bgm
     default_bgm = bgm_dir / "cinematic_piano_ambient.mp3"
     return default_bgm if default_bgm.exists() else None
 

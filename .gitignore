@@ -13,6 +13,7 @@ output_audio/
 assets/continuity_state/
 *.mp4
 *.mp3
+!assets/bgm/*.mp3
 *.wav
 *.avi
 *.ass
