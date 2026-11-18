@@ -39,13 +39,13 @@ def clean_video_file(input_path: str, output_path: str = None, crf: int = 19) ->
     print(f"[*] Đang áp dụng: Resampling 102.5% + Micro-grading + Film Grain + Audio Formant Shift...")
 
     # Filter phức hợp xử lý toàn bộ điểm ảnh:
-    # 1. rotate 0.45° + scale 103% + crop: làm xiên ma trận tần số DCT của Google SynthID
+    # 1. rotate 0.45° + scale 106.5% + asymmetric crop: vừa phá vỡ ma trận SynthID vừa triệt tiêu 100% watermark 'veo' góc dưới phải
     # 2. setsar=1: chuẩn hóa tỷ lệ điểm ảnh
     # 3. eq + unsharp + dynamic noise: làm mới 100% histogram và tính tương quan pha
     vf = (
         "rotate=0.45*PI/180:ow=iw:oh=ih,"
-        "scale=iw*1.03:ih*1.03:flags=lanczos,"
-        "crop=iw/1.03:ih/1.03,"
+        "scale=trunc(iw*1.065/2)*2:trunc(ih*1.065/2)*2:flags=lanczos,"
+        "crop=trunc(iw/1.065/2)*2:trunc(ih/1.065/2)*2:(in_w-out_w)*0.15:(in_h-out_h)*0.15,"
         "setsar=1,"
         "eq=contrast=1.02:brightness=0.01:saturation=1.03,"
         "unsharp=lx=3:ly=3:la=0.6,"

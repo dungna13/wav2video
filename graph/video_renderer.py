@@ -593,17 +593,30 @@ def render_flow_video(
             )
         elif 0.0 < src_dur < target_len and src_dur >= target_len * 0.65:
             ratio = target_len / src_dur
-            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},setpts={ratio:.4f}*PTS,fps={fps},setsar=1"
+            # Tự động triệt tiêu 100% Watermark 'veo' góc dưới bên phải bằng Micro-Zoom 6.5% & Asymmetric Crop
+            vf = (
+                f"scale=trunc({w}*1.065/2)*2:trunc({h}*1.065/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:(in_w-out_w)*0.15:(in_h-out_h)*0.15{harm},"
+                f"setpts={ratio:.4f}*PTS,fps={fps},setsar=1"
+            )
             cmd = [ff, "-y", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
             cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
             _run(cmd)
         elif 0.0 < src_dur < target_len * 0.65:
-            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
+            vf = (
+                f"scale=trunc({w}*1.065/2)*2:trunc({h}*1.065/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:(in_w-out_w)*0.15:(in_h-out_h)*0.15{harm},"
+                f"fps={fps},setsar=1"
+            )
             cmd = [ff, "-y", "-stream_loop", "-1", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
             cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
             _run(cmd)
         else:
-            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{harm},fps={fps},setsar=1"
+            vf = (
+                f"scale=trunc({w}*1.065/2)*2:trunc({h}*1.065/2)*2:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:(in_w-out_w)*0.15:(in_h-out_h)*0.15{harm},"
+                f"fps={fps},setsar=1"
+            )
             cmd = [ff, "-y", "-i", str(src_path), "-t", f"{target_len:.3f}", "-vf", vf, "-an"]
             cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(out_clip)]
             _run(cmd)
