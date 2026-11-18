@@ -222,24 +222,25 @@ def _search_mixkit_candidates(
     return out
 
 
-def _fetch_pollinations_image(prompt: str, dest: Path, seed: int, width: int, height: int, attempts: int = 3) -> bool:
+def _fetch_pollinations_image(prompt: str, dest: Path, seed: int, width: int, height: int, attempts: int = 2) -> bool:
     url = (
         f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}"
-        f"?model={POLLINATIONS_MODEL}&width={width}&height={height}&seed={seed}&nologo=true"
+        f"?width={width}&height={height}&seed={seed}&nologo=true"
     )
     for attempt in range(1, attempts + 1):
         try:
-            resp = requests.get(url, timeout=60)
+            resp = requests.get(url, timeout=25)
             ctype = resp.headers.get("content-type", "")
             if resp.status_code == 200 and "image" in ctype and len(resp.content) > MIN_IMAGE_BYTES:
                 Image.open(io.BytesIO(resp.content)).convert("RGB").save(str(dest), quality=95)
                 return True
-            wait = 12 if resp.status_code in (402, 429) else 4
-            print(f"   [Pollinations] HTTP {resp.status_code} (lần {attempt}/{attempts}) -> chờ {wait}s")
+            if resp.status_code in (402, 429):
+                print(f"   [Pollinations] Endpoint miễn phí tạm giới hạn ({resp.status_code}) -> Chuyển ngay sang video stock/tư liệu.")
+                return False
+            print(f"   [Pollinations] HTTP {resp.status_code} (lần {attempt}/{attempts})")
         except Exception as e:
-            wait = 4
-            print(f"   [Pollinations] {type(e).__name__} (lần {attempt}/{attempts}) -> chờ {wait}s")
-        time.sleep(wait)
+            print(f"   [Pollinations] {type(e).__name__} (lần {attempt}/{attempts})")
+        time.sleep(1)
     return False
 
 
@@ -432,7 +433,7 @@ def _select_best_stock_video(
     Thử tối đa `max_candidates` video stock chưa trùng ID, chấm keyframe local 0-token.
     Trả về `(accepted_cand, backup_usable_cand_info, tried_count)`.
     """
-    no_human = intent_mode == "NO_HUMAN_BROLL"
+    no_human = False if intent_mode in ("WEB_CINEMATIC", "FLOW_CINEMATIC", "HUMAN_NO_LIPSYNC") else (intent_mode == "NO_HUMAN_BROLL")
     query = sc.get("stock_query_en", "")
     prompt_en = sc.get("image_prompt_en", "")
     cands = _collect_stock_candidates(query, width, height, used_ids | bad_ids, no_human=no_human, limit=max(max_candidates, 4))

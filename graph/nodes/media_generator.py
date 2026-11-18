@@ -170,7 +170,7 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
         raise RuntimeError("media_generator_node: state không có `scenes` — prompt_architect_node chưa chạy hoặc thất bại.")
     style_anchor = state.get("style_anchor_en", "")
     genre = state.get("genre", "")
-    effective_mode = state.get("effective_intent_mode") or "NO_HUMAN_BROLL"
+    effective_mode = state.get("effective_intent_mode") or state.get("intent_mode") or "WEB_CINEMATIC"
 
     seed = abs(hash(topic_title)) % 800000 + 100000
     run_id = f"run_{_slugify_vn(topic_title)}_{time.strftime('%m%d_%H%M%S')}"
