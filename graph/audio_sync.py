@@ -393,77 +393,158 @@ def _resolve_wav_path(output_filename: Any) -> Path:
 
 
 VOICE_PROFILES = {
-    # 1. Giọng Nữ truyền cảm TikTok (Khuyên dùng - cực tự nhiên, biểu cảm sắc thái phong phú)
+    # ── NHÓM 1: CÁC PHONG CÁCH TIKTOK TRENDY HIỆN ĐẠI (MỚI) ───────────────
+    "review_phim": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+4Hz",
+        "default_speed": 1.42,
+        "scene_gap": 0.05,
+        "desc": "Nữ Review Phim: Tốc độ cao 1.42x, dứt khoát, ngắt nhịp punchy cực cuốn",
+    },
+    "review": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+4Hz",
+        "default_speed": 1.42,
+        "scene_gap": 0.05,
+        "desc": "Nữ Review Phim / Drama (tốc độ cao 1.42x)",
+    },
+    "gen_z": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+9Hz",
+        "default_speed": 1.38,
+        "scene_gap": 0.07,
+        "desc": "Nữ Gen Z: Tươi sáng, năng động, bắt trend TikTok, cao độ +9Hz",
+    },
+    "genz": {
+        "voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+9Hz",
+        "default_speed": 1.38,
+        "scene_gap": 0.07,
+        "desc": "Nữ Gen Z bắt trend TikTok",
+    },
+    "giat_gan": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "-6Hz",
+        "default_speed": 1.36,
+        "scene_gap": 0.08,
+        "desc": "Nam Kể Chuyện Giật Gân: Trầm bí ẩn, dồn nhịp kịch tính, tài liệu bí ẩn",
+    },
+    "bi_an": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "-6Hz",
+        "default_speed": 1.36,
+        "scene_gap": 0.08,
+        "desc": "Nam Kể Chuyện Giật Gân / Bí Ẩn",
+    },
+    "nam_review": {
+        "voice": "vi-VN-NamMinhNeural",
+        "pitch": "+5Hz",
+        "default_speed": 1.40,
+        "scene_gap": 0.06,
+        "desc": "Nam Review Hiện Đại: Nhanh, hiện đại, dứt khoát (tài chính/công nghệ)",
+    },
+
+    # ── NHÓM 2: CÁC PHONG CÁCH TRUYỀN THỐNG ──────────────────────────────
     "hoai_my": {
         "voice": "vi-VN-HoaiMyNeural",
         "pitch": "+0Hz",
+        "default_speed": 1.35,
+        "scene_gap": 0.10,
         "desc": "Nữ Hoài My truyền cảm, cuốn hút chuẩn TikTok",
     },
     "nu": {
         "voice": "vi-VN-HoaiMyNeural",
         "pitch": "+0Hz",
+        "default_speed": 1.35,
+        "scene_gap": 0.10,
         "desc": "Nữ Hoài My truyền cảm",
     },
     "nu_nhe_nhang": {
         "voice": "vi-VN-HoaiMyNeural",
         "pitch": "-5Hz",
+        "default_speed": 1.25,
+        "scene_gap": 0.14,
         "desc": "Nữ nhẹ nhàng, sâu lắng, chill",
     },
     "nu_tre": {
         "voice": "vi-VN-HoaiMyNeural",
         "pitch": "+8Hz",
+        "default_speed": 1.35,
+        "scene_gap": 0.10,
         "desc": "Nữ trẻ trung, sôi động",
     },
-    # 2. Giọng Nam điện ảnh & trầm ấm
     "nam_tram": {
         "voice": "vi-VN-NamMinhNeural",
         "pitch": "-10Hz",
+        "default_speed": 1.30,
+        "scene_gap": 0.12,
         "desc": "Nam trầm ấm điện ảnh (dày dặn, uy quyền, phim tài liệu/bí ẩn)",
     },
     "tram": {
         "voice": "vi-VN-NamMinhNeural",
         "pitch": "-10Hz",
+        "default_speed": 1.30,
+        "scene_gap": 0.12,
         "desc": "Nam trầm ấm điện ảnh",
     },
     "nam_tre": {
         "voice": "vi-VN-NamMinhNeural",
         "pitch": "+6Hz",
+        "default_speed": 1.35,
+        "scene_gap": 0.10,
         "desc": "Nam trẻ trung, dứt khoát, hiện đại",
     },
     "nam_minh": {
         "voice": "vi-VN-NamMinhNeural",
         "pitch": "+0Hz",
+        "default_speed": 1.30,
+        "scene_gap": 0.12,
         "desc": "Nam Minh nguyên bản",
     },
     "nam": {
         "voice": "vi-VN-NamMinhNeural",
         "pitch": "-8Hz",
+        "default_speed": 1.30,
+        "scene_gap": 0.12,
         "desc": "Nam trầm tự nhiên",
     },
 }
 
 
-def list_available_voices() -> Dict[str, Dict[str, str]]:
+def list_available_voices() -> Dict[str, Dict[str, Any]]:
     """Trả về danh sách các profile giọng đọc chuẩn TikTok có sẵn."""
     return {k: dict(v) for k, v in VOICE_PROFILES.items()}
 
 
 def print_voices_table() -> None:
     """In bảng tra cứu giọng đọc thân thiện ra terminal."""
-    print("=" * 72)
-    print("🎙️ DANH SÁCH GIỌNG ĐỌC TIẾNG VIỆT CHUẨN TIKTOK (EDGE-TTS / LOCAL VITS)")
-    print("=" * 72)
-    print(f"{'MÃ GIỌNG (--voice)':<18} | {'PITCH':<7} | {'MÔ TẢ PHONG CÁCH'}")
-    print("-" * 72)
-    for code, info in VOICE_PROFILES.items():
+    print("=" * 84)
+    print("🎙️ DANH SÁCH GIỌNG ĐỌC & PHONG CÁCH TIKTOK TRENDY MỚI (EDGE-TTS / STUDIO)")
+    print("=" * 84)
+    print("🔥 PHONG CÁCH MỚI (REVIEW PHIM / GEN Z / GIẬT GÂN):")
+    print("-" * 84)
+    print(f"{'MÃ GIỌNG (--voice)':<18} | {'TỐC ĐỘ':<7} | {'PITCH':<7} | {'MÔ TẢ PHONG CÁCH'}")
+    print("-" * 84)
+    new_styles = ["review_phim", "gen_z", "giat_gan", "nam_review"]
+    for code in new_styles:
+        info = VOICE_PROFILES[code]
+        spd = f"{info['default_speed']:.2f}x"
+        print(f"{code:<18} | {spd:<7} | {info['pitch']:<7} | {info['desc']}")
+
+    print("\n🏛️ PHONG CÁCH TRUYỀN THỐNG / KỂ CHUYỆN ĐIỆN ẢNH:")
+    print("-" * 84)
+    for code in ["hoai_my", "nam_tram", "nu_nhe_nhang", "nam_tre"]:
+        info = VOICE_PROFILES[code]
+        spd = f"{info['default_speed']:.2f}x"
         is_default = " ⭐ (Mặc định)" if code == "hoai_my" else ""
-        print(f"{code:<18} | {info['pitch']:<7} | {info['desc']}{is_default}")
-    print("-" * 72)
-    print("💡 Mẹo: Sử dụng lệnh:")
-    print("   python main.py --voice hoai_my \"Chủ đề của bạn\"   (Nữ truyền cảm)")
-    print("   python main.py --voice nam_tram \"Chủ đề của bạn\"  (Nam trầm điện ảnh)")
-    print("   python main.py --voice nu_nhe_nhang \"Chủ đề...\"   (Nữ nhẹ nhàng, sách)")
-    print("=" * 72)
+        print(f"{code:<18} | {spd:<7} | {info['pitch']:<7} | {info['desc']}{is_default}")
+    print("-" * 84)
+    print("💡 GỢI Ý CHẠY PHONG CÁCH MỚI:")
+    print("   python main.py --voice review_phim \"Chủ đề...\"  (🔥 Nữ Review Phim / Drama cực dồn dập)")
+    print("   python main.py --voice gen_z       \"Chủ đề...\"  (✨ Nữ Gen Z tươi tắn bắt trend)")
+    print("   python main.py --voice giat_gan    \"Chủ đề...\"  (⚡ Nam kể chuyện kịch tính, giật tít)")
+    print("   python main.py --voice nam_review  \"Chủ đề...\"  (🚀 Nam review tài chính, công nghệ)")
+    print("=" * 84)
 
 
 def _generate_edge_tts_audio(
@@ -543,8 +624,10 @@ def synthesize_scene_voiceover(
     profile = VOICE_PROFILES.get(v_key, VOICE_PROFILES["hoai_my"])
     edge_voice = profile["voice"]
     pitch_str = profile["pitch"]
+    eff_speed = profile.get("default_speed", speed_rate) if (abs(speed_rate - 1.35) < 0.01 and "default_speed" in profile) else speed_rate
+    eff_gap = profile.get("scene_gap", scene_gap_sec)
     use_edge = v_key not in ("mms", "vits", "local")
-    rate_percent = int((speed_rate - 1.0) * 100) if speed_rate > 0 else 0
+    rate_percent = int((eff_speed - 1.0) * 100) if eff_speed > 0 else 0
 
     lead = 0.15
     timings: List[Tuple[float, float]] = []
@@ -573,8 +656,8 @@ def synthesize_scene_voiceover(
                 if cue != "none":
                     sfx_events.append((max(0.0, cursor - 0.08), cue))
             chunks.append(audio)
-            chunks.append(np.zeros(int(scene_gap_sec * working_sr), dtype=np.float32))
-            cursor += dur + scene_gap_sec
+            chunks.append(np.zeros(int(eff_gap * working_sr), dtype=np.float32))
+            cursor += dur + eff_gap
 
     if not use_edge:
         model, tokenizer = _get_local_vits_vietnamese_model()

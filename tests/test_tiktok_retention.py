@@ -48,7 +48,10 @@ class TestTikTokVoiceProfiles(unittest.TestCase):
 
     def test_voice_profiles_complete(self):
         voices = list_available_voices()
-        required_keys = ["hoai_my", "nam_tram", "nu_nhe_nhang", "nu_tre", "nam_tre", "nam_minh"]
+        required_keys = [
+            "review_phim", "gen_z", "giat_gan", "nam_review",
+            "hoai_my", "nam_tram", "nu_nhe_nhang", "nu_tre", "nam_tre", "nam_minh"
+        ]
         for key in required_keys:
             self.assertIn(key, voices, f"Thiếu profile giọng: {key}")
             self.assertIn("voice", voices[key])
