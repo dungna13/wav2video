@@ -1,53 +1,49 @@
-# 🎬 HƯỚNG DẪN QUY TRÌNH GOOGLE FLOW (NGƯỜI THẬT ĐIỆN ẢNH)
+# 🎬 HƯỚNG DẪN TẠO VIDEO TỰ ĐỘNG TỪ A-Z (CHUẨN TIKTOK TRIỆU VIEW)
 
-> Hệ thống đã được **tinh gọn và thống nhất 100%** vào quy trình tạo video **Người Thật Điện Ảnh (Photorealistic Cinematic)** với Google Flow. Đã loại bỏ hoàn toàn các luồng cũ (router 3 chế độ và người que).
+> Hệ thống đã được thiết kế lại **hoàn toàn tự động từ A-Z**: Tự động viết kịch bản giật tít, lồng giọng đọc Nữ Review Phim siêu cuốn (1.42x), hòa âm nhạc nền bí ẩn kịch tính (Dark Suspense Bass), tự động kéo video b-roll HD từ web (Mixkit / Pexels / Pixabay), ghép phụ đề Safe Zone và xuất thành phẩm ngay trong 1 lệnh duy nhất! **Không còn dính nhãn AI, không cần tạo prompt hay thao tác thủ công trên Google Flow.**
 
 ---
 
-## 🚀 QUY TRÌNH TẠO VIDEO 2 BƯỚC:
+## 🚀 CÁCH CHẠY 1 LỆNH DUY NHẤT TỪ A-Z (KHUYÊN DÙNG SỐ 1):
 
-### BƯỚC 1: Tạo Prompt Google Flow & Audio Giọng Đọc
-Chỉ cần chạy lệnh với chủ đề bạn muốn làm:
+Chỉ cần gõ chủ đề của bạn:
 ```bash
 cd /home/blue/Downloads/Projects/wav2video
-../.venv/bin/python main.py "Tư duy của người Do Thái giúp họ làm chủ đồng tiền" --voice hoai_my
+../.venv/bin/python main.py "Tại sao người trẻ không còn mặn mà mua nhà"
 ```
-*(Hoặc chọn `--voice nam_tram` cho giọng nam trầm điện ảnh)*
 
-#### 🎯 Máy sẽ tự động làm:
-1. Viết kịch bản người thật điện ảnh, tối ưu câu mở đầu (Hook 3s) giật tít.
-2. Sinh audio giọng đọc chuẩn TikTok (`-14 LUFS`).
-3. Chia các Block vừa khít Google Flow, viết sẵn các Prompt chuyên sâu:
-   - Tỷ lệ dọc **9:16**.
-   - Phong cách **35mm film photography, 8k resolution, volumetric cinematic lighting, shallow depth of field**.
-   - Chi tiết da người, biểu cảm tự nhiên, hành động thật (không nhìn chằm chằm ống kính, không biến dạng tay).
-   - Tự động liên kết mượt mà từ frame cuối của block trước (Seamless continuation).
-4. In các prompt ra màn hình + lưu vào file `flow_prompts.txt`.
-
----
-
-### BƯỚC 2: Dán vào Google Flow & Tải Clip
-1. Mở web **Google Flow**.
-2. Copy từng Block Prompt dán vào để tạo video.
-3. Tải các file video `.mp4` lưu vào thư mục `flow_clips/` mà máy vừa in ra (ví dụ: `1.mp4`, `2.mp4`).
+### 🎯 Máy sẽ tự động làm 100% trong ~30 giây:
+1. **Kịch bản & Hook 3s:** Viết kịch bản theo mô hình tương phản, giữ chân người xem ngay từ giây đầu tiên.
+2. **Giọng đọc Review Phim (1.42x):** Tự động dùng giọng Nữ Review Phim (`review_phim` - Hoài My +4Hz, ngắt nhịp siêu ngắn 0.05s) dồn dập, sắc sảo y hệt các kênh triệu view (như `vanthanhthu09`).
+3. **Nhạc nền bí ẩn kịch tính:** Tự động hòa âm bản nhạc **Cinematic Mystery / Suspense Bass** đập ngầm kịch tính ở mức 28% âm lượng, có tính năng Sidechain Ducking (nhạc tự hạ xuống khi giọng đọc cất lên).
+4. **Săn Footage HD thật từ Web:** Tự động tìm và tải các đoạn video stock HD thật từ web (Mixkit, Pexels, Pixabay) cho từng cảnh, cắt đúng nhịp câu thoại.
+5. **Dựng & Xuất thành phẩm:** Tự động crop 9:16 dọc, vi hạt film grain, phụ đề vàng viền đen Safe Zone và xuất ra:
+   - 🎬 `final_master.mp4`: Video hoàn chỉnh sẵn sàng đăng TikTok (100% không bị gắn nhãn AI).
+   - 🖼️ `cover.jpg`: Ảnh bìa TikTok 9:16 chuẩn lưới hiển thị profile.
+   - 📋 `post_info.txt`: Tiêu đề + Caption gợi ý + 7 Hashtags xu hướng.
 
 ---
 
-### BƯỚC 3: Ráp Video Hoàn Chỉnh & Làm Sạch Anti-AI
-Chạy đúng 1 lệnh render (đường dẫn thư mục đã được in sẵn ở cuối Bước 1):
+## 🎙️ CÁC TÙY CHỌN MÀU GIỌNG KHÁC (NẾU MUỐN THAY ĐỔI):
 ```bash
-../.venv/bin/python main.py --flow-render "workspace/flow_Tu_duy_cua_nguoi_Do_Thai_xxxx"
-```
+# Giọng Nữ Review Phim / Drama dồn nhịp, kịch tính (Mặc định):
+../.venv/bin/python main.py --voice review_phim "Chủ đề..."
 
-#### 📦 Kết quả nhận được ngay trong thư mục:
-- 🎬 `final_master_clean.mp4`: Video hoàn chỉnh đã khớp audio, thêm phụ đề TikTok Safe Zone (viền đen chữ vàng không bị nút like/share che), phủ vi hạt film grain và micro-tilt phá mã AI SynthID.
-- 🖼️ `cover.jpg`: Ảnh bìa TikTok 9:16 có tiêu đề giật tít đặt đúng tâm lưới trang cá nhân.
-- 📋 `post_info.txt`: Tiêu đề + Caption gợi ý + 7 Hashtags xu hướng + Hướng dẫn đăng điện thoại 100% không bị gán nhãn AI.
+# Giọng Nữ Gen Z tươi sáng, bắt trend:
+../.venv/bin/python main.py --voice gen_z "Chủ đề..."
+
+# Giọng Nam Review hiện đại (kinh tế, tài chính, công nghệ):
+../.venv/bin/python main.py --voice nam_review "Chủ đề..."
+
+# Giọng Nam Kể Chuyện Giật Gân (bí ẩn, tài liệu đen):
+../.venv/bin/python main.py --voice giat_gan "Chủ đề..."
+```
 
 ---
 
-## 🎙️ DANH SÁCH GIỌNG ĐỌC:
-- `hoai_my` (Mặc định): Nữ truyền cảm chuẩn TikTok
-- `nam_tram`: Nam trầm ấm điện ảnh (phim tài liệu, lịch sử, tài chính)
-- `nu_nhe_nhang`: Nữ nhẹ nhàng, sâu lắng, chill
-- `nam_tre`: Nam trẻ trung, dứt khoát
+## 💡 NẾU MUỐN DÙNG LẠI GOOGLE FLOW (TÙY CHỌN):
+Nếu bạn vẫn muốn tự tay sinh video AI trên Google Flow bằng prompt:
+```bash
+../.venv/bin/python main.py --flow-prep "Chủ đề..."
+```
+Hệ thống sẽ chuẩn bị audio và file `flow_prompts.txt` để bạn copy sang Google Flow như trước.
