@@ -482,7 +482,7 @@ def _finalize_master_video(
             "sfx_cue": sc.get("sfx_cue", "none"),
             "media_type": sc.get("media_type"),
             "media_source": sc.get("media_source"),
-            "image_prompt_en": sc["image_prompt_en"],
+            "image_prompt_en": sc.get("image_prompt_en", ""),
         }
         for i, sc in enumerate(scenes)
     ]

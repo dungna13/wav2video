@@ -58,7 +58,7 @@ def _assign_clips_to_blocks(
                 "duration_sec": total_audio_sec,
                 "media_path": str(found_clips[0]),
                 "media_type": "video",
-                "image_prompt_en": blocks[0]["flow_prompt"],
+                "image_prompt_en": blocks[0].get("flow_prompt") or blocks[0].get("animation_prompt_en") or "",
             }
         ]
 
@@ -69,7 +69,10 @@ def _assign_clips_to_blocks(
         ordered_clips = sorted(found_clips, key=_natural_sort_key)[:n_assign]
     else:
         stop_words = {"camera", "pans", "across", "tilts", "up", "down", "close", "of", "the", "a", "an", "with", "in", "on"}
-        block_tokens = [set(re.findall(r"[a-z]{3,}", b["flow_prompt"].lower())) - stop_words for b in blocks[:n_assign]]
+        block_tokens = [
+            set(re.findall(r"[a-z]{3,}", (b.get("flow_prompt") or b.get("animation_prompt_en") or b.get("image_prompt_en") or b.get("narration_vn") or "").lower())) - stop_words
+            for b in blocks[:n_assign]
+        ]
         clip_tokens = [set(re.findall(r"[a-z]{3,}", p.stem.lower())) - stop_words for p in found_clips]
 
         remaining_clips = list(range(len(found_clips)))
@@ -102,7 +105,7 @@ def _assign_clips_to_blocks(
                 **blk,
                 "media_path": str(ordered_clips[idx]),
                 "media_type": "video",
-                "image_prompt_en": blk["flow_prompt"],
+                "image_prompt_en": blk.get("flow_prompt") or blk.get("animation_prompt_en") or "",
             }
         )
 
