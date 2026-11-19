@@ -315,18 +315,18 @@ def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float =
         f"Language requirement: {lang_instruction}\n"
         f"CLIP STRUCTURE ({num_clips} CLIPS x {clip_sec:.0f}s = {total_sec}s):\n"
         f"Make sure there are EXACTLY {num_clips} clips of {clip_sec:.0f} seconds each ({', '.join(time_slices)}).\n"
-        f"- Clip 1 (0.0-{clip_sec:.1f}s): Immediate hook, premise setup & leader's resolve on the riverbank.\n"
-        f"- Clip 2 ({clip_sec:.1f}-{clip_sec*2:.1f}s): The antagonist sailing in with arrogance.\n"
-        f"- Clip 3 ({clip_sec*2:.1f}-{clip_sec*3:.1f}s): Water level recedes rapidly, wooden river posts emerge, boats come to a halt, antagonist panics.\n"
-        f"- Clip 4 ({clip_sec*3:.1f}-{clip_sec*4:.1f}s): Tactical encirclement, peaceful white flag surrender & triumphant historic celebration.\n\n"
-        "CHARACTER ROSTER & SOLDIER UNIFORMS MANDATE:\n"
-        "1. Friendly Vietnamese soldiers wear crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, and conical hats (non la). "
-        "Opposing Nam Han soldiers wear navy blue uniforms (#1976D2) with yellow trim and metal helmets with ear flaps (#546E7A). "
-        "STRICT FACTION SEPARATION: Hero (Ngo Quyen) and friendly Vietnamese troops ONLY in Clip 1 (strictly no Luu Hoang Thao, no enemy troops); "
-        "Antagonist (Luu Hoang Thao) and opposing Nam Han troops ONLY in Clip 2 (strictly no Ngo Quyen, no Vietnamese soldiers); "
-        "Clip 3: Two factions strictly separated across the river (Vietnamese on left shore, Nam Han boats caught in river posts on right); "
-        "Clip 4: Vietnamese victorious in foreground, Luu Hoang Thao waving white peace banner in background.\n"
-        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-2s, 2-5s, 5-8s timing. Explicitly describe Clean 2D flat stickman animation in epic historical documentary style, slim stick limbs, round heads, light skin tone, dot eyes with expressive eyebrows, mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a photorealistic human, NOT 3D'.\n"
+        f"- Clip 1 (0.0-{clip_sec:.1f}s): Immediate historical hook, premise setup & protagonist introduction.\n"
+        f"- Clip 2 ({clip_sec:.1f}-{clip_sec*2:.1f}s): Rising tension, opposing force/conflict or catastrophe unfolds.\n"
+        f"- Clip 3 ({clip_sec*2:.1f}-{clip_sec*3:.1f}s): Decisive turning point, climax confrontation or disaster peak.\n"
+        f"- Clip 4 ({clip_sec*3:.1f}-{clip_sec*4:.1f}s): Historical outcome, resolution, victory or aftermath & enduring legacy.\n\n"
+        "CHARACTER ROSTER & FACTION SEPARATION MANDATE:\n"
+        f"1. Define 2 clear opposing characters tailored to '{topic}'. Character 1 is the main protagonist/leader; Character 2 is the antagonist or counterpart. "
+        "Ensure high contrast in clothing colors (e.g. Red vs Blue, or Heroic uniform vs Adversary attire). Subordinate background crowd figures wear distinct uniform attire matching their faction.\n"
+        "STRICT FACTION SEPARATION: Protagonist and friendly figures ONLY in Clip 1 (strictly no opposing faction); "
+        "Opposing force/antagonist ONLY in Clip 2 (strictly no protagonist); "
+        "Clip 3 shows opposing sides strictly separated on screen (Screen Left vs Screen Right); "
+        "Clip 4 shows triumphant outcome / resolution in foreground.\n"
+        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-2s, 2-5s, 5-8s timing. Explicitly describe Clean 2D flat stickman animation in epic historical documentary style, slim stick limbs, round heads, light skin tone, dot eyes with expressive eyebrows, mouth, hair, and period-accurate costume colors. ALWAYS append 'NOT a black silhouette, NOT a photorealistic human, NOT 3D'.\n"
         "Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
     )
 
@@ -433,50 +433,72 @@ def generate_stickman_production_package(
 
 
 def _build_standalone_clip_prompt(clip: Dict[str, Any], data: Dict[str, Any], clip_sec: float = 8.0) -> str:
-    """Tạo 1 prompt video 8s độc lập, tách biệt chiến tuyến ta và địch, khóa chết hoạt hình 2D chống người thật."""
+    """Tạo 1 prompt video 8s độc lập, tách biệt chiến tuyến ta và địch động theo từng topic, khóa chết hoạt hình 2D chống người thật."""
     idx = clip.get("clip_index", 1)
     raw_anim = clip.get("animation_prompt_en", "")
     safe_anim = _sanitize_for_google_safety_policy(raw_anim)
-    # Loại bỏ cụm từ cũ nếu có
-    safe_anim = safe_anim.replace("soldiers in brown tunics", "Vietnamese soldiers in crimson red tunics with yellow trim and conical hats")
-    safe_anim = safe_anim.replace("rowers and villagers in brown tunics", "Vietnamese soldiers in crimson red tunics with yellow trim and conical hats")
 
-    # Định nghĩa trang phục chuẩn theo Character Reference Sheets
-    ngo_quyen_spec = "Ngo Quyen: heroic leader with light tan skin, wearing crimson red tunic (#D32F2F) with golden trim and bronze armor cuirass, golden lotus crown with topknot, holding golden command sword"
-    hoang_thao_spec = "Luu Hoang Thao: arrogant general with fair skin, wearing imperial navy blue robe (#1976D2) with gold embroidery, black official winged cap (mandarin cap), smug sneering face"
-    vn_soldiers_spec = "Vietnamese soldiers: light tan skin, wearing crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, traditional conical hats (non la), holding wooden oars and round wooden shields"
-    han_soldiers_spec = "Nam Han soldiers: fair skin, wearing navy blue uniforms (#1976D2) with yellow trim, grey metal helmets with ear flaps (#546E7A)"
+    # Đọc danh sách nhân vật động từ dữ liệu kịch bản
+    chars = data.get("characters", [])
 
-    # Tách biệt chiến tuyến theo từng Clip để không bao giờ để tướng địch chung thuyền/chiến tuyến với ta
+    def _fmt_character(c: Dict[str, Any]) -> str:
+        name = unicodedata.normalize("NFKD", c.get('name', '')).encode('ascii', 'ignore').decode('ascii')
+        desc = _sanitize_for_google_safety_policy(c.get('silhouette_and_costume', ''))
+        head = _sanitize_for_google_safety_policy(c.get('headwear_or_hair', ''))
+        prop = _sanitize_for_google_safety_policy(c.get('signature_props', ''))
+        color = c.get('color_tag', '#D32F2F')
+        return f"{name}: slim stick limbs, round head, wearing {color} ({desc}, {head}, prop: {prop})"
+
+    p = chars[0] if len(chars) > 0 else {}
+    a = chars[1] if len(chars) > 1 else None
+
+    p_spec = _fmt_character(p) if p else "Protagonist: slim stick limbs, round head, wearing #D32F2F"
+    p_name = unicodedata.normalize("NFKD", p.get('name', 'Protagonist')).encode('ascii', 'ignore').decode('ascii')
+
+    a_spec = _fmt_character(a) if a else None
+    a_name = unicodedata.normalize("NFKD", a.get('name', 'Antagonist')).encode('ascii', 'ignore').decode('ascii') if a else None
+
+    # Tách biệt chiến tuyến theo từng Clip để không bao giờ để hai phe đứng lẫn lộn sai bối cảnh
     if idx == 1:
-        char_cast = f"Heroic Lead: {ngo_quyen_spec}. Allied Crew: {vn_soldiers_spec}. (STRICTLY NO ENEMY TROOPS, NO LUU HOANG THAO IN THIS SCENE)."
-        neg_faction = "enemy soldiers, blue robes, mandarin caps, "
+        no_enemy_rule = f" (STRICTLY NO OPPOSING FORCES, NO {a_name} IN THIS SCENE)." if a_name else ""
+        char_cast = f"Lead Hero / Protagonist: {p_spec}.{no_enemy_rule}"
+        neg_faction = f"opposing figures, adversary, {a_name}, " if a_name else ""
     elif idx == 2:
-        char_cast = f"Antagonist Lead: {hoang_thao_spec}. Opposing Crew: {han_soldiers_spec}. (STRICTLY NO NGO QUYEN, NO VIETNAMESE SOLDIERS IN THIS SCENE)."
-        neg_faction = "friendly soldiers, red tunics, conical hats, lotus crown, "
+        if a_spec:
+            char_cast = f"Adversary / Opposing Key Figure: {a_spec}. (STRICTLY NO {p_name} IN THIS SCENE)."
+            neg_faction = f"{p_name}, allied forces, "
+        else:
+            char_cast = f"Protagonist encountering escalating event: {p_spec}."
+            neg_faction = ""
     elif idx == 3:
-        char_cast = (
-            f"STRICT OPPOSING FACTIONS: "
-            f"Screen Left (Foreground Shore): {ngo_quyen_spec} with {vn_soldiers_spec}. "
-            f"Screen Right (Middle-ground River): {hoang_thao_spec} with {han_soldiers_spec} on wooden warships tilting against vertical wooden river posts. "
-            f"Clear physical separation across the river water, never mixing sides."
-        )
+        if a_spec:
+            char_cast = (
+                f"STRICT OPPOSING FORCES (DIVIDED SCENE): "
+                f"Screen Left (Foreground): {p_spec}. "
+                f"Screen Right (Background): {a_spec}. "
+                f"Clear physical separation across the frame, never mixing sides."
+            )
+        else:
+            char_cast = f"Climactic Turning Point: {p_spec} confronting the peak event."
         neg_faction = ""
     else:
-        char_cast = (
-            f"VICTORY HIERARCHY: "
-            f"Foreground Center-Left: {ngo_quyen_spec} standing triumphant with cheering {vn_soldiers_spec} raising oars and shields. "
-            f"Distant Background Right: {hoang_thao_spec} and panicked {han_soldiers_spec} comically waving a white peace banner in cartoon surrender."
-        )
+        if a_spec:
+            char_cast = (
+                f"HISTORICAL RESOLUTION: "
+                f"Foreground Center-Left: {p_spec} standing triumphant and victorious. "
+                f"Distant Background Right: {a_spec} defeated, comically waving a white peace banner in surrender."
+            )
+        else:
+            char_cast = f"HISTORICAL RESOLUTION: {p_spec} standing proud at the victorious conclusion."
         neg_faction = ""
 
     prompt = (
-        f"Pure flat 2D vector cartoon animation in OverSimplified style, flat vibrant colors, clean bold black outlines, strictly non-photorealistic illustration. "
-        f"Round cartoon heads, visible expressive cartoon faces with large white eyes and black pupils, dynamic mouth animations. "
-        f"NOT a black silhouette, NOT a shadow figure. "
+        f"Clean 2D flat stickman animation in epic historical documentary style, crisp black outlines, slim stick limbs, round heads, flat vibrant colors, strictly non-photorealistic illustration. "
+        f"Visible expressive cartoon faces with large white eyes and black pupils, dynamic mouth animations. "
+        f"NOT a black silhouette, NOT a photorealistic human, NOT 3D. "
         f"Character & Faction Design: {char_cast} "
         f"Scene action ({clip_sec:.0f}-second duration in 9:16 vertical format): {safe_anim} "
-        f"Negative constraints: {neg_faction}real humans, live-action actors, real people, photorealistic, photograph, 3D CGI, 3D render, realistic faces, realistic skin, cinematography, realistic violence, gore, black silhouettes, shadow figures."
+        f"Negative constraints: {neg_faction}real humans, live-action actors, real people, photorealistic, photograph, 3D CGI, 3D render, realistic faces, realistic anatomy, realistic skin texture, cinematography, realistic violence, gore, black silhouettes, shadow figures."
     )
     return re.sub(r"\s+", " ", prompt).strip()
 
