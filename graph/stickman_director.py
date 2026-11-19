@@ -226,6 +226,12 @@ def _make_veo_pacifist_safe(text: str) -> str:
         (r"\b(pierc(e|ed|ing)|impale(d)?)\b", "lodged against"),
         (r"\b(sinks?|sinking|drown(ed|ing)?)\b", "settling on the water"),
         (r"\b(crash(ed|ing)?|wreck(ed)?|shatter(ed)?|collid(e|ed|ing))\b", "tilting to a halt"),
+        (r"\b(fatal|lethal|destructive|destruction|destroy(ed|ing)?)\b", "dramatic tactical"),
+        (r"\b(carnage|massacre|bloodbath)\b", "historic event"),
+        (r"\b(sharp|pointed)\b", "tall vertical"),
+        (r"\b(fury|furious|rage)\b", "intense expression"),
+        (r"\b(casualt(y|ies)|victim(s)?)\b", "participants"),
+        (r"\b(conquer(ed|ing|or)?|subjugat(e|ed))\b", "historical turning point"),
 
         # Quân sự / Chiến tranh -> Hoạt hình giáo dục
         (r"\b(wars?|battles?|combats?|fights?|clash(es|ing)?)\b", "historical event"),
@@ -258,8 +264,8 @@ def _sanitize_for_google_safety_policy(text: str) -> str:
 
 
 
-def build_stickman_system_prompt(num_clips: int = 3) -> str:
-    total_sec = num_clips * 10
+def build_stickman_system_prompt(num_clips: int = 4, clip_sec: float = 15.0) -> str:
+    total_sec = int(num_clips * clip_sec)
     return (
         "You are the master Historical Stickman Animation Director, Writer, Character Designer, and Prompt Engineer, "
         "following the exact specifications of 'Historical Stickman Video Instructions'.\n\n"
@@ -267,15 +273,18 @@ def build_stickman_system_prompt(num_clips: int = 3) -> str:
         "Google Veo / VideoFX has strict safety filters that reject prompts containing weapons or violence.\n"
         "- NEVER use words: sword, spear, polearm, blade, weapon, kill, dead, death, die, blood, fight, battle, violent, strike, pierce, drown, sink.\n"
         "- ALWAYS USE SAFE METAPHORS: 'golden command baton', 'tactical banner flag', 'bamboo scroll', 'strategic confrontation', "
-        "'dramatic animated standoff', 'trapped against wooden stakes', 'waving a white flag of surrender', 'tactical retreat', 'celebrating victory'.\n\n"
+        "'dramatic animated standoff', 'trapped against wooden river posts', 'waving a white peace banner', 'tactical retreat', 'celebrating victory'.\n\n"
         "CREDIT-SAVING & PRODUCTION WORKFLOW RULES:\n"
         "1. SINGLE MASTER CHARACTER LINEUP SHEET:\n"
         "   - The 'character_reference_sheet_prompt' MUST be a SINGLE master image prompt containing ALL named recurring characters together side-by-side on ONE canvas in separated panels (e.g. Left: Protagonist, Right: Antagonist).\n"
         "   - Every character must have clearly distinct silhouette, contrasting color palette (e.g. Red vs Blue), different hairstyles/hats, and distinct facial expressions so they NEVER look identical or get confused.\n"
-        "   - Nameless crowd/soldiers remain visually subordinate in simple brown peasant tunics.\n\n"
-        "2. DIRECT VIDEO GENERATION (ZERO CREDIT WASTED ON STILL IMAGES):\n"
-        "   - Users do NOT need to generate still starting images for every scene. The 'animation_prompt_en' is an ALL-IN-ONE DIRECT VIDEO PROMPT ready to be pasted straight into Text-to-Video / Video mode in Google Flow (Veo 3.1 & Omni).\n"
-        "   - Each video prompt must be self-contained: explicitly specifying the 2D OverSimplified cartoon style, the characters present (names, skin tone, facial expression, costume colors), the environment, and the 4-phase local timing (0-2s, 2-5s, 5-8s, 8-10s).\n\n"
+        "   - Nameless crowd/rowers remain visually subordinate in simple brown peasant tunics.\n\n"
+        "2. DIRECT INDIVIDUAL VIDEO PROMPTS (STANDALONE 15-SECOND PROMPTS):\n"
+        "   - Each video prompt is an ALL-IN-ONE STANDALONE VIDEO PROMPT ready for direct Text-to-Video generation in Google Veo 3.1.\n"
+        f"   - Each video prompt covers exactly {clip_sec:.0f} seconds using 4-phase local timing: "
+        f"0.0-{clip_sec*0.2:.1f}s (establish hook), {clip_sec*0.2:.1f}-{clip_sec*0.46:.1f}s (main action & prop movement), "
+        f"{clip_sec*0.46:.1f}-{clip_sec*0.73:.1f}s (reaction, escalation, or turning point), {clip_sec*0.73:.1f}-{clip_sec:.1f}s (land outcome & explicitly describe final pose).\n"
+        "   - Describe facial expressions, eye movements, and mouth changes dynamically throughout the duration. ZERO VIOLENT/WEAPON WORDS.\n\n"
         "CRITICAL VISUAL STYLE REQUIREMENTS (PREVENT ALL-BLACK SILHOUETTES):\n"
         "The characters are NOT solid black silhouettes or featureless shadow figures! "
         "They are colorful, expressive 2D cartoon characters in the style of OverSimplified / Infographics / cute animated history documentaries:\n"
@@ -283,64 +292,60 @@ def build_stickman_system_prompt(num_clips: int = 3) -> str:
         "Fully visible, highly expressive facial features: large white cartoon eyes with black pupils, dynamic animated eyebrows (furrowed, arched, or worried), "
         "and expressive mouth (shouting with teeth, wide shocked O-mouth, confident smirk, or panicked grimace). "
         "Hair is clearly visible (topknot, sideburns, bangs, or bun under headwear).\n"
-        "- COSTUMES & COLORS: Outfits MUST be colorful and historically themed (e.g. crimson red tunic #D32F2F, royal blue robe #1976D2, bronze armor, leather belts). "
+        "- COSTUMES & COLORS: Outfits MUST be colorful and historically themed (e.g. crimson red tunic #D32F2F, royal blue robe #1976D2, bronze decorative plates, leather belts). "
         "Limbs have clean black outlines, but the body and face are fully colored.\n"
         "- PROHIBITION IN PROMPTS: NEVER use ambiguous phrases like 'black stickman' or 'shadow figure'. ALWAYS explicitly include: "
         "'2D colorful cartoon illustration in OverSimplified animation style', 'visible cartoon face with expressive white eyes and dynamic mouth', 'NOT a black silhouette, NOT a shadow figure'.\n\n"
         "STRICT PRODUCTION REQUIREMENTS:\n"
-        f"1. FORMAT: Vertical 9:16 frame. Exactly {num_clips} editorial clips x 10 seconds each = {total_sec} seconds total.\n"
-        "2. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 18 to 24 spoken words per 10-second clip. "
-        "Clip 1 must hook immediately within the first 2 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
-        "3. PROMPTS PER CLIP:\n"
-        "   - 'image_prompt_en': 70-120 descriptive words. Vertical 9:16, 2D colorful cartoon illustration in OverSimplified style, "
-        "character name, skin tone, exact facial expression (eyes, eyebrows, mouth), hair/headwear, specific colored historical attire, "
-        "props, environment, lighting, clean vector lines, 'NOT a silhouette, NOT all-black'.\n"
-        "   - 'animation_prompt_en': 150-280 words. All-in-one direct video prompt for Google Flow. Account for all 10 seconds using 4-phase local timing: "
-        "0.0-2.0s (facial reaction & hook), 2.0-5.0s (main body action & prop interaction), 5.0-8.0s (escalation, reaction, factual reveal), 8.0-10.0s (land outcome & explicitly describe final pose). "
-        "Describe facial expressions, eye movements, and mouth changes dynamically throughout the 10 seconds. ZERO VIOLENT/WEAPON WORDS.\n"
-        "4. Output ONLY a valid JSON object matching the requested schema."
+        f"1. FORMAT: Vertical 9:16 frame. Exactly {num_clips} editorial clips x {clip_sec:.0f} seconds each = {total_sec} seconds total.\n"
+        f"2. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 24 to 32 spoken words per {clip_sec:.0f}-second clip. "
+        "Clip 1 must hook immediately within the first 3 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
+        "3. Output ONLY a valid JSON object matching the requested schema."
     )
 
 
 
 
-def build_stickman_user_prompt(topic: str, num_clips: int = 3, language: str = "vi") -> str:
-    total_sec = num_clips * 10
+def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float = 15.0, language: str = "vi") -> str:
+    total_sec = int(num_clips * clip_sec)
+    time_slices = [f"{i*clip_sec:.1f}-{(i+1)*clip_sec:.1f}s" for i in range(num_clips)]
     lang_instruction = (
-        f"Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (18-24 từ mỗi cảnh cho đúng {num_clips} cảnh). "
+        f"Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (24-32 từ mỗi cảnh cho đúng {num_clips} cảnh x {clip_sec:.0f}s). "
         "Phần prompt kỹ thuật ('image_prompt_en', 'animation_prompt_en', 'character_reference_sheet_prompt', 'consistency_agent_prompt') "
         "BẮT BUỘC viết bằng TIẾNG ANH chuyên nghiệp cho Google Flow (Veo 3.1 & Omni 1.2)."
         if language == "vi" else
-        f"Write narration in punchy English (18-24 words per clip for exactly {num_clips} clips). All generation prompts in English."
+        f"Write narration in punchy English (24-32 words per clip for exactly {num_clips} clips). All generation prompts in English."
     )
     return (
         f"Create a high-impact, credit-saving {total_sec}-second Historical Stickman Video Production Package for the event: '{topic}'.\n\n"
         f"Language requirement: {lang_instruction}\n"
-        f"CLIP STRUCTURE ({num_clips} CLIPS x 10s = {total_sec}s):\n"
-        f"Make sure there are EXACTLY {num_clips} clips of 10.0 seconds each ({', '.join([f'{i*10}.0-{(i+1)*10}.0s' for i in range(num_clips)])}).\n"
-        f"- Clip 1: Immediate hook & premise setup.\n"
-        + (f"- Clip 2: The turning point, dramatic trap/clash.\n- Clip 3: The historic climax, decisive victory & legacy.\n" if num_clips == 3 else "- Advance the historical cause-and-effect seamlessly through each clip.\n")
-        + "\nCHARACTER ROSTER & MASTER REFERENCE SHEET MANDATE:\n"
+        f"CLIP STRUCTURE ({num_clips} CLIPS x {clip_sec:.0f}s = {total_sec}s):\n"
+        f"Make sure there are EXACTLY {num_clips} clips of {clip_sec:.0f} seconds each ({', '.join(time_slices)}).\n"
+        "- Clip 1 (0.0-15.0s): Immediate hook, premise setup & leader's resolve on the riverbank.\n"
+        "- Clip 2 (15.0-30.0s): Preparing the wooden river posts trap under high tide & the antagonist sailing in with arrogance.\n"
+        "- Clip 3 (30.0-45.0s): Water level recedes rapidly, wooden river posts emerge, boats come to a halt, antagonist panics.\n"
+        "- Clip 4 (45.0-60.0s): Tactical encirclement, peaceful white flag surrender & triumphant historic celebration.\n\n"
+        "CHARACTER ROSTER & MASTER REFERENCE SHEET MANDATE:\n"
         "1. In 'character_reference_sheet_prompt': Produce ONE SINGLE master lineup image prompt containing ALL recurring main characters side-by-side in separated panels (Left side vs Right side). "
-        "Ensure high contrast between characters: completely different costume colors (e.g. vibrant crimson red vs imperial navy blue), different headwear/hair, different distinct facial expressions, so they NEVER duplicate or look alike. Only generic nameless soldiers in background share simple brown peasant tunics.\n"
-        "2. In all 'image_prompt_en' and 'animation_prompt_en': Explicitly describe the 2D OverSimplified cartoon style, light skin tone, large white cartoon eyes with black pupils, expressive mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a shadow figure'.\n"
+        "Ensure high contrast between characters: completely different costume colors (e.g. vibrant crimson red vs imperial navy blue), different headwear/hair, different distinct facial expressions, so they NEVER duplicate or look alike. Only generic nameless rowers in background share simple brown peasant tunics.\n"
+        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-3s, 3-7s, 7-11s, 11-15s timing. Explicitly describe 2D OverSimplified cartoon style, light skin tone, large white cartoon eyes with black pupils, expressive mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a shadow figure'.\n"
         "Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
     )
 
 
-
 def generate_stickman_production_package(
     topic: str,
-    num_clips: int = 3,
+    num_clips: int = 4,
+    clip_sec: float = 15.0,
     language: str = "vi",
     voice_name: str = "vanthanhthu",
     speed_rate: float = 1.34,
 ) -> Dict[str, Any]:
     """Tạo gói sản xuất Video Lịch Sử Người Que hoàn chỉnh từ A-Z tối ưu tiết kiệm credit."""
-    sys_prompt = build_stickman_system_prompt(num_clips=num_clips)
-    user_prompt = build_stickman_user_prompt(topic, num_clips=num_clips, language=language)
+    sys_prompt = build_stickman_system_prompt(num_clips=num_clips, clip_sec=clip_sec)
+    user_prompt = build_stickman_user_prompt(topic, num_clips=num_clips, clip_sec=clip_sec, language=language)
 
-    print(f"\n[Stickman Director] Đang nghiên cứu lịch sử và thiết kế kịch bản {num_clips*10}s ({num_clips} clips) cho: '{topic}'...")
+    print(f"\n[Stickman Director] Đang nghiên cứu lịch sử và thiết kế kịch bản {int(num_clips*clip_sec)}s ({num_clips} clips x {int(clip_sec)}s) cho: '{topic}'...")
     parsed_json = call_gemini_thinking_structured(
         prompt=user_prompt,
         response_schema=STICKMAN_GEMINI_SCHEMA,
@@ -385,7 +390,7 @@ def generate_stickman_production_package(
     flow_blocks = []
     t_cursor = 0.0
     for idx, c in enumerate(clips, 1):
-        dur = 10.0
+        dur = clip_sec
         if idx - 1 < len(timings):
             st, en = timings[idx - 1]
             dur = max(6.0, round(en - st + 0.3, 2))
@@ -429,83 +434,52 @@ def generate_stickman_production_package(
     }
 
 
-def _generate_flow_agent_batch_prompts(data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
-    """Tạo 2 Master Prompts đóng gói sẵn cho Agent của Google Flow (mỗi prompt gen đủ 3 clips, 100% sạch Policy)."""
-    clips = data.get("clips", [])
-    style_anchor = _sanitize_for_google_safety_policy(data.get("visual_style_anchor", ""))
-    raw_sheet = data.get("character_reference_sheet_prompt", "")
-    char_sheet = _sanitize_for_google_safety_policy(raw_sheet)
-    raw_title = data.get("event_title", "")
-    norm_title = unicodedata.normalize("NFKD", raw_title).encode("ascii", "ignore").decode("ascii")
-    safe_project_title = _sanitize_for_google_safety_policy(norm_title) or "Historical Animation Project"
+def _build_standalone_clip_prompt(clip: Dict[str, Any], data: Dict[str, Any], clip_sec: float = 15.0) -> str:
+    """Tạo 1 prompt video 15s độc lập, tách biệt chiến tuyến ta và địch, đúng chuẩn Character Sheet."""
+    idx = clip.get("clip_index", 1)
+    raw_anim = clip.get("animation_prompt_en", "")
+    safe_anim = _sanitize_for_google_safety_policy(raw_anim)
+    raw_neg = clip.get("negative_constraints_en", "no black silhouettes, no shadow figures, no 3D")
+    safe_neg = _sanitize_for_google_safety_policy(raw_neg)
 
-    chars = data.get("characters", [])
+    # Định nghĩa trang phục chuẩn theo Character Reference Sheets
+    ngo_quyen_spec = "Ngo Quyen: heroic leader with light tan skin, wearing crimson red tunic (#D32F2F) with golden trim and bronze armor plates, golden lotus crown with topknot, holding golden command sword"
+    hoang_thao_spec = "Luu Hoang Thao: arrogant general with fair skin, wearing imperial navy blue robe (#1976D2) with gold embroidery, black official winged cap (mandarin cap), smug sneering face"
+    vn_soldiers_spec = "Vietnamese soldiers: light tan skin, wearing crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, traditional conical hats (non la), carrying round wooden shields"
+    han_soldiers_spec = "Nam Han soldiers: fair skin, wearing navy blue uniforms (#1976D2) with yellow trim, grey metal helmets with ear flaps (#546E7A)"
 
-    def _build_part(part_num: int, slice_clips: List[Dict[str, Any]]) -> str:
-        clip_nums = ", ".join([str(c.get("clip_index", i+1)) for i, c in enumerate(slice_clips)])
-        t_start = slice_clips[0].get("time_range", "0s").split("-")[0].strip()
-        t_end = slice_clips[-1].get("time_range", "30s").split("-")[-1].strip()
+    # Tách biệt chiến tuyến theo từng Clip để không bao giờ để tướng địch chung thuyền/chiến tuyến với ta
+    if idx == 1:
+        # Clip 1: CHỈ CÓ Ngô Quyền và quân ta
+        char_cast = f"Heroic Lead: {ngo_quyen_spec}. Allied Crew: {vn_soldiers_spec}. (STRICTLY NO ENEMY TROOPS, NO LUu HOANG THAO IN THIS SCENE)."
+    elif idx == 2:
+        # Clip 2: CHỈ CÓ Hoằng Thao và quân Nam Hán
+        char_cast = f"Antagonist Lead: {hoang_thao_spec}. Opposing Crew: {han_soldiers_spec}. (STRICTLY NO NGO QUYEN, NO VIETNAMESE SOLDIERS IN THIS SCENE)."
+    elif idx == 3:
+        # Clip 3: Hai bên đối đầu rõ rệt 2 chiến tuyến
+        char_cast = (
+            f"STRICT OPPOSING FACTIONS: "
+            f"Screen Left (Foreground/Far Left): {ngo_quyen_spec} with {vn_soldiers_spec}. "
+            f"Screen Right (Background/Trapped Fleet): {hoang_thao_spec} with {han_soldiers_spec} on tilting wooden boats caught by vertical wooden river posts. "
+            f"Clear physical separation across the river water, never mixing sides."
+        )
+    else:
+        # Clip 4: Chiến thắng - Quân ta tiền cảnh, Địch đầu hàng hậu cảnh
+        char_cast = (
+            f"VICTORY HIERARCHY: "
+            f"Foreground Center-Left: {ngo_quyen_spec} standing triumphant with cheering {vn_soldiers_spec}. "
+            f"Distant Background Right: {hoang_thao_spec} and panicked {han_soldiers_spec} waving a white peace banner in comical cartoon surrender."
+        )
 
-        char_spec_lines = []
-        for c in chars:
-            c_name = unicodedata.normalize("NFKD", c.get('name', '')).encode('ascii', 'ignore').decode('ascii')
-            c_desc = _sanitize_for_google_safety_policy(c.get('silhouette_and_costume', ''))
-            c_head = _sanitize_for_google_safety_policy(c.get('headwear_or_hair', ''))
-            c_prop = _sanitize_for_google_safety_policy(c.get('signature_props', ''))
-            c_color = c.get('color_tag', '')
-            char_spec_lines.append(f"  * {c_name}: {c_desc}, {c_head}, prop: {c_prop}, color: {c_color}.")
-
-        prompt_lines = [
-            f"You are the Lead Historical Animation Director Agent in Google Flow. Generate {len(slice_clips)} consecutive 9:16 vertical video clips (Clips {clip_nums}, Timeline: {t_start}-{t_end}) for the project: '{safe_project_title}'.",
-            "",
-            "### 1. MASTER VISUAL & CHARACTER SPECIFICATIONS (CRITICAL):",
-            f"- Art Style: {style_anchor}",
-            "- Character Aesthetic: 2D colorful cartoon illustration in OverSimplified animation style. Round heads with light skin, visible expressive faces with large white eyes and black pupils, dynamic mouth expressions, hair/headwear, and contrasting colored attire. NOT black silhouettes, NOT shadow figures.",
-            f"- Approved Master Character Reference Sheet: {char_sheet}",
-            "- Fixed Lead Characters:",
-            *char_spec_lines,
-            "",
-            "### 2. MULTI-CHARACTER SCENE RULES (When multiple lead characters appear together):",
-            "- Strict Screen Placement: Hero is positioned on Screen Left (facing right); Antagonist is positioned on Screen Right (facing left).",
-            "- Absolute Color Separation: Hero in vibrant Crimson Red (#D32F2F); Antagonist in Imperial Navy Blue (#1976D2). Never swap colors or costumes.",
-            "- Body Proportions: Hero stands at 3.5 head units tall; Antagonist stands at 3.2 head units tall. Maintain clear physical distance between them (never merge outlines or limbs).",
-            "",
-            "### 3. BACKGROUND CROWD & NAMELESS FIGURES (QUẦN CHÚNG):",
-            "- All background crowd figures are visually subordinate, drawn at a noticeably smaller scale (2.5 head units).",
-            "- Friendly rowers wear uniform plain, muted brown peasant tunics (#8D6E63) with simple conical hats.",
-            "- Opposing rowers wear uniform plain, muted grey/tan armor (#78909C).",
-            "- Crowd figures NEVER have unique heroic features, never have individual names, and must NEVER distract from or duplicate the lead characters.",
-            "",
-            "### 4. GOOGLE VEO PACIFIST SAFETY MANDATE (ZERO VIOLENCE / WEAPONS):",
-            "- Strictly avoid realistic violence, sharp weapons, blood, or injury. All historical actions are depicted symbolically through colorful flags, command batons, tactical maneuvers, and expressive cartoon reactions.",
-            "",
-            f"### 5. BATCH VIDEO GENERATION TASK ({len(slice_clips)} CLIPS):",
-            "Generate the following video clips in sequential order, adhering strictly to the local 4-phase timing and maintaining 100% character and environmental continuity:",
-            "",
-        ]
-        for c in slice_clips:
-            idx = c.get("clip_index", 1)
-            raw_anim = c.get("animation_prompt_en", "")
-            safe_anim = _sanitize_for_google_safety_policy(raw_anim)
-            raw_neg = c.get("negative_constraints_en", "no black silhouettes, no shadow figures, no 3D")
-            safe_neg = _sanitize_for_google_safety_policy(raw_neg)
-            safe_purpose = _sanitize_for_google_safety_policy(c.get("story_purpose", ""))
-
-            prompt_lines.extend([
-                f"--- [CLIP {idx}] (Timeline: {c.get('time_range', '10s')}) ---",
-                f"- Visual Scene Goal: {safe_purpose}",
-                f"- Direct Video Animation Prompt (Veo 3.1):",
-                f"{safe_anim}",
-                f"- Negative Constraints: {safe_neg}, no weapons, no violence, no gore",
-                "",
-            ])
-        prompt_lines.append("Execute this batch generation in high quality 9:16 vertical video format.")
-        return "\n".join(prompt_lines)
-
-
-    p1 = _build_part(1, clips[:3]) if len(clips) >= 1 else ""
-    p2 = _build_part(2, clips[3:6]) if len(clips) >= 4 else None
-    return p1, p2
+    prompt = (
+        f"2D colorful cartoon illustration in OverSimplified animation style, minimalist historical aesthetic, clean bold outlines, flat vibrant colors. "
+        f"Round cartoon heads, visible expressive cartoon faces with large white eyes and black pupils, dynamic mouth animations. "
+        f"NOT a black silhouette, NOT a shadow figure. "
+        f"Character & Faction Design: {char_cast}. "
+        f"Scene action ({clip_sec:.0f}-second duration in 9:16 vertical format): {safe_anim} "
+        f"Negative constraints: {safe_neg}, no black silhouettes, no shadow figures, no realistic gore, no photorealism, no 3D render."
+    )
+    return re.sub(r"\s+", " ", prompt).strip()
 
 
 def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clips_dir: Path, run_dir: Path) -> str:
@@ -513,12 +487,12 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
     chars = data.get("characters", [])
     clips = data.get("clips", [])
     total_clips = len(clips)
-    total_sec = total_clips * 10
-    agent_p1, agent_p2 = _generate_flow_agent_batch_prompts(data)
+    clip_sec = 15.0 if total_clips == 4 else 10.0
+    total_sec = int(total_clips * clip_sec)
 
     lines = [
         f"# 🎬 GÓI SẢN XUẤT HOẠT HÌNH LỊCH SỬ NGƯỜI QUE: {data.get('event_title', '')}",
-        f"**Địa điểm & Thời gian**: {data.get('date_and_location', '')} | **Thời lượng**: {total_sec} giây ({total_clips} clips x 10s)",
+        f"**Địa điểm & Thời gian**: {data.get('date_and_location', '')} | **Thời lượng**: {total_sec} giây ({total_clips} clips x {clip_sec:.0f}s)",
         f"**Thư mục làm việc**: `{run_dir}`",
         "",
         "---",
@@ -561,22 +535,23 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
         "- **Không có đặc điểm anh hùng**: Không vẽ mặt mũi riêng biệt, không cầm vật phẩm đặc trưng của tướng, tuyệt đối không làm lu mờ nhân vật chính.",
         "",
         "---",
-        "## 4. 🤖 [BƯỚC 2: NÉM PROMPT CHO GOOGLE FLOW AGENT] (ĐÓNG GÓI 2 PART - 100% POLICY SAFE)",
-        "> *💡 Bạn chỉ cần copy nguyên khối Prompt dưới đây ném thẳng vào con Agent của Google Flow:*",
-        "",
-        "### 📦 PROMPT PART 1 (Ném cho Flow Agent để gen Clips 1, 2, 3):",
-        "```text",
-        agent_p1,
-        "```",
+        f"## 4. 🎬 [BƯỚC 2: {total_clips} PROMPTS VIDEO ĐỘC LẬP - MỖI PROMPT {clip_sec:.0f}S CHUẨN VEO - 100% SẠCH POLICY]",
+        "> *💡 Bạn chỉ cần copy từng Prompt độc lập dưới đây ném thẳng vào ô prompt Text-to-Video của Google Veo:*",
         "",
     ])
 
-    if agent_p2:
+    for c in clips:
+        idx = c.get("clip_index", 1)
+        t_range = c.get("time_range", f"{(idx-1)*clip_sec:.1f}-{idx*clip_sec:.1f}s")
+        purpose = _sanitize_for_google_safety_policy(c.get("story_purpose", ""))
+        clip_prompt = _build_standalone_clip_prompt(c, data, clip_sec=clip_sec)
+
         lines.extend([
-            "### 📦 PROMPT PART 2 (Ném cho Flow Agent để gen Clips 4, 5, 6):",
+            f"### 🎬 PROMPT CLIP {idx}/{total_clips} ({t_range}) - {purpose}:",
             "```text",
-            agent_p2,
+            clip_prompt,
             "```",
+            f"- **Lời bình tiếng Việt đi kèm**: *\"{c.get('narration', '')}\"*",
             "",
         ])
 
@@ -597,13 +572,13 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
 def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir: Path) -> str:
     clips = data.get("clips", [])
     total_clips = len(clips)
-    total_sec = total_clips * 10
-    agent_p1, agent_p2 = _generate_flow_agent_batch_prompts(data)
+    clip_sec = 15.0 if total_clips == 4 else 10.0
+    total_sec = int(total_clips * clip_sec)
 
     lines = [
         "=" * 92,
-        f"📋 GOOGLE FLOW AGENT PROMPTS (ĐÓNG GÓI 2 PART - 100% POLICY SAFE): {data.get('event_title', '')}",
-        f"Tỷ lệ: 9:16 dọc | {total_clips} clips x 10s = {total_sec}s | Thư mục ném clip: {clips_dir}",
+        f"📋 GOOGLE FLOW VEO PROMPTS ({total_clips} PROMPTS ĐỘC LẬP - MỖI PROMPT {clip_sec:.0f}S - 100% POLICY SAFE)",
+        f"Sự kiện: {data.get('event_title', '')} | Tỷ lệ: 9:16 dọc | Tổng {total_sec}s | Thư mục ném clip: {clips_dir}",
         "=" * 92,
         "",
         "📌 [BƯỚC 1: TẠO 1 ẢNH DUY NHẤT] BẢNG TOÀN BỘ NHÂN VẬT (MASTER CHARACTER LINEUP SHEET):",
@@ -612,21 +587,22 @@ def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir
         _sanitize_for_google_safety_policy(data.get("character_reference_sheet_prompt", "")),
         "-" * 92,
         "",
-        "🤖 [BƯỚC 2: NÉM PROMPT CHO CON AGENT GOOGLE FLOW ĐỂ TỰ ĐỘNG GEN 3 CLIPS/PART]:",
+        f"🎬 [BƯỚC 2: {total_clips} PROMPTS VIDEO ĐỘC LẬP - COPY PASTE TỪNG PROMPT VÀO GOOGLE VEO]:",
         "=" * 92,
-        "📦 >>> PROMPT PART 1 (Ném cho Flow Agent để gen Clips 1, 2, 3):",
-        "-" * 92,
-        agent_p1,
-        "-" * 92,
-        "",
     ]
 
-    if agent_p2:
+    for c in clips:
+        idx = c.get("clip_index", 1)
+        t_range = c.get("time_range", f"{(idx-1)*clip_sec:.1f}-{idx*clip_sec:.1f}s")
+        purpose = _sanitize_for_google_safety_policy(c.get("story_purpose", ""))
+        clip_prompt = _build_standalone_clip_prompt(c, data, clip_sec=clip_sec)
+
         lines.extend([
-            "📦 >>> PROMPT PART 2 (Ném cho Flow Agent để gen Clips 4, 5, 6):",
+            f"🎬 >>> PROMPT CLIP {idx}/{total_clips} ({t_range}) | {purpose}:",
             "-" * 92,
-            agent_p2,
+            clip_prompt,
             "-" * 92,
+            f"🎙️ Lời bình tiếng Việt: \"{c.get('narration', '')}\"",
             "",
         ])
 
@@ -640,6 +616,7 @@ def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir
         "=" * 92,
     ])
     return "\n".join(lines)
+
 
 
 

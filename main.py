@@ -66,7 +66,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "voice": "vanthanhthu",  # MẶC ĐỊNH GIỌNG NAM KHOA HỌC VŨ TRỤ DỒN DẬP 1.35x CUỐN HÚT CHUẨN TIKTOK VANTHANHTHU09
         "stickman": False,
         "stickman_topics": False,
-        "clips": 3,  # MẶC ĐỊNH 3 CLIPS = 30s TIẾT KIỆM CREDIT VÀ TỐI ƯU RETENTION TIKTOK
+        "clips": 4,  # MẶC ĐỊNH 4 CLIPS = 60s (4 clips x 15s) TỐI ƯU GOOGLE VEO VÀ TIẾT KIỆM CREDIT
         "topic": "",
     }
     words = []
@@ -80,9 +80,9 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["stickman"] = True
         elif a in ("--clips", "-c"):
             try:
-                opts["clips"] = max(1, min(6, int(next(it, 3))))
+                opts["clips"] = max(1, min(6, int(next(it, 4))))
             except Exception:
-                opts["clips"] = 3
+                opts["clips"] = 4
         elif a == "--model":
             opts["model"] = next(it, "auto").strip().lower()
         elif a in ("--batch", "--queue"):
