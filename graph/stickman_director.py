@@ -264,7 +264,7 @@ def _sanitize_for_google_safety_policy(text: str) -> str:
 
 
 
-def build_stickman_system_prompt(num_clips: int = 4, clip_sec: float = 15.0) -> str:
+def build_stickman_system_prompt(num_clips: int = 4, clip_sec: float = 8.0) -> str:
     total_sec = int(num_clips * clip_sec)
     return (
         "You are the master Historical Stickman Animation Director, Writer, Character Designer, and Prompt Engineer, "
@@ -275,56 +275,50 @@ def build_stickman_system_prompt(num_clips: int = 4, clip_sec: float = 15.0) -> 
         "- ALWAYS USE SAFE METAPHORS: 'golden command baton', 'tactical banner flag', 'bamboo scroll', 'strategic confrontation', "
         "'dramatic animated standoff', 'trapped against wooden river posts', 'waving a white peace banner', 'tactical retreat', 'celebrating victory'.\n\n"
         "CREDIT-SAVING & PRODUCTION WORKFLOW RULES:\n"
-        "1. SINGLE MASTER CHARACTER LINEUP SHEET:\n"
-        "   - The 'character_reference_sheet_prompt' MUST be a SINGLE master image prompt containing ALL named recurring characters together side-by-side on ONE canvas in separated panels (e.g. Left: Protagonist, Right: Antagonist).\n"
-        "   - Every character must have clearly distinct silhouette, contrasting color palette (e.g. Red vs Blue), different hairstyles/hats, and distinct facial expressions so they NEVER look identical or get confused.\n"
-        "   - Nameless crowd/rowers remain visually subordinate in simple brown peasant tunics.\n\n"
-        "2. DIRECT INDIVIDUAL VIDEO PROMPTS (STANDALONE 15-SECOND PROMPTS):\n"
+        "1. DIRECT INDIVIDUAL VIDEO PROMPTS (STANDALONE 8-SECOND PROMPTS):\n"
         "   - Each video prompt is an ALL-IN-ONE STANDALONE VIDEO PROMPT ready for direct Text-to-Video generation in Google Veo 3.1.\n"
-        f"   - Each video prompt covers exactly {clip_sec:.0f} seconds using 4-phase local timing: "
-        f"0.0-{clip_sec*0.2:.1f}s (establish hook), {clip_sec*0.2:.1f}-{clip_sec*0.46:.1f}s (main action & prop movement), "
-        f"{clip_sec*0.46:.1f}-{clip_sec*0.73:.1f}s (reaction, escalation, or turning point), {clip_sec*0.73:.1f}-{clip_sec:.1f}s (land outcome & explicitly describe final pose).\n"
+        f"   - Each video prompt covers exactly {clip_sec:.0f} seconds using fast, punchy timing: "
+        f"0.0-{clip_sec*0.25:.1f}s (establish hook), {clip_sec*0.25:.1f}-{clip_sec*0.65:.1f}s (main action & prop movement), "
+        f"{clip_sec*0.65:.1f}-{clip_sec:.1f}s (land outcome & explicitly describe final hold pose).\n"
         "   - Describe facial expressions, eye movements, and mouth changes dynamically throughout the duration. ZERO VIOLENT/WEAPON WORDS.\n\n"
-        "CRITICAL VISUAL STYLE REQUIREMENTS (PREVENT ALL-BLACK SILHOUETTES):\n"
-        "The characters are NOT solid black silhouettes or featureless shadow figures! "
-        "They are colorful, expressive 2D cartoon characters in the style of OverSimplified / Infographics / cute animated history documentaries:\n"
-        "- HEAD & FACE: Round heads with light cartoon skin tone (light tan, fair, or peach skin; NEVER pitch-black fill). "
-        "Fully visible, highly expressive facial features: large white cartoon eyes with black pupils, dynamic animated eyebrows (furrowed, arched, or worried), "
-        "and expressive mouth (shouting with teeth, wide shocked O-mouth, confident smirk, or panicked grimace). "
-        "Hair is clearly visible (topknot, sideburns, bangs, or bun under headwear).\n"
-        "- COSTUMES & COLORS: Outfits MUST be colorful and historically themed (e.g. crimson red tunic #D32F2F, royal blue robe #1976D2, bronze decorative plates, leather belts). "
-        "Limbs have clean black outlines, but the body and face are fully colored.\n"
-        "- PROHIBITION IN PROMPTS: NEVER use ambiguous phrases like 'black stickman' or 'shadow figure'. ALWAYS explicitly include: "
-        "'2D colorful cartoon illustration in OverSimplified animation style', 'visible cartoon face with expressive white eyes and dynamic mouth', 'NOT a black silhouette, NOT a shadow figure'.\n\n"
+        "CRITICAL VISUAL STYLE REQUIREMENTS (PREVENT ALL-BLACK SILHOUETTES & LIVE ACTION):\n"
+        "The characters are clean 2D flat stickman animation in epic historical documentary style, round heads, consistent crisp black outlines, slim stick limbs, dot eyes with fierce expressive eyebrows, compact stylized armor silhouette. "
+        "NOT solid black silhouettes, NOT featureless shadow figures, NOT real humans, NOT live-action!\n"
+        "- HEAD & FACE: Round heads with light cartoon skin tone, large white cartoon eyes with black pupils, dynamic animated eyebrows, expressive mouth. "
+        "Hair is clearly visible (topknot, sideburns under headwear).\n"
+        "- COSTUMES & COLORS: Outfits MUST be colorful and historically themed (crimson red tunic #D32F2F, royal blue robe #1976D2, bronze decorative plates). "
+        "Slim stick limbs have clean black outlines, but the body and face are fully colored.\n"
+        "- PROHIBITION IN PROMPTS: NEVER use 'black stickman' or 'shadow figure'. ALWAYS explicitly include: "
+        "'Clean 2D flat stickman animation in epic historical documentary style', 'slim stick limbs', 'NOT a black silhouette, NOT a photorealistic human, NOT 3D'.\n\n"
         "STRICT PRODUCTION REQUIREMENTS:\n"
         f"1. FORMAT: Vertical 9:16 frame. Exactly {num_clips} editorial clips x {clip_sec:.0f} seconds each = {total_sec} seconds total.\n"
-        f"2. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 24 to 32 spoken words per {clip_sec:.0f}-second clip. "
-        "Clip 1 must hook immediately within the first 3 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
+        f"2. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 14 to 20 spoken words per {clip_sec:.0f}-second clip. "
+        "Clip 1 must hook immediately within the first 2 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
         "3. Output ONLY a valid JSON object matching the requested schema."
     )
 
 
 
 
-def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float = 15.0, language: str = "vi") -> str:
+def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float = 8.0, language: str = "vi") -> str:
     total_sec = int(num_clips * clip_sec)
     time_slices = [f"{i*clip_sec:.1f}-{(i+1)*clip_sec:.1f}s" for i in range(num_clips)]
     lang_instruction = (
-        f"Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (24-32 từ mỗi cảnh cho đúng {num_clips} cảnh x {clip_sec:.0f}s). "
+        f"Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (14-20 từ mỗi cảnh cho đúng {num_clips} cảnh x {clip_sec:.0f}s). "
         "Phần prompt kỹ thuật ('image_prompt_en', 'animation_prompt_en', 'character_reference_sheet_prompt', 'consistency_agent_prompt') "
         "BẮT BUỘC viết bằng TIẾNG ANH chuyên nghiệp cho Google Flow (Veo 3.1 & Omni 1.2)."
         if language == "vi" else
-        f"Write narration in punchy English (24-32 words per clip for exactly {num_clips} clips). All generation prompts in English."
+        f"Write narration in punchy English (14-20 words per clip for exactly {num_clips} clips). All generation prompts in English."
     )
     return (
         f"Create a high-impact, credit-saving {total_sec}-second Historical Stickman Video Production Package for the event: '{topic}'.\n\n"
         f"Language requirement: {lang_instruction}\n"
         f"CLIP STRUCTURE ({num_clips} CLIPS x {clip_sec:.0f}s = {total_sec}s):\n"
         f"Make sure there are EXACTLY {num_clips} clips of {clip_sec:.0f} seconds each ({', '.join(time_slices)}).\n"
-        "- Clip 1 (0.0-15.0s): Immediate hook, premise setup & leader's resolve on the riverbank.\n"
-        "- Clip 2 (15.0-30.0s): Preparing the wooden river posts trap under high tide & the antagonist sailing in with arrogance.\n"
-        "- Clip 3 (30.0-45.0s): Water level recedes rapidly, wooden river posts emerge, boats come to a halt, antagonist panics.\n"
-        "- Clip 4 (45.0-60.0s): Tactical encirclement, peaceful white flag surrender & triumphant historic celebration.\n\n"
+        f"- Clip 1 (0.0-{clip_sec:.1f}s): Immediate hook, premise setup & leader's resolve on the riverbank.\n"
+        f"- Clip 2 ({clip_sec:.1f}-{clip_sec*2:.1f}s): The antagonist sailing in with arrogance.\n"
+        f"- Clip 3 ({clip_sec*2:.1f}-{clip_sec*3:.1f}s): Water level recedes rapidly, wooden river posts emerge, boats come to a halt, antagonist panics.\n"
+        f"- Clip 4 ({clip_sec*3:.1f}-{clip_sec*4:.1f}s): Tactical encirclement, peaceful white flag surrender & triumphant historic celebration.\n\n"
         "CHARACTER ROSTER & SOLDIER UNIFORMS MANDATE:\n"
         "1. Friendly Vietnamese soldiers wear crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, and conical hats (non la). "
         "Opposing Nam Han soldiers wear navy blue uniforms (#1976D2) with yellow trim and metal helmets with ear flaps (#546E7A). "
@@ -332,7 +326,7 @@ def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float =
         "Antagonist (Luu Hoang Thao) and opposing Nam Han troops ONLY in Clip 2 (strictly no Ngo Quyen, no Vietnamese soldiers); "
         "Clip 3: Two factions strictly separated across the river (Vietnamese on left shore, Nam Han boats caught in river posts on right); "
         "Clip 4: Vietnamese victorious in foreground, Luu Hoang Thao waving white peace banner in background.\n"
-        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-3s, 3-7s, 7-11s, 11-15s timing. Explicitly describe Pure flat 2D vector cartoon animation in OverSimplified style, flat vibrant colors, clean bold black outlines, strictly non-photorealistic illustration. Round cartoon heads, light skin tone, large white cartoon eyes with black pupils, expressive mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a shadow figure'.\n"
+        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-2s, 2-5s, 5-8s timing. Explicitly describe Clean 2D flat stickman animation in epic historical documentary style, slim stick limbs, round heads, light skin tone, dot eyes with expressive eyebrows, mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a photorealistic human, NOT 3D'.\n"
         "Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
     )
 
@@ -340,7 +334,7 @@ def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float =
 def generate_stickman_production_package(
     topic: str,
     num_clips: int = 4,
-    clip_sec: float = 15.0,
+    clip_sec: float = 8.0,
     language: str = "vi",
     voice_name: str = "vanthanhthu",
     speed_rate: float = 1.34,
@@ -438,8 +432,8 @@ def generate_stickman_production_package(
     }
 
 
-def _build_standalone_clip_prompt(clip: Dict[str, Any], data: Dict[str, Any], clip_sec: float = 15.0) -> str:
-    """Tạo 1 prompt video 15s độc lập, tách biệt chiến tuyến ta và địch, khóa chết hoạt hình 2D chống người thật."""
+def _build_standalone_clip_prompt(clip: Dict[str, Any], data: Dict[str, Any], clip_sec: float = 8.0) -> str:
+    """Tạo 1 prompt video 8s độc lập, tách biệt chiến tuyến ta và địch, khóa chết hoạt hình 2D chống người thật."""
     idx = clip.get("clip_index", 1)
     raw_anim = clip.get("animation_prompt_en", "")
     safe_anim = _sanitize_for_google_safety_policy(raw_anim)
@@ -491,7 +485,7 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
     hb = data.get("historical_brief", {})
     clips = data.get("clips", [])
     total_clips = len(clips)
-    clip_sec = 15.0 if total_clips == 4 else 10.0
+    clip_sec = 8.0 if total_clips == 4 else 10.0
     total_sec = int(total_clips * clip_sec)
 
     lines = [
@@ -550,7 +544,7 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
 def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir: Path) -> str:
     clips = data.get("clips", [])
     total_clips = len(clips)
-    clip_sec = 15.0 if total_clips == 4 else 10.0
+    clip_sec = 8.0 if total_clips == 4 else 10.0
     total_sec = int(total_clips * clip_sec)
 
     lines = [
