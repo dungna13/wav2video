@@ -204,11 +204,43 @@ def get_curated_stickman_topics() -> List[Dict[str, str]]:
     ]
 
 
+def _sanitize_for_google_safety_policy(text: str) -> str:
+    """Loại bỏ triệt để các từ bạo lực/vũ khí để không bị Google Flow Policy chặn."""
+    replacements = [
+        (r"\bswords?\b", "command baton"),
+        (r"\bspears?\b", "tactical banner"),
+        (r"\bpolearms?\b", "commander staff"),
+        (r"\bweapons?\b", "props"),
+        (r"\bblades?\b", "baton"),
+        (r"\bfight(ing)?\b", "animated standoff"),
+        (r"\bbattle(s)?\b", "dramatic confrontation"),
+        (r"\bkill(ed|ing)?\b", "defeated"),
+        (r"\bdead|death|die(d|s)?\b", "surrendered"),
+        (r"\bblood(y)?\b", "colorful ink"),
+        (r"\bviolent(ly)?\b", "energetically"),
+        (r"\bpierc(e|ed|ing)\b", "trapped against"),
+        (r"\bsink(s|ing)?\b", "coming to a halt"),
+        (r"\bdrown(ing)?\b", "retreating"),
+        (r"\bcrash(ed|ing)?\b", "halting"),
+        (r"\bsplinter(ing)?\b", "wobbling"),
+        (r"\bshatter(ed)?\b", "tilting"),
+    ]
+    res = text
+    for pat, rep in replacements:
+        res = re.sub(pat, rep, res, flags=re.IGNORECASE)
+    return res
+
+
 def build_stickman_system_prompt(num_clips: int = 3) -> str:
     total_sec = num_clips * 10
     return (
         "You are the master Historical Stickman Animation Director, Writer, Character Designer, and Prompt Engineer, "
         "following the exact specifications of 'Historical Stickman Video Instructions'.\n\n"
+        "GOOGLE FLOW SAFETY POLICY (CRITICAL - PREVENT 'VIOLATE OUR POLICIES'):\n"
+        "Google Veo / VideoFX has strict safety filters that reject prompts containing weapons or violence.\n"
+        "- NEVER use words: sword, spear, polearm, blade, weapon, kill, dead, death, die, blood, fight, battle, violent, strike, pierce, drown, sink.\n"
+        "- ALWAYS USE SAFE METAPHORS: 'golden command baton', 'tactical banner flag', 'bamboo scroll', 'strategic confrontation', "
+        "'dramatic animated standoff', 'trapped against wooden stakes', 'waving a white flag of surrender', 'tactical retreat', 'celebrating victory'.\n\n"
         "CREDIT-SAVING & PRODUCTION WORKFLOW RULES:\n"
         "1. SINGLE MASTER CHARACTER LINEUP SHEET:\n"
         "   - The 'character_reference_sheet_prompt' MUST be a SINGLE master image prompt containing ALL named recurring characters together side-by-side on ONE canvas in separated panels (e.g. Left: Protagonist, Right: Antagonist).\n"
@@ -238,9 +270,10 @@ def build_stickman_system_prompt(num_clips: int = 3) -> str:
         "props, environment, lighting, clean vector lines, 'NOT a silhouette, NOT all-black'.\n"
         "   - 'animation_prompt_en': 150-280 words. All-in-one direct video prompt for Google Flow. Account for all 10 seconds using 4-phase local timing: "
         "0.0-2.0s (facial reaction & hook), 2.0-5.0s (main body action & prop interaction), 5.0-8.0s (escalation, reaction, factual reveal), 8.0-10.0s (land outcome & explicitly describe final pose). "
-        "Describe facial expressions, eye movements, and mouth changes dynamically throughout the 10 seconds.\n"
+        "Describe facial expressions, eye movements, and mouth changes dynamically throughout the 10 seconds. ZERO VIOLENT/WEAPON WORDS.\n"
         "4. Output ONLY a valid JSON object matching the requested schema."
     )
+
 
 
 
@@ -369,12 +402,88 @@ def generate_stickman_production_package(
     }
 
 
+def _generate_flow_agent_batch_prompts(data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """Tạo 2 Master Prompts đóng gói sẵn cho Agent của Google Flow (mỗi prompt gen đủ 3 clips, 100% sạch Policy)."""
+    clips = data.get("clips", [])
+    style_anchor = _sanitize_for_google_safety_policy(data.get("visual_style_anchor", ""))
+    raw_sheet = data.get("character_reference_sheet_prompt", "")
+    char_sheet = _sanitize_for_google_safety_policy(raw_sheet)
+    event_title = data.get("event_title", "")
+    chars = data.get("characters", [])
+
+    def _build_part(part_num: int, slice_clips: List[Dict[str, Any]]) -> str:
+        clip_nums = ", ".join([str(c.get("clip_index", i+1)) for i, c in enumerate(slice_clips)])
+        t_start = slice_clips[0].get("time_range", "0s").split("-")[0].strip()
+        t_end = slice_clips[-1].get("time_range", "30s").split("-")[-1].strip()
+
+        char_spec_lines = []
+        for c in chars:
+            c_name = c.get('name', '')
+            c_role = c.get('historical_role', '')
+            c_desc = _sanitize_for_google_safety_policy(c.get('silhouette_and_costume', ''))
+            c_head = _sanitize_for_google_safety_policy(c.get('headwear_or_hair', ''))
+            c_prop = _sanitize_for_google_safety_policy(c.get('signature_props', ''))
+            c_color = c.get('color_tag', '')
+            char_spec_lines.append(f"  * {c_name} ({c_role}): {c_desc}, {c_head}, prop: {c_prop}, color tag: {c_color}.")
+
+        prompt_lines = [
+            f"You are the Lead Historical Animation Director Agent in Google Flow. Generate {len(slice_clips)} consecutive 9:16 vertical video clips (Clips {clip_nums}, Timeline: {t_start}-{t_end}) for the project: '{event_title}'.",
+            "",
+            "### 1. MASTER VISUAL & CHARACTER SPECIFICATIONS (CRITICAL):",
+            f"- Art Style: {style_anchor}",
+            "- Character Aesthetic: 2D colorful cartoon illustration in OverSimplified animation style. Round heads with light skin, visible expressive faces with large white eyes and black pupils, dynamic mouth expressions, hair/headwear, and contrasting colored attire. NOT black silhouettes, NOT shadow figures.",
+            f"- Approved Master Character Reference Sheet: {char_sheet}",
+            "- Fixed Lead Characters:",
+            *char_spec_lines,
+            "",
+            "### 2. MULTI-CHARACTER SCENE RULES (When multiple lead characters appear together):",
+            "- Strict Screen Placement: Hero is positioned on Screen Left (facing right); Antagonist is positioned on Screen Right (facing left).",
+            "- Absolute Color Separation: Hero in vibrant Crimson Red (#D32F2F); Antagonist in Imperial Navy Blue (#1976D2). Never swap colors or costumes.",
+            "- Body Proportions: Hero stands at 3.5 head units tall; Antagonist stands at 3.2 head units tall. Maintain clear physical distance between them (never merge outlines or limbs).",
+            "",
+            "### 3. BACKGROUND CROWD & NAMELESS SOLDIERS (QUẦN CHÚNG):",
+            "- All background crowd figures and soldiers are visually subordinate, drawn at a noticeably smaller scale (2.5 head units).",
+            "- Friendly soldiers wear uniform plain, muted brown peasant tunics (#8D6E63) with simple conical hats.",
+            "- Opposing soldiers wear uniform plain, muted grey/tan armor (#78909C).",
+            "- Crowd figures NEVER have unique heroic features, never have individual names, and must NEVER distract from or duplicate the lead characters.",
+            "",
+            "### 4. GOOGLE SAFETY COMPLIANCE (ZERO VIOLENCE / WEAPONS):",
+            "- Strictly avoid realistic violence, sharp weapons, blood, or injury. All military actions are depicted symbolically through colorful flags, command batons, tactical maneuvers, and expressive cartoon reactions.",
+            "",
+            f"### 5. BATCH VIDEO GENERATION TASK ({len(slice_clips)} CLIPS):",
+            "Generate the following video clips in sequential order, adhering strictly to the local 4-phase timing and maintaining 100% character and environmental continuity:",
+            "",
+        ]
+        for c in slice_clips:
+            idx = c.get("clip_index", 1)
+            raw_anim = c.get("animation_prompt_en", "")
+            safe_anim = _sanitize_for_google_safety_policy(raw_anim)
+            raw_neg = c.get("negative_constraints_en", "no black silhouettes, no shadow figures, no 3D")
+            safe_neg = _sanitize_for_google_safety_policy(raw_neg)
+
+            prompt_lines.extend([
+                f"--- [CLIP {idx}] (Timeline: {c.get('time_range', '10s')}) ---",
+                f"- Narration Context: \"{c.get('narration', '')}\"",
+                f"- Direct Video Animation Prompt (Veo 3.1):",
+                f"{safe_anim}",
+                f"- Negative Constraints: {safe_neg}, no weapons, no violence, no gore",
+                "",
+            ])
+        prompt_lines.append("Execute this batch generation in high quality 9:16 vertical video format.")
+        return "\n".join(prompt_lines)
+
+    p1 = _build_part(1, clips[:3]) if len(clips) >= 1 else ""
+    p2 = _build_part(2, clips[3:6]) if len(clips) >= 4 else None
+    return p1, p2
+
+
 def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clips_dir: Path, run_dir: Path) -> str:
     hb = data.get("historical_brief", {})
     chars = data.get("characters", [])
     clips = data.get("clips", [])
     total_clips = len(clips)
     total_sec = total_clips * 10
+    agent_p1, agent_p2 = _generate_flow_agent_batch_prompts(data)
 
     lines = [
         f"# 🎬 GÓI SẢN XUẤT HOẠT HÌNH LỊCH SỬ NGƯỜI QUE: {data.get('event_title', '')}",
@@ -395,60 +504,54 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
     lines.extend([
         "",
         "---",
-        "## 2. Phong Cách Hình Ảnh & Thiết Kế Nhân Vật (Locked Cartoon Style)",
-        f"**Visual Style Anchor**: `{data.get('visual_style_anchor', '')}`",
+        "## 2. [BƯỚC 1: ẢNH THAM CHIẾU DUY NHẤT] Prompt Bảng Nhân Vật Toàn Diện (Master Character Lineup Sheet)",
+        "> *💡 TIẾT KIỆM CREDIT: Bạn CHỈ CẦN tạo 1 ảnh duy nhất này lúc đầu làm ảnh tham chiếu (Image Reference) cho toàn bộ nhân vật. Tất cả các nhân vật chính đều xuất hiện chung trên 1 ảnh với màu sắc và trang phục đối lập, không bao giờ bị trùng lặp!*",
+        "```text",
+        _sanitize_for_google_safety_policy(data.get("character_reference_sheet_prompt", "")),
+        "```",
         "",
-        "### Danh Sách Nhân Vật Cốt Lõi:",
+        "---",
+        "## 3. Quy Tắc Nhân Vật, Đa Nhân Vật & Nhân Vật Quần Chúng (Characters & Continuity Instructions)",
+        "### 👥 Danh Sách Nhân Vật Cốt Lõi:",
     ])
     for c in chars:
-        lines.append(f"#### 👤 {c.get('name')} ({c.get('historical_role')})")
-        lines.append(f"- **Dáng vóc & Trang phục**: {c.get('silhouette_and_costume')}")
-        lines.append(f"- **Mũ nón / Tóc**: {c.get('headwear_or_hair')}")
-        lines.append(f"- **Vật dụng đặc trưng**: {c.get('signature_props')}")
-        lines.append(f"- **Mã màu nhận diện**: `{c.get('color_tag')}`")
-        lines.append("")
+        lines.append(f"- **{c.get('name')} ({c.get('historical_role')})**: {c.get('silhouette_and_costume')}, {c.get('headwear_or_hair')}, prop: {c.get('signature_props')}, mã màu: `{c.get('color_tag')}`.")
 
     lines.extend([
-        "---",
-        "## 3. [BƯỚC 1: ẢNH DUY NHẤT] Prompt Bảng Nhân Vật Toàn Diện (Master Character Lineup Sheet)",
-        "> *💡 TIẾT KIỆM CREDIT: Bạn CHỈ CẦN tạo 1 ảnh duy nhất này lúc đầu để làm ảnh tham chiếu (Image Reference) cho toàn bộ nhân vật. Tất cả các nhân vật chính đều xuất hiện chung trên 1 ảnh với màu sắc và trang phục đối lập, không bao giờ bị trùng lặp!*",
-        "```text",
-        data.get("character_reference_sheet_prompt", ""),
-        "```",
+        "",
+        "### 🎭 Quy Tắc Khi Nhiều Nhân Vật Chính Cùng Xuất Hiện Trong 1 Bối Cảnh:",
+        "- **Bố cục khung hình**: Nhân vật chính diện (Ngô Quyền) luôn đứng bên Trái khung hình hướng về bên Phải. Nhân vật phản diện (Hoằng Thao) luôn đứng bên Phải khung hình hướng về bên Trái.",
+        "- **Màu sắc đối lập tuyệt đối**: Đỏ truyền thống (#D32F2F) đối lập với Xanh hoàng gia (#1976D2). Không bao giờ được đổi màu áo của nhau.",
+        "- **Khoảng cách hình học**: Luôn giữ khoảng cách rõ ràng giữa 2 nhân vật chính, không vẽ dính chùm hoặc đè nét lên nhau.",
+        "",
+        "### 🌾 Quy Tắc Cho Nhân Vật Quần Chúng (Lính & Dân Làng):",
+        "- **Kích thước**: Vẽ nhỏ hơn nhân vật chính (chỉ bằng khoảng 70% chiều cao nhân vật chính).",
+        "- **Trang phục đơn giản**: Lính ta mặc áo nâu sồng tối giản (#8D6E63) đội nón nan. Lính địch mặc áo xám/be (#78909C).",
+        "- **Không có đặc điểm anh hùng**: Không vẽ mặt mũi riêng biệt, không cầm vật phẩm đặc trưng của tướng, tuyệt đối không làm lu mờ nhân vật chính.",
         "",
         "---",
-        "## 4. Chỉ Dẫn Agent Giữ Tính Nhất Quán (Consistency Agent Instructions)",
+        "## 4. 🤖 [BƯỚC 2: NÉM PROMPT CHO GOOGLE FLOW AGENT] (ĐÓNG GÓI 2 PART - 100% POLICY SAFE)",
+        "> *💡 Bạn chỉ cần copy nguyên khối Prompt dưới đây ném thẳng vào con Agent của Google Flow:*",
+        "",
+        "### 📦 PROMPT PART 1 (Ném cho Flow Agent để gen Clips 1, 2, 3):",
         "```text",
-        data.get("consistency_agent_prompt", ""),
+        agent_p1,
         "```",
         "",
-        "---",
-        f"## 5. [BƯỚC 2: TẠO VIDEO TRỰC TIẾP] Danh Sách {total_clips} Clips (Dán Thẳng Vào Text-To-Video, Không Cần Tạo Ảnh Tĩnh)",
     ])
 
-    for c in clips:
-        idx = c.get("clip_index", 1)
+    if agent_p2:
         lines.extend([
-            f"### 🎞️ CLIP {idx} ({c.get('time_range', '10s')}) — {c.get('story_purpose', '')}",
-            f"**🎙️ Lời bình ({c.get('narration_word_count', len(c.get('narration','').split()))} từ)**: {c.get('narration')}",
-            f"**🎬 Hành động chính**: {c.get('main_visual_action')}",
-            f"**🔊 Hiệu ứng âm thanh (SFX)**: `{c.get('sfx_cue', 'none')}`",
-            "",
-            f"**🎥 PROMPT TẠO VIDEO TRỰC TIẾP (DÁN THẲNG VÀO VEO / OMNI TRÊN FLOW)**:",
+            "### 📦 PROMPT PART 2 (Ném cho Flow Agent để gen Clips 4, 5, 6):",
             "```text",
-            c.get("animation_prompt_en", ""),
+            agent_p2,
             "```",
             "",
-            f"*(Tùy chọn phụ: Nếu bạn thích chế độ Image-to-Video thì mới dùng prompt ảnh này: `{c.get('image_prompt_en', '')}`)*",
-            "",
-            f"**🚫 Negative Constraints**: `{c.get('negative_constraints_en', '')}`",
-            f"**🔗 Khớp nối sang cảnh tiếp theo**: {c.get('continuity_outgoing_state', '')}",
-            "",
-            "---",
         ])
 
     lines.extend([
-        "## 6. Hướng Dẫn Dựng & Hoàn Tất Video Bằng 1 Lệnh",
+        "---",
+        "## 5. Hướng Dẫn Dựng & Hoàn Tất Video Bằng 1 Lệnh",
         f"1. Tạo xong {total_clips} clip trên Google Flow, tải về đổi tên lần lượt: " + ", ".join([f"`{i+1}.mp4`" for i in range(total_clips)]),
         f"2. Thả tất cả clip vào thư mục:",
         f"   `{clips_dir}`",
@@ -464,30 +567,34 @@ def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir
     clips = data.get("clips", [])
     total_clips = len(clips)
     total_sec = total_clips * 10
+    agent_p1, agent_p2 = _generate_flow_agent_batch_prompts(data)
+
     lines = [
         "=" * 92,
-        f"📋 GOOGLE FLOW READY PROMPTS (TIẾT KIỆM CREDIT): {data.get('event_title', '')}",
+        f"📋 GOOGLE FLOW AGENT PROMPTS (ĐÓNG GÓI 2 PART - 100% POLICY SAFE): {data.get('event_title', '')}",
         f"Tỷ lệ: 9:16 dọc | {total_clips} clips x 10s = {total_sec}s | Thư mục ném clip: {clips_dir}",
         "=" * 92,
         "",
         "📌 [BƯỚC 1: TẠO 1 ẢNH DUY NHẤT] BẢNG TOÀN BỘ NHÂN VẬT (MASTER CHARACTER LINEUP SHEET):",
         "   (💡 Chỉ tạo 1 ảnh này duy nhất lúc đầu làm ảnh tham chiếu. Toàn bộ nhân vật chính đều có mặt, trang phục & màu sắc đối lập, không trùng lặp)",
         "-" * 92,
-        data.get("character_reference_sheet_prompt", ""),
+        _sanitize_for_google_safety_policy(data.get("character_reference_sheet_prompt", "")),
         "-" * 92,
         "",
-        "🎬 [BƯỚC 2: TẠO VIDEO TRỰC TIẾP] (DÁN THẲNG VÀO VEO / OMNI - KHÔNG CẦN TẠO ẢNH TĨNH CHO TỪNG CẢNH):",
+        "🤖 [BƯỚC 2: NÉM PROMPT CHO CON AGENT GOOGLE FLOW ĐỂ TỰ ĐỘNG GEN 3 CLIPS/PART]:",
         "=" * 92,
+        "📦 >>> PROMPT PART 1 (Ném cho Flow Agent để gen Clips 1, 2, 3):",
+        "-" * 92,
+        agent_p1,
+        "-" * 92,
+        "",
     ]
-    for c in clips:
-        idx = c.get("clip_index", 1)
+
+    if agent_p2:
         lines.extend([
-            f"▶ [CLIP {idx}/{total_clips}] ({c.get('time_range', '10s')}):",
-            f"Lời bình: \"{c.get('narration', '')}\"",
-            "",
-            f"🎥 Prompt Tạo Video Trực Tiếp (Text-to-Video trên Flow):",
-            c.get("animation_prompt_en", ""),
-            "",
+            "📦 >>> PROMPT PART 2 (Ném cho Flow Agent để gen Clips 4, 5, 6):",
+            "-" * 92,
+            agent_p2,
             "-" * 92,
             "",
         ])
@@ -502,4 +609,6 @@ def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir
         "=" * 92,
     ])
     return "\n".join(lines)
+
+
 
