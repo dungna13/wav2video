@@ -204,10 +204,19 @@ def get_curated_stickman_topics() -> List[Dict[str, str]]:
     ]
 
 
-def build_stickman_system_prompt() -> str:
+def build_stickman_system_prompt(num_clips: int = 3) -> str:
+    total_sec = num_clips * 10
     return (
         "You are the master Historical Stickman Animation Director, Writer, Character Designer, and Prompt Engineer, "
         "following the exact specifications of 'Historical Stickman Video Instructions'.\n\n"
+        "CREDIT-SAVING & PRODUCTION WORKFLOW RULES:\n"
+        "1. SINGLE MASTER CHARACTER LINEUP SHEET:\n"
+        "   - The 'character_reference_sheet_prompt' MUST be a SINGLE master image prompt containing ALL named recurring characters together side-by-side on ONE canvas in separated panels (e.g. Left: Protagonist, Right: Antagonist).\n"
+        "   - Every character must have clearly distinct silhouette, contrasting color palette (e.g. Red vs Blue), different hairstyles/hats, and distinct facial expressions so they NEVER look identical or get confused.\n"
+        "   - Nameless crowd/soldiers remain visually subordinate in simple brown peasant tunics.\n\n"
+        "2. DIRECT VIDEO GENERATION (ZERO CREDIT WASTED ON STILL IMAGES):\n"
+        "   - Users do NOT need to generate still starting images for every scene. The 'animation_prompt_en' is an ALL-IN-ONE DIRECT VIDEO PROMPT ready to be pasted straight into Text-to-Video / Video mode in Google Flow (Veo 3.1 & Omni).\n"
+        "   - Each video prompt must be self-contained: explicitly specifying the 2D OverSimplified cartoon style, the characters present (names, skin tone, facial expression, costume colors), the environment, and the 4-phase local timing (0-2s, 2-5s, 5-8s, 8-10s).\n\n"
         "CRITICAL VISUAL STYLE REQUIREMENTS (PREVENT ALL-BLACK SILHOUETTES):\n"
         "The characters are NOT solid black silhouettes or featureless shadow figures! "
         "They are colorful, expressive 2D cartoon characters in the style of OverSimplified / Infographics / cute animated history documentaries:\n"
@@ -220,14 +229,14 @@ def build_stickman_system_prompt() -> str:
         "- PROHIBITION IN PROMPTS: NEVER use ambiguous phrases like 'black stickman' or 'shadow figure'. ALWAYS explicitly include: "
         "'2D colorful cartoon illustration in OverSimplified animation style', 'visible cartoon face with expressive white eyes and dynamic mouth', 'NOT a black silhouette, NOT a shadow figure'.\n\n"
         "STRICT PRODUCTION REQUIREMENTS:\n"
-        "1. FORMAT: Vertical 9:16 frame. Exactly 6 editorial clips x 10 seconds each = 60 seconds total.\n"
+        f"1. FORMAT: Vertical 9:16 frame. Exactly {num_clips} editorial clips x 10 seconds each = {total_sec} seconds total.\n"
         "2. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 18 to 24 spoken words per 10-second clip. "
         "Clip 1 must hook immediately within the first 2 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
         "3. PROMPTS PER CLIP:\n"
-        "   - 'image_prompt_en': 70-120 descriptive words. Must include: Vertical 9:16, 2D colorful cartoon illustration in OverSimplified style, "
+        "   - 'image_prompt_en': 70-120 descriptive words. Vertical 9:16, 2D colorful cartoon illustration in OverSimplified style, "
         "character name, skin tone, exact facial expression (eyes, eyebrows, mouth), hair/headwear, specific colored historical attire, "
-        "props, environment, lighting, warm parchment or stylized matte background, clean vector lines, 'NOT a silhouette, NOT all-black'.\n"
-        "   - 'animation_prompt_en': 150-280 words specifying that the scene image is the starting frame. Account for all 10 seconds using 4-phase local timing: "
+        "props, environment, lighting, clean vector lines, 'NOT a silhouette, NOT all-black'.\n"
+        "   - 'animation_prompt_en': 150-280 words. All-in-one direct video prompt for Google Flow. Account for all 10 seconds using 4-phase local timing: "
         "0.0-2.0s (facial reaction & hook), 2.0-5.0s (main body action & prop interaction), 5.0-8.0s (escalation, reaction, factual reveal), 8.0-10.0s (land outcome & explicitly describe final pose). "
         "Describe facial expressions, eye movements, and mouth changes dynamically throughout the 10 seconds.\n"
         "4. Output ONLY a valid JSON object matching the requested schema."
@@ -235,44 +244,49 @@ def build_stickman_system_prompt() -> str:
 
 
 
-def build_stickman_user_prompt(topic: str, language: str = "vi") -> str:
+def build_stickman_user_prompt(topic: str, num_clips: int = 3, language: str = "vi") -> str:
+    total_sec = num_clips * 10
     lang_instruction = (
-        "Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (18-24 từ mỗi cảnh). "
+        f"Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (18-24 từ mỗi cảnh cho đúng {num_clips} cảnh). "
         "Phần prompt kỹ thuật ('image_prompt_en', 'animation_prompt_en', 'character_reference_sheet_prompt', 'consistency_agent_prompt') "
         "BẮT BUỘC viết bằng TIẾNG ANH chuyên nghiệp cho Google Flow (Veo 3.1 & Omni 1.2)."
         if language == "vi" else
-        "Write narration in punchy English (18-24 words per clip). All generation prompts in English."
+        f"Write narration in punchy English (18-24 words per clip for exactly {num_clips} clips). All generation prompts in English."
     )
     return (
-        f"Create a complete 60-second Historical Stickman Video Production Package for the event: '{topic}'.\n\n"
+        f"Create a high-impact, credit-saving {total_sec}-second Historical Stickman Video Production Package for the event: '{topic}'.\n\n"
         f"Language requirement: {lang_instruction}\n"
-        f"CHARACTER DESIGN MANDATE:\n"
-        f"DO NOT create all-black silhouette stick figures! In Veo/Imagen, simple 'stickman' creates a creepy pitch-black shadow. "
-        f"Instead, create cute, expressive 2D cartoon characters in the style of OverSimplified / Infographics Show: "
-        f"Characters MUST have light cartoon skin (cream/fair/peach), large white cartoon eyes with black pupils, clear animated mouth and eyebrows for visible emotions (anger, fear, shock, triumph), hair, and brightly colored period costumes (e.g. red tunic, blue robes). "
-        f"In every 'image_prompt_en' and 'character_reference_sheet_prompt', explicitly describe the face, eyes, hair, skin tone, and colorful attire, and add 'NOT a black silhouette, NOT a shadow figure'.\n\n"
-        f"Make sure there are exactly 6 clips of 10.0 seconds each (0.0-10.0s, 10.0-20.0s, 20.0-30.0s, 30.0-40.0s, 40.0-50.0s, 50.0-60.0s). "
-        f"Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
+        f"CLIP STRUCTURE ({num_clips} CLIPS x 10s = {total_sec}s):\n"
+        f"Make sure there are EXACTLY {num_clips} clips of 10.0 seconds each ({', '.join([f'{i*10}.0-{(i+1)*10}.0s' for i in range(num_clips)])}).\n"
+        f"- Clip 1: Immediate hook & premise setup.\n"
+        + (f"- Clip 2: The turning point, dramatic trap/clash.\n- Clip 3: The historic climax, decisive victory & legacy.\n" if num_clips == 3 else "- Advance the historical cause-and-effect seamlessly through each clip.\n")
+        + "\nCHARACTER ROSTER & MASTER REFERENCE SHEET MANDATE:\n"
+        "1. In 'character_reference_sheet_prompt': Produce ONE SINGLE master lineup image prompt containing ALL recurring main characters side-by-side in separated panels (Left side vs Right side). "
+        "Ensure high contrast between characters: completely different costume colors (e.g. vibrant crimson red vs imperial navy blue), different headwear/hair, different distinct facial expressions, so they NEVER duplicate or look alike. Only generic nameless soldiers in background share simple brown peasant tunics.\n"
+        "2. In all 'image_prompt_en' and 'animation_prompt_en': Explicitly describe the 2D OverSimplified cartoon style, light skin tone, large white cartoon eyes with black pupils, expressive mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a shadow figure'.\n"
+        "Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
     )
 
 
 
 def generate_stickman_production_package(
     topic: str,
+    num_clips: int = 3,
     language: str = "vi",
     voice_name: str = "vanthanhthu",
     speed_rate: float = 1.34,
 ) -> Dict[str, Any]:
-    """Tạo gói sản xuất Video Lịch Sử Người Que hoàn chỉnh từ A-Z."""
-    sys_prompt = build_stickman_system_prompt()
-    user_prompt = build_stickman_user_prompt(topic, language=language)
+    """Tạo gói sản xuất Video Lịch Sử Người Que hoàn chỉnh từ A-Z tối ưu tiết kiệm credit."""
+    sys_prompt = build_stickman_system_prompt(num_clips=num_clips)
+    user_prompt = build_stickman_user_prompt(topic, num_clips=num_clips, language=language)
 
-    print(f"\n[Stickman Director] Đang nghiên cứu lịch sử và thiết kế kịch bản 60s cho: '{topic}'...")
+    print(f"\n[Stickman Director] Đang nghiên cứu lịch sử và thiết kế kịch bản {num_clips*10}s ({num_clips} clips) cho: '{topic}'...")
     parsed_json = call_gemini_thinking_structured(
         prompt=user_prompt,
         response_schema=STICKMAN_GEMINI_SCHEMA,
         system_instruction=sys_prompt,
     )
+
 
     if not parsed_json or not parsed_json.get("clips"):
         raise RuntimeError(f"Không thể tạo kịch bản Stickman cho chủ đề '{topic}'. Vui lòng kiểm tra lại kết nối mạng hoặc API Key.")
@@ -359,10 +373,12 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
     hb = data.get("historical_brief", {})
     chars = data.get("characters", [])
     clips = data.get("clips", [])
+    total_clips = len(clips)
+    total_sec = total_clips * 10
 
     lines = [
         f"# 🎬 GÓI SẢN XUẤT HOẠT HÌNH LỊCH SỬ NGƯỜI QUE: {data.get('event_title', '')}",
-        f"**Địa điểm & Thời gian**: {data.get('date_and_location', '')} | **Thời lượng**: 60 giây (6 clips x 10s)",
+        f"**Địa điểm & Thời gian**: {data.get('date_and_location', '')} | **Thời lượng**: {total_sec} giây ({total_clips} clips x 10s)",
         f"**Thư mục làm việc**: `{run_dir}`",
         "",
         "---",
@@ -379,7 +395,7 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
     lines.extend([
         "",
         "---",
-        "## 2. Phong Cách Hình Ảnh & Thiết Kế Nhân Vật (Locked Stickman Style)",
+        "## 2. Phong Cách Hình Ảnh & Thiết Kế Nhân Vật (Locked Cartoon Style)",
         f"**Visual Style Anchor**: `{data.get('visual_style_anchor', '')}`",
         "",
         "### Danh Sách Nhân Vật Cốt Lõi:",
@@ -394,8 +410,8 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
 
     lines.extend([
         "---",
-        "## 3. Prompt Tạo Bảng Nhân Vật Mẫu (Character Reference Sheet Prompt)",
-        "> *Copy prompt này dán vào Google Flow / Imagen 3 để tạo ảnh mẫu chuẩn hóa nhân vật trước:*",
+        "## 3. [BƯỚC 1: ẢNH DUY NHẤT] Prompt Bảng Nhân Vật Toàn Diện (Master Character Lineup Sheet)",
+        "> *💡 TIẾT KIỆM CREDIT: Bạn CHỈ CẦN tạo 1 ảnh duy nhất này lúc đầu để làm ảnh tham chiếu (Image Reference) cho toàn bộ nhân vật. Tất cả các nhân vật chính đều xuất hiện chung trên 1 ảnh với màu sắc và trang phục đối lập, không bao giờ bị trùng lặp!*",
         "```text",
         data.get("character_reference_sheet_prompt", ""),
         "```",
@@ -407,7 +423,7 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
         "```",
         "",
         "---",
-        "## 5. Kịch Bản & Cặp Prompt Cho Từng Cảnh (Clip 1 -> Clip 6)",
+        f"## 5. [BƯỚC 2: TẠO VIDEO TRỰC TIẾP] Danh Sách {total_clips} Clips (Dán Thẳng Vào Text-To-Video, Không Cần Tạo Ảnh Tĩnh)",
     ])
 
     for c in clips:
@@ -418,15 +434,12 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
             f"**🎬 Hành động chính**: {c.get('main_visual_action')}",
             f"**🔊 Hiệu ứng âm thanh (SFX)**: `{c.get('sfx_cue', 'none')}`",
             "",
-            f"**🖼️ Prompt Ảnh Bắt Đầu (Starting Frame Image Prompt)**:",
-            "```text",
-            c.get("image_prompt_en", ""),
-            "```",
-            "",
-            f"**🎥 Prompt Video Animation (Veo 3.1 / Omni 1.2 — 4 Nhịp Thời Gian)**:",
+            f"**🎥 PROMPT TẠO VIDEO TRỰC TIẾP (DÁN THẲNG VÀO VEO / OMNI TRÊN FLOW)**:",
             "```text",
             c.get("animation_prompt_en", ""),
             "```",
+            "",
+            f"*(Tùy chọn phụ: Nếu bạn thích chế độ Image-to-Video thì mới dùng prompt ảnh này: `{c.get('image_prompt_en', '')}`)*",
             "",
             f"**🚫 Negative Constraints**: `{c.get('negative_constraints_en', '')}`",
             f"**🔗 Khớp nối sang cảnh tiếp theo**: {c.get('continuity_outgoing_state', '')}",
@@ -436,8 +449,8 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
 
     lines.extend([
         "## 6. Hướng Dẫn Dựng & Hoàn Tất Video Bằng 1 Lệnh",
-        "1. Mở Google Flow trên trình duyệt, dán các Prompt ở trên vào để tạo 6 clip.",
-        f"2. Tải 6 clip về đổi tên thành `1.mp4`, `2.mp4`... `6.mp4` và thả vào thư mục:",
+        f"1. Tạo xong {total_clips} clip trên Google Flow, tải về đổi tên lần lượt: " + ", ".join([f"`{i+1}.mp4`" for i in range(total_clips)]),
+        f"2. Thả tất cả clip vào thư mục:",
         f"   `{clips_dir}`",
         "3. Chạy lệnh dựng tự động (cắt sạch watermark Veo, khớp giọng đọc, ghép nhạc, làm phụ đề Safe Zone):",
         f"   ```bash",
@@ -448,28 +461,31 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
 
 
 def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir: Path) -> str:
+    clips = data.get("clips", [])
+    total_clips = len(clips)
+    total_sec = total_clips * 10
     lines = [
         "=" * 92,
-        f"📋 GOOGLE FLOW READY PROMPTS: {data.get('event_title', '')}",
-        f"Tỷ lệ: 9:16 dọc | 6 clips x 10s = 60s | Thư mục ném clip: {clips_dir}",
+        f"📋 GOOGLE FLOW READY PROMPTS (TIẾT KIỆM CREDIT): {data.get('event_title', '')}",
+        f"Tỷ lệ: 9:16 dọc | {total_clips} clips x 10s = {total_sec}s | Thư mục ném clip: {clips_dir}",
         "=" * 92,
         "",
-        "📌 [BƯỚC 1] TẠO BẢNG NHÂN VẬT MẪU (CHARACTER REFERENCE SHEET):",
+        "📌 [BƯỚC 1: TẠO 1 ẢNH DUY NHẤT] BẢNG TOÀN BỘ NHÂN VẬT (MASTER CHARACTER LINEUP SHEET):",
+        "   (💡 Chỉ tạo 1 ảnh này duy nhất lúc đầu làm ảnh tham chiếu. Toàn bộ nhân vật chính đều có mặt, trang phục & màu sắc đối lập, không trùng lặp)",
         "-" * 92,
         data.get("character_reference_sheet_prompt", ""),
         "-" * 92,
         "",
+        "🎬 [BƯỚC 2: TẠO VIDEO TRỰC TIẾP] (DÁN THẲNG VÀO VEO / OMNI - KHÔNG CẦN TẠO ẢNH TĨNH CHO TỪNG CẢNH):",
+        "=" * 92,
     ]
-    for c in data.get("clips", []):
+    for c in clips:
         idx = c.get("clip_index", 1)
         lines.extend([
-            f"🎬 [CLIP {idx}/6] ({c.get('time_range', '10s')}):",
+            f"▶ [CLIP {idx}/{total_clips}] ({c.get('time_range', '10s')}):",
             f"Lời bình: \"{c.get('narration', '')}\"",
             "",
-            f"▶ 1. Prompt Tạo Ảnh Tĩnh (Starting Frame):",
-            c.get("image_prompt_en", ""),
-            "",
-            f"▶ 2. Prompt Tạo Video Veo / Omni (Animation):",
+            f"🎥 Prompt Tạo Video Trực Tiếp (Text-to-Video trên Flow):",
             c.get("animation_prompt_en", ""),
             "",
             "-" * 92,
@@ -479,9 +495,11 @@ def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir
     lines.extend([
         "=" * 92,
         "💡 HƯỚNG DẪN DỰNG HOÀN THIỆN:",
-        f"Sau khi tạo xong 6 clip trên Flow, bạn tải về thả vào: {clips_dir}",
-        f"Rồi chạy lệnh sau trên terminal để tự động cắt watermark & xuất video 60s hoàn chỉnh:",
+        f"Sau khi tạo xong {total_clips} clip trên Flow, bạn tải về đổi tên {', '.join([f'{i+1}.mp4' for i in range(total_clips)])} thả vào:",
+        f"{clips_dir}",
+        f"Rồi chạy lệnh sau trên terminal để tự động cắt watermark & xuất video hoàn chỉnh:",
         f"./run.sh --flow-render \"{run_dir}\"",
         "=" * 92,
     ])
     return "\n".join(lines)
+

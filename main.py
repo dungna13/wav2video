@@ -66,6 +66,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "voice": "vanthanhthu",  # MẶC ĐỊNH GIỌNG NAM KHOA HỌC VŨ TRỤ DỒN DẬP 1.35x CUỐN HÚT CHUẨN TIKTOK VANTHANHTHU09
         "stickman": False,
         "stickman_topics": False,
+        "clips": 3,  # MẶC ĐỊNH 3 CLIPS = 30s TIẾT KIỆM CREDIT VÀ TỐI ƯU RETENTION TIKTOK
         "topic": "",
     }
     words = []
@@ -77,6 +78,11 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["stickman_topics"] = True
         elif a in ("--stickman", "-s", "--stickman-history"):
             opts["stickman"] = True
+        elif a in ("--clips", "-c"):
+            try:
+                opts["clips"] = max(1, min(6, int(next(it, 3))))
+            except Exception:
+                opts["clips"] = 3
         elif a == "--model":
             opts["model"] = next(it, "auto").strip().lower()
         elif a in ("--batch", "--queue"):
@@ -257,17 +263,18 @@ def main():
         from graph.stickman_director import generate_stickman_production_package
         info = generate_stickman_production_package(
             topic=opts["topic"],
+            num_clips=opts["clips"],
             language="vi",
             voice_name=opts["voice"],
             speed_rate=opts["speed"],
         )
         print("\n" + "=" * 96)
-        print(f"✅ GÓI SẢN XUẤT STICKMAN LỊCH SỬ SẴN SÀNG: {opts['topic']}")
+        print(f"✅ GÓI SẢN XUẤT STICKMAN LỊCH SỬ SẴN SÀNG: {opts['topic']} ({opts['clips']} CLIPS = {opts['clips']*10}S)")
         print("=" * 96)
         print(f" • File Gói Sản Xuất Markdown: {info['package_md_path']}")
         print(f" • File Prompts Google Flow  : {info['prompts_txt_path']}")
         print(f" • File Giọng Đọc + Nhạc BGM : {info['wav_path']}")
-        print(f" • Thư mục thả 6 clip Flow   : {info['clips_dir']}")
+        print(f" • Thư mục thả {opts['clips']} clip Flow   : {info['clips_dir']}")
         print(f" • Lệnh dựng hoàn tất        : ./run.sh --flow-render \"{info['run_dir']}\"")
         print("=" * 96)
         print("\n📋 NỘI DUNG PROMPTS GOOGLE FLOW (COPY DÁN THẲNG VÀO FLOW):")
