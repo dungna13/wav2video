@@ -208,21 +208,31 @@ def build_stickman_system_prompt() -> str:
     return (
         "You are the master Historical Stickman Animation Director, Writer, Character Designer, and Prompt Engineer, "
         "following the exact specifications of 'Historical Stickman Video Instructions'.\n\n"
+        "CRITICAL VISUAL STYLE REQUIREMENTS (PREVENT ALL-BLACK SILHOUETTES):\n"
+        "The characters are NOT solid black silhouettes or featureless shadow figures! "
+        "They are colorful, expressive 2D cartoon characters in the style of OverSimplified / Infographics / cute animated history documentaries:\n"
+        "- HEAD & FACE: Round heads with light cartoon skin tone (light tan, fair, or peach skin; NEVER pitch-black fill). "
+        "Fully visible, highly expressive facial features: large white cartoon eyes with black pupils, dynamic animated eyebrows (furrowed, arched, or worried), "
+        "and expressive mouth (shouting with teeth, wide shocked O-mouth, confident smirk, or panicked grimace). "
+        "Hair is clearly visible (topknot, sideburns, bangs, or bun under headwear).\n"
+        "- COSTUMES & COLORS: Outfits MUST be colorful and historically themed (e.g. crimson red tunic #D32F2F, royal blue robe #1976D2, bronze armor, leather belts). "
+        "Limbs have clean black outlines, but the body and face are fully colored.\n"
+        "- PROHIBITION IN PROMPTS: NEVER use ambiguous phrases like 'black stickman' or 'shadow figure'. ALWAYS explicitly include: "
+        "'2D colorful cartoon illustration in OverSimplified animation style', 'visible cartoon face with expressive white eyes and dynamic mouth', 'NOT a black silhouette, NOT a shadow figure'.\n\n"
         "STRICT PRODUCTION REQUIREMENTS:\n"
         "1. FORMAT: Vertical 9:16 frame. Exactly 6 editorial clips x 10 seconds each = 60 seconds total.\n"
-        "2. STYLE: Expressive 2D historical stickman animation on textured matte parchment / clean documentary background. "
-        "High readability, bold black outlines, distinctive historical headwear/hats, simple historical tunics/uniforms with distinctive color accents. "
-        "No modern photorealism, no 3D uncanny valley. Clean cinematic lighting and clear visual staging.\n"
-        "3. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 18 to 24 spoken words per 10-second clip. "
+        "2. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 18 to 24 spoken words per 10-second clip. "
         "Clip 1 must hook immediately within the first 2 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
-        "4. PROMPTS PER CLIP:\n"
-        "   - 'image_prompt_en': The starting still frame (clean vertical 9:16, locked stickman style, exact character poses, accessories, uncluttered lower third for subtitles).\n"
-        "   - 'animation_prompt_en': 200-350 words specifying that the scene image is the starting frame. Account for all 10 seconds using the 4-phase local timing: "
-        "0.0-2.0s (establish hook), 2.0-5.0s (main body action & prop interaction), 5.0-8.0s (escalation, reaction, factual reveal), 8.0-10.0s (land outcome & explicitly describe final pose). "
-        "All motion physically understandable, seamless continuation.\n"
-        "5. CHARACTER CONSISTENCY: Provide a complete Character Reference Sheet Prompt and standalone Consistency Agent Instructions.\n"
-        "6. Output ONLY a valid JSON object matching the requested schema."
+        "3. PROMPTS PER CLIP:\n"
+        "   - 'image_prompt_en': 70-120 descriptive words. Must include: Vertical 9:16, 2D colorful cartoon illustration in OverSimplified style, "
+        "character name, skin tone, exact facial expression (eyes, eyebrows, mouth), hair/headwear, specific colored historical attire, "
+        "props, environment, lighting, warm parchment or stylized matte background, clean vector lines, 'NOT a silhouette, NOT all-black'.\n"
+        "   - 'animation_prompt_en': 150-280 words specifying that the scene image is the starting frame. Account for all 10 seconds using 4-phase local timing: "
+        "0.0-2.0s (facial reaction & hook), 2.0-5.0s (main body action & prop interaction), 5.0-8.0s (escalation, reaction, factual reveal), 8.0-10.0s (land outcome & explicitly describe final pose). "
+        "Describe facial expressions, eye movements, and mouth changes dynamically throughout the 10 seconds.\n"
+        "4. Output ONLY a valid JSON object matching the requested schema."
     )
+
 
 
 def build_stickman_user_prompt(topic: str, language: str = "vi") -> str:
@@ -236,9 +246,15 @@ def build_stickman_user_prompt(topic: str, language: str = "vi") -> str:
     return (
         f"Create a complete 60-second Historical Stickman Video Production Package for the event: '{topic}'.\n\n"
         f"Language requirement: {lang_instruction}\n"
+        f"CHARACTER DESIGN MANDATE:\n"
+        f"DO NOT create all-black silhouette stick figures! In Veo/Imagen, simple 'stickman' creates a creepy pitch-black shadow. "
+        f"Instead, create cute, expressive 2D cartoon characters in the style of OverSimplified / Infographics Show: "
+        f"Characters MUST have light cartoon skin (cream/fair/peach), large white cartoon eyes with black pupils, clear animated mouth and eyebrows for visible emotions (anger, fear, shock, triumph), hair, and brightly colored period costumes (e.g. red tunic, blue robes). "
+        f"In every 'image_prompt_en' and 'character_reference_sheet_prompt', explicitly describe the face, eyes, hair, skin tone, and colorful attire, and add 'NOT a black silhouette, NOT a shadow figure'.\n\n"
         f"Make sure there are exactly 6 clips of 10.0 seconds each (0.0-10.0s, 10.0-20.0s, 20.0-30.0s, 30.0-40.0s, 40.0-50.0s, 50.0-60.0s). "
         f"Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
     )
+
 
 
 def generate_stickman_production_package(
