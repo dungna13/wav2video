@@ -64,6 +64,8 @@ def _parse_args(argv) -> Dict[str, Any]:
         "max_blocks": 2,
         "speed": 1.35,
         "voice": "vanthanhthu",  # MẶC ĐỊNH GIỌNG NAM KHOA HỌC VŨ TRỤ DỒN DẬP 1.35x CUỐN HÚT CHUẨN TIKTOK VANTHANHTHU09
+        "stickman": False,
+        "stickman_topics": False,
         "topic": "",
     }
     words = []
@@ -71,6 +73,10 @@ def _parse_args(argv) -> Dict[str, Any]:
     for a in it:
         if a in ("--list-voices", "--voices"):
             opts["list_voices"] = True
+        elif a in ("--stickman-topics", "--topics", "--historical-topics"):
+            opts["stickman_topics"] = True
+        elif a in ("--stickman", "-s", "--stickman-history"):
+            opts["stickman"] = True
         elif a == "--model":
             opts["model"] = next(it, "auto").strip().lower()
         elif a in ("--batch", "--queue"):
@@ -224,6 +230,54 @@ def main():
     if opts["list_voices"]:
         from graph.audio_sync import print_voices_table
         print_voices_table()
+        return
+
+    if opts["stickman_topics"] or (opts["stickman"] and not opts["topic"]):
+        from graph.stickman_director import get_curated_stickman_topics
+        topics = get_curated_stickman_topics()
+        print("=" * 96)
+        print("📜 8 Ý TƯỞNG SỰ KIỆN LỊCH SỬ HOẠT HÌNH NGƯỜI QUE (HISTORICAL STICKMAN - STEP 1)")
+        print("=" * 96)
+        for t in topics:
+            print(f"[{t['id']}] {t['title'].upper()}")
+            print(f"    • Thời gian & Địa điểm : {t['date_place']}")
+            print(f"    • Tiền đề thực tế       : {t['premise']}")
+            print(f"    • Thị giác 2s mở đầu    : {t['opening_visual']}")
+            print(f"    • Mâu thuẫn chính       : {t['conflict']}")
+            print(f"    • Kết quả / Ý nghĩa     : {t['outcome']}")
+            print(f"    • Thời lượng & Độ khó   : {t['duration']} | {t['difficulty']}")
+            print("-" * 96)
+        print("\n💡 GỢI Ý CHẠY NGAY:")
+        print("  ./run.sh --stickman \"Trận Bạch Đằng 938: Bẫy cọc ngầm đánh tan quân Nam Hán\"")
+        print("  ./run.sh --stickman \"The 1814 London Beer Flood: Đại hồng thủy bia ở London\"")
+        print("=" * 96)
+        return
+
+    if opts["stickman"]:
+        from graph.stickman_director import generate_stickman_production_package
+        info = generate_stickman_production_package(
+            topic=opts["topic"],
+            language="vi",
+            voice_name=opts["voice"],
+            speed_rate=opts["speed"],
+        )
+        print("\n" + "=" * 96)
+        print(f"✅ GÓI SẢN XUẤT STICKMAN LỊCH SỬ SẴN SÀNG: {opts['topic']}")
+        print("=" * 96)
+        print(f" • File Gói Sản Xuất Markdown: {info['package_md_path']}")
+        print(f" • File Prompts Google Flow  : {info['prompts_txt_path']}")
+        print(f" • File Giọng Đọc + Nhạc BGM : {info['wav_path']}")
+        print(f" • Thư mục thả 6 clip Flow   : {info['clips_dir']}")
+        print(f" • Lệnh dựng hoàn tất        : ./run.sh --flow-render \"{info['run_dir']}\"")
+        print("=" * 96)
+        print("\n📋 NỘI DUNG PROMPTS GOOGLE FLOW (COPY DÁN THẲNG VÀO FLOW):")
+        print("-" * 96)
+        try:
+            with open(info['prompts_txt_path'], 'r', encoding='utf-8') as pf:
+                print(pf.read())
+        except Exception as pe:
+            print(f"[Không thể đọc file prompts: {pe}]")
+        print("-" * 96)
         return
 
     if opts["batch"]:

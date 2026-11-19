@@ -261,6 +261,32 @@ class TestOmniFlowPromptSanitization(unittest.TestCase):
         self.assertIn("photorealistic 35mm motion picture", prompt)
 
 
+class TestHistoricalStickmanDirector(unittest.TestCase):
+    """Kiểm tra module Đạo diễn Hoạt hình Người Que Lịch sử (Historical Stickman Framework)."""
+
+    def test_curated_topics_spec(self):
+        from graph.stickman_director import get_curated_stickman_topics
+        topics = get_curated_stickman_topics()
+        self.assertEqual(len(topics), 8, "Cần có đúng 8 chủ đề mẫu chuẩn Step 1")
+        required_keys = ["id", "title", "date_place", "premise", "opening_visual", "conflict", "outcome", "duration", "difficulty"]
+        for t in topics:
+            for k in required_keys:
+                self.assertIn(k, t, f"Topic {t.get('id')} thiếu trường: {k}")
+
+    def test_stickman_cli_args_parsing(self):
+        opts1 = _parse_args(["--stickman-topics"])
+        self.assertTrue(opts1["stickman_topics"])
+
+        opts2 = _parse_args(["--stickman", "Trận Bạch Đằng 938"])
+        self.assertTrue(opts2["stickman"])
+        self.assertEqual(opts2["topic"], "Trận Bạch Đằng 938")
+
+        opts3 = _parse_args(["-s", "The 1814 London Beer Flood"])
+        self.assertTrue(opts3["stickman"])
+        self.assertEqual(opts3["topic"], "The 1814 London Beer Flood")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

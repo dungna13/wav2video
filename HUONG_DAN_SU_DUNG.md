@@ -1,49 +1,76 @@
-# 🎬 HƯỚNG DẪN TẠO VIDEO TỰ ĐỘNG TỪ A-Z (CHUẨN TIKTOK TRIỆU VIEW)
+# 🎬 HƯỚNG DẪN SẢN XUẤT VIDEO TỰ ĐỘNG CHUẨN TIKTOK TRIỆU VIEW
 
-> Hệ thống đã được thiết kế lại **hoàn toàn tự động từ A-Z**: Tự động viết kịch bản giật tít, lồng giọng đọc Nữ Review Phim siêu cuốn (1.42x), hòa âm nhạc nền bí ẩn kịch tính (Dark Suspense Bass), tự động kéo video b-roll HD từ web (Mixkit / Pexels / Pixabay), ghép phụ đề Safe Zone và xuất thành phẩm ngay trong 1 lệnh duy nhất! **Không còn dính nhãn AI, không cần tạo prompt hay thao tác thủ công trên Google Flow.**
+> Hệ thống hỗ trợ 2 mô hình sản xuất nội dung hàng đầu hiện nay:
+> 1. **Hoạt Hình Người Que Lịch Sử (Historical Stickman)**: Chuẩn tài liệu `Historical_Stickman_Video_Instructions.docx` (6 cảnh x 10s = 60s, Character Sheet, Veo/Omni prompts 4 nhịp thời gian, BGM dồn dập).
+> 2. **Điện Ảnh B-Roll Thực Tế (Web Cinematic Auto)**: Tự động tải video thật HD từ web, ghép lồng giọng đọc và nhạc nền xuất file ngay trong 30s.
 
 ---
 
-## 🚀 CÁCH CHẠY 1 LỆNH DUY NHẤT TỪ A-Z (KHUYÊN DÙNG SỐ 1):
+## ⚔️ PHẦN 1: HOẠT HÌNH NGƯỜI QUE LỊCH SỬ (HISTORICAL STICKMAN 60S)
 
-Chỉ cần gõ chủ đề của bạn:
+Chuẩn 100% khung chỉ dẫn sản xuất chuyên nghiệp:
+- **Thời lượng:** Chuẩn 60 giây (6 clips x 10 giây). Tỷ lệ 9:16 dọc.
+- **Kịch bản:** 18–24 từ/cảnh. Hook kịch tính 2s đầu tiên, twist ở cảnh 4, cao trào cảnh 5, kết luận sâu sắc cảnh 6.
+- **Tính nhất quán nhân vật (Character Consistency):** Tự động sinh bảng Character Reference Sheet và chỉ thị hệ thống Continuity Agent.
+- **Prompt 2 tầng cho Veo / Omni / Flow:** 1 Ảnh tĩnh xuất phát điểm (Starting Frame) + 1 Video chuyển động 4 nhịp thời gian (0-2s, 2-5s, 5-8s, 8-10s).
+- **Âm thanh:** Tự động thu âm giọng đọc dồn dập, hòa âm nhạc nền chiến trận bí ẩn (Du Sơn Luyến x TCMHUC) với hiệu ứng Auto-Ducking chuẩn studio.
+
+### 1. Xem 8 chủ đề sự kiện lịch sử mẫu:
 ```bash
-cd /home/blue/Downloads/Projects/wav2video
-../.venv/bin/python main.py "Tại sao người trẻ không còn mặn mà mua nhà"
+./run.sh --stickman-topics
 ```
 
-### 🎯 Máy sẽ tự động làm 100% trong ~30 giây:
-1. **Kịch bản & Hook 3s:** Viết kịch bản theo mô hình tương phản, giữ chân người xem ngay từ giây đầu tiên.
-2. **Giọng đọc Review Phim (1.42x):** Tự động dùng giọng Nữ Review Phim (`review_phim` - Hoài My +4Hz, ngắt nhịp siêu ngắn 0.05s) dồn dập, sắc sảo y hệt các kênh triệu view (như `vanthanhthu09`).
-3. **Nhạc nền bí ẩn kịch tính:** Tự động hòa âm bản nhạc **Cinematic Mystery / Suspense Bass** đập ngầm kịch tính ở mức 28% âm lượng, có tính năng Sidechain Ducking (nhạc tự hạ xuống khi giọng đọc cất lên).
-4. **Săn Footage HD thật từ Web:** Tự động tìm và tải các đoạn video stock HD thật từ web (Mixkit, Pexels, Pixabay) cho từng cảnh, cắt đúng nhịp câu thoại.
-5. **Dựng & Xuất thành phẩm:** Tự động crop 9:16 dọc, vi hạt film grain, phụ đề vàng viền đen Safe Zone và xuất ra:
-   - 🎬 `final_master.mp4`: Video hoàn chỉnh sẵn sàng đăng TikTok (100% không bị gắn nhãn AI).
-   - 🖼️ `cover.jpg`: Ảnh bìa TikTok 9:16 chuẩn lưới hiển thị profile.
-   - 📋 `post_info.txt`: Tiêu đề + Caption gợi ý + 7 Hashtags xu hướng.
+### 2. Tạo toàn bộ gói sản xuất chỉ bằng 1 lệnh:
+```bash
+./run.sh --stickman "Trận Bạch Đằng 938: Bẫy cọc ngầm đánh tan quân Nam Hán"
+# Hoặc:
+./run.sh --stickman "The 1814 London Beer Flood: Đại hồng thủy bia ở London"
+```
+
+### 3. Kết quả xuất ra trong thư mục `workspace/run_Stickman_.../`:
+1. `historical_stickman_package.md`: Toàn văn hồ sơ sản xuất, kịch bản song ngữ, phân tích lịch sử, nhân vật mẫu và prompt chi tiết.
+2. `flow_prompts.txt`: Toàn bộ prompt ảnh & video đã được chuẩn hóa để dán thẳng vào Google Flow / Veo 3.1.
+3. `audio_16k_mono.wav`: File âm thanh 60 giây hoàn chỉnh (lời đọc + nhạc nền dồn dập).
+4. `flow_manifest.json`: Metadata kỹ thuật.
+5. `clips/`: Thư mục lưu 6 clip tải về từ Flow (`1.mp4` đến `6.mp4`).
+
+### 4. Dựng & xuất video 60s hoàn thiện sau khi tạo clip trên Flow:
+Sau khi tạo xong 6 clip trên Flow và tải về thả vào thư mục `clips/`:
+```bash
+./run.sh --flow-render "workspace/run_Stickman_..."
+```
+Hệ thống sẽ tự động ghép 6 clip, cắt bỏ watermark Veo, phủ hạt film grain, chèn phụ đề TikTok Safe Zone và xuất `final_master.mp4`.
 
 ---
 
-## 🎙️ CÁC TÙY CHỌN MÀU GIỌNG KHÁC (NẾU MUỐN THAY ĐỔI):
+## 🎥 PHẦN 2: VIDEO REVIEW / KHOA HỌC / ĐỜI SỐNG (B-ROLL TỰ ĐỘNG)
+
+Tạo video hoàn chỉnh tự động từ A-Z trong 30 giây:
 ```bash
-# Giọng Nữ Review Phim / Drama dồn nhịp, kịch tính (Mặc định):
-../.venv/bin/python main.py --voice review_phim "Chủ đề..."
+./run.sh "Tại sao người trẻ không còn mặn mà mua nhà"
+```
+
+### Các tùy chọn giọng đọc:
+```bash
+# Giọng Nam Khoa học Vũ trụ (Chuẩn vanthanhthu09 - 1.34x dứt khoát):
+./run.sh --voice vanthanhthu "Chủ đề..."
+
+# Giọng Nữ Review Phim / Drama (1.40x dồn nhịp, ngắt punchy):
+./run.sh --voice review_phim "Chủ đề..."
 
 # Giọng Nữ Gen Z tươi sáng, bắt trend:
-../.venv/bin/python main.py --voice gen_z "Chủ đề..."
+./run.sh --voice gen_z "Chủ đề..."
 
-# Giọng Nam Review hiện đại (kinh tế, tài chính, công nghệ):
-../.venv/bin/python main.py --voice nam_review "Chủ đề..."
+# Giọng Nam Kể Chuyện Giật Gân (bí ẩn, tài liệu kịch tính):
+./run.sh --voice giat_gan "Chủ đề..."
 
-# Giọng Nam Kể Chuyện Giật Gân (bí ẩn, tài liệu đen):
-../.venv/bin/python main.py --voice giat_gan "Chủ đề..."
+# Giọng Nam Review hiện đại (tài chính, kinh tế, công nghệ):
+./run.sh --voice nam_review "Chủ đề..."
 ```
 
 ---
 
-## 💡 NẾU MUỐN DÙNG LẠI GOOGLE FLOW (TÙY CHỌN):
-Nếu bạn vẫn muốn tự tay sinh video AI trên Google Flow bằng prompt:
-```bash
-../.venv/bin/python main.py --flow-prep "Chủ đề..."
-```
-Hệ thống sẽ chuẩn bị audio và file `flow_prompts.txt` để bạn copy sang Google Flow như trước.
+## 🎵 BẢN NHẠC NỀN & CHẤT LƯỢNG ÂM THANH MỚI
+- **Nhạc nền:** Đã tích hợp bản beat viral chuẩn từ kênh tham chiếu (**Du Sơn Luyến x TCMHUC beat**) đã tách lời bằng Demucs AI.
+- **Âm lượng:** Đã tăng âm lượng BGM lên mức dồn dập (26% khi đọc, 48% khi ngắt nghỉ), hòa âm theo chuẩn -14 LUFS của TikTok.
+- **Giọng nữ:** Đã được lọc qua chuỗi Studio EQ (`asetrate=24000*1.12`, `equalizer=3200Hz/180Hz`), loại bỏ hoàn toàn hiện tượng giọng đọc Google Translate đơ cứng.

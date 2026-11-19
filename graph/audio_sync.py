@@ -124,8 +124,8 @@ def _generate_cinematic_ambient_bgm(
         pad = signal.sosfilt(sos_lp, pad).astype(np.float32)
         pad = pad / (np.max(np.abs(pad)) + 1e-6)
 
-    # Auto-Ducking chuẩn TikTok: khi có giọng đọc thì hạ xuống 15%; khi nghỉ câu thì ngân dồn dập lên 30%
-    ducking_gain = 0.30 - 0.15 * np.clip(voice_env * 2.5, 0.0, 1.0)
+    # Auto-Ducking chuẩn TikTok: khi có giọng đọc thì hạ xuống 26%; khi nghỉ câu thì ngân dồn dập lên 48%
+    ducking_gain = 0.48 - 0.22 * np.clip(voice_env * 2.2, 0.0, 1.0)
     fade_in = np.minimum(1.0, t / 1.0)
     fade_out = np.minimum(1.0, (t[-1] - t) / 1.5) if len(t) > 1 else 1.0
     return (pad * ducking_gain * fade_in * fade_out).astype(np.float32)
@@ -376,7 +376,7 @@ def _master_and_mix(
     win_len = max(1, int(0.08 * sample_rate))
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
     bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env, music_mood=music_mood)
-    final_mix = mastered_voice * 0.86 + bgm
+    final_mix = mastered_voice * 0.82 + bgm * 1.15
     if sfx_events:
         for t_sec, cue in sfx_events:
             sfx = _synth_sfx(cue, sample_rate)
@@ -635,8 +635,13 @@ def _generate_edge_tts_audio(
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
                 tmp_wav = f_wav.name
             ff = imageio_ffmpeg.get_ffmpeg_exe()
+            # Áp dụng bộ lọc Studio EQ + Tốc độ TikTok để giọng nữ không bị "Google Translate" đơ cứng
+            filter_chain = (
+                f"asetrate=24000*1.12,aresample=24000,atempo={max(0.5, min(2.0, atempo_val / 1.12)):.2f},"
+                "equalizer=f=3200:t=q:w=1:g=2.5,equalizer=f=180:t=q:w=1:g=3"
+            )
             subprocess.run(
-                [ff, "-y", "-i", tmp_mp3, "-filter:a", f"atempo={atempo_val:.2f}", "-ar", "24000", "-ac", "1", tmp_wav],
+                [ff, "-y", "-i", tmp_mp3, "-filter_complex", filter_chain, "-ar", "24000", "-ac", "1", tmp_wav],
                 check=True,
                 capture_output=True,
             )

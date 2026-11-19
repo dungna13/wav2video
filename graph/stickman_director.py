@@ -1,619 +1,471 @@
 """
-STICKMAN VIDEO DIRECTOR WORKFLOW — NATIVE GIT INTEGRATION
-Tích hợp trực tiếp từ kho mã nguồn `external/stickman-video-director` (kaomei).
-Sử dụng nguyên bản bộ Character Pose Sheet, Font chữ Archivo Black & Hand-Drawn Crayon Props chính hãng từ repo.
-100% nhất quán, không lỗi ảnh đen, render tức thì với chất lượng đồ họa cực đẹp.
+Module Đạo Diễn Video Lịch Sử Người Que (Historical Stickman Director).
+Tuân thủ 100% tài liệu `Historical_Stickman_Video_Instructions.docx`:
+- Cấu trúc chuẩn 6 cảnh x 10 giây = 60 giây (Vertical 9:16).
+- Tóm tắt sự thật lịch sử và nguồn kiểm chứng.
+- Kịch bản & Lời bình 18–24 từ/cảnh.
+- Bảng nhân vật mẫu (Character Reference Sheet Prompt).
+- Chỉ dẫn cho Agent giữ nhất quán nhân vật (Character Consistency Agent Prompt).
+- Cặp prompt cho từng cảnh (1 Still Starting Frame Image Prompt + 1 Animation Video Prompt 4 nhịp thời gian).
+- Negative constraints & Continuity checklist.
 """
 
-import io
+from __future__ import annotations
+
 import json
 import os
 import re
-import shutil
 import time
-import urllib.parse
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import requests
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-
-from config.settings import (
-    IMAGE_HEIGHT,
-    IMAGE_WIDTH,
-    TTS_ENGINE,
-    TTS_RATE,
-    TTS_VOICE,
-    VIDEO_FPS,
-    WORKSPACE_DIR,
-)
-from graph.audio_sync import extract_waveform_sync_features, synthesize_scene_voiceover
+from config.settings import WORKSPACE_DIR
+from graph.audio_sync import synthesize_scene_voiceover
 from graph.llm_client import call_gemini_thinking_structured
-from graph.video_renderer import (
-    compute_scene_durations,
-    _ffmpeg,
-    _make_scene_clip,
-    _merge_clips_xfade,
-    _finalize_master_video,
-    TRANSITION_SEC,
-)
-from prompts.stickman_prompt import (
-    STICKMAN_DIRECTOR_SYSTEM_INSTRUCTION,
-    STICKMAN_GEMINI_SCHEMA,
-    OFFICIAL_STICKMAN_STYLES,
-    resolve_style_info,
-    render_stickman_director_prompt,
-)
-
-# Đường dẫn tài nguyên Stickman Director (ưu tiên assets/stickman trong repo, fallback sang external/)
-LOCAL_STICKMAN_ASSETS = Path(__file__).resolve().parent.parent / "assets" / "stickman"
-GIT_ROOT = Path(__file__).resolve().parent.parent / "external" / "stickman-video-director"
-GIT_ASSETS = LOCAL_STICKMAN_ASSETS if LOCAL_STICKMAN_ASSETS.exists() else GIT_ROOT / "skills" / "directing-stickman-videos" / "assets"
 
 
-def _slugify_vn(text: str) -> str:
-    import unicodedata
+STICKMAN_GEMINI_SCHEMA: Dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "event_title": {"type": "STRING"},
+        "historical_scope": {"type": "STRING"},
+        "date_and_location": {"type": "STRING"},
+        "historical_brief": {
+            "type": "OBJECT",
+            "properties": {
+                "core_cause": {"type": "STRING"},
+                "key_figures": {"type": "ARRAY", "items": {"type": "STRING"}},
+                "turning_point": {"type": "STRING"},
+                "factual_outcome": {"type": "STRING"},
+                "sources": {"type": "ARRAY", "items": {"type": "STRING"}},
+            },
+            "required": ["core_cause", "key_figures", "turning_point", "factual_outcome", "sources"],
+        },
+        "visual_style_anchor": {"type": "STRING"},
+        "characters": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "historical_role": {"type": "STRING"},
+                    "silhouette_and_costume": {"type": "STRING"},
+                    "headwear_or_hair": {"type": "STRING"},
+                    "signature_props": {"type": "STRING"},
+                    "color_tag": {"type": "STRING"},
+                },
+                "required": ["name", "historical_role", "silhouette_and_costume", "headwear_or_hair", "signature_props", "color_tag"],
+            },
+        },
+        "character_reference_sheet_prompt": {"type": "STRING"},
+        "consistency_agent_prompt": {"type": "STRING"},
+        "clips": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "clip_index": {"type": "INTEGER"},
+                    "time_range": {"type": "STRING"},
+                    "narration": {"type": "STRING"},
+                    "narration_word_count": {"type": "INTEGER"},
+                    "main_visual_action": {"type": "STRING"},
+                    "story_purpose": {"type": "STRING"},
+                    "sfx_cue": {"type": "STRING"},
+                    "image_prompt_en": {"type": "STRING"},
+                    "animation_prompt_en": {"type": "STRING"},
+                    "negative_constraints_en": {"type": "STRING"},
+                    "continuity_outgoing_state": {"type": "STRING"},
+                },
+                "required": [
+                    "clip_index",
+                    "time_range",
+                    "narration",
+                    "main_visual_action",
+                    "story_purpose",
+                    "image_prompt_en",
+                    "animation_prompt_en",
+                    "negative_constraints_en",
+                    "continuity_outgoing_state",
+                ],
+            },
+        },
+    },
+    "required": [
+        "event_title",
+        "date_and_location",
+        "historical_brief",
+        "visual_style_anchor",
+        "characters",
+        "character_reference_sheet_prompt",
+        "consistency_agent_prompt",
+        "clips",
+    ],
+}
+
+
+def _slugify(text: str) -> str:
     text = text.replace("đ", "d").replace("Đ", "D")
     norm = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-zA-Z0-9]+", "_", norm).strip("_")[:36] or "stickman"
 
 
-def create_stickman_storyboard(
+def get_curated_stickman_topics() -> List[Dict[str, str]]:
+    """Trả về 8 chủ đề sự kiện lịch sử mẫu theo đúng Step 1 của tài liệu."""
+    return [
+        {
+            "id": 1,
+            "title": "Trận Bạch Đằng 938: Bẫy cọc ngầm đánh tan quân Nam Hán",
+            "date_place": "Năm 938, Sông Bạch Đằng, Đại Cồ Việt",
+            "premise": "Ngô Quyền lợi dụng thủy triều và cọc gỗ bịt sắt dưới lòng sông để tiêu diệt hạm đội thuyền chiến Nam Hán.",
+            "opening_visual": "Cận cảnh người que Ngô Quyền đẽo vót cọc gỗ sắc nhọn rồi cắm xuống đáy sông khi thủy triều dâng cao.",
+            "conflict": "Hạm đội thuyền Nam Hán khổng lồ tràn vào cửa sông trong lúc quân ta vờ rút lui nhử địch.",
+            "outcome": "Thủy triều rút nhanh, thuyền giặc bị cọc ngầm đâm thủng vỡ vụn, chấm dứt 1000 năm Bắc thuộc.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Trung bình (Có tương tác thuyền và nước sông)",
+        },
+        {
+            "id": 2,
+            "title": "The 1814 London Beer Flood: Đại hồng thủy bia ở London",
+            "date_place": "Tháng 10 năm 1814, London, Vương quốc Anh",
+            "premise": "Một bồn ủ bia khổng lồ phát nổ tạo thành cơn sóng thần bia 1,4 triệu lít càn quét đường phố.",
+            "opening_visual": "Người que thợ ủ bia đứng sững sờ trước thùng gỗ cao 7 mét bắt đầu nứt toác dữ dội.",
+            "conflict": "Bức tường bia sụp đổ, sóng bọt bia tràn ngập các tầng hầm và làm đổ sập hai ngôi nhà gạch.",
+            "outcome": "Ngành sản xuất bia Anh chuyển từ thùng gỗ khổng lồ sang bồn xi măng và sắt an toàn hơn.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Dễ - Hài hước (Cực kỳ bắt mắt và cuốn hút người xem)",
+        },
+        {
+            "id": 3,
+            "title": "Trận Cannae 216 TCN: Bẫy gọng kìm vĩ đại của Hannibal",
+            "date_place": "Năm 216 TCN, Cannae, Bán đảo Ý",
+            "premise": "Hannibal Barca sử dụng đội hình cánh cung uốn ngược để bao vây tiêu diệt quân đội La Mã đông gấp đôi.",
+            "opening_visual": "Người que Hannibal cưỡi voi chỉ huy trung quân chủ động lùi bước giả vờ thất thủ.",
+            "conflict": "Quân La Mã say máu đuổi theo vào giữa mà không nhận ra hai gọng kìm kỵ binh đang khép chặt sau lưng.",
+            "outcome": "Trở thành chiến thuật bao vây kinh điển nhất mọi thời đại được giảng dạy tại mọi trường quân sự.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Trung bình (Bố trận quân sự stickman rõ ràng)",
+        },
+        {
+            "id": 4,
+            "title": "Cuộc giải cứu Apollo 13: 3 ngày nghẹt thở trong không gian",
+            "date_place": "Tháng 4 năm 1970, Không gian giữa Trái Đất và Mặt Trăng",
+            "premise": "Một bình oxy phát nổ giữa vũ trụ, NASA phải dùng mô-đun đổ bộ làm xuồng cứu sinh để đưa phi hành gia về nhà.",
+            "opening_visual": "Phi hành gia người que trôi bồng bềnh trong khoang tàu tối om thở ra làn khói lạnh buốt.",
+            "conflict": "Thiếu năng lượng, nồng độ CO2 tăng cao, phải chế tạo bộ lọc khí từ băng dính và bìa sách hướng dẫn.",
+            "outcome": "Được mệnh danh là 'Thất bại thành công nhất' trong lịch sử thám hiểm không gian của loài người.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Trung bình (Không gian tối giản, hiệu ứng thở lạnh)",
+        },
+        {
+            "id": 5,
+            "title": "Chiến dịch Mincemeat 1943: Xác chết đánh lừa Hitler",
+            "date_place": "Năm 1943, Bờ biển Tây Ban Nha & Địa Trung Hải",
+            "premise": "Tình báo Anh gài tài liệu mật giả vào xác một người vô gia cư thả trôi biển để lừa Hitler dời quân khỏi Sicily.",
+            "opening_visual": "Sĩ quan tình báo người que khóa chiếc cặp tài liệu mật vào cổ tay một thi thể mặc quân phục hải quân.",
+            "conflict": "Hitler tin bức thư tuyệt mật là thật và rút hết quân thiết giáp tinh nhuệ sang Hy Lạp phòng thủ.",
+            "outcome": "Phe Đồng Minh đổ bộ Sicily thành công với thương vong tối thiểu, mở toang cửa ngõ châu Âu.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Dễ (Hồi hộp, bí ẩn, trinh thám)",
+        },
+        {
+            "id": 6,
+            "title": "Trận Điện Biên Phủ 1954: Kéo pháo lên đỉnh dốc",
+            "date_place": "Năm 1954, Thung lũng Mường Thanh, Việt Nam",
+            "premise": "Hàng vạn chiến sĩ dùng sức người kéo những khẩu pháo hạng nặng nặng hàng tấn vượt qua các con dốc 70 độ.",
+            "opening_visual": "Những người que đội mũ nan quấn lưới kéo dây thừng gồng mình chống lại trọng lực trên vách núi cheo leo.",
+            "conflict": "Tướng De Castries tin tưởng tuyệt đối rằng Việt Minh không thể mang pháo hạng nặng lên các đỉnh núi cao.",
+            "outcome": "Hỏa lực pháo binh khống chế hoàn toàn sân bay Mường Thanh, dẫn đến thắng lợi chấn động địa cầu.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Trung bình (Tạo cảm xúc ý chí kiên cường)",
+        },
+        {
+            "id": 7,
+            "title": "Cơn sốt hoa Tulip 1637: Bong bóng kinh tế đầu tiên của nhân loại",
+            "date_place": "Năm 1637, Amsterdam, Hà Lan",
+            "premise": "Một củ hoa tulip có giá bằng một trang trại khổng lồ trước khi sụp đổ về con số không chỉ sau một đêm.",
+            "opening_visual": "Thương nhân người que nâng niu một củ hoa tulip như bảo ngọc trước hàng dài người tranh mua phát cuồng.",
+            "conflict": "Người dân bán sạch nhà cửa, đất đai, gia súc để gom tiền đầu cơ hoa tulip.",
+            "outcome": "Thị trường đổ vỡ trong chớp mắt, khai sinh ra định nghĩa bong bóng tài chính đầu tiên trên thế giới.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Dễ - Châm biếm (Rất thích hợp cho khán giả thích kinh tế & đời sống)",
+        },
+        {
+            "id": 8,
+            "title": "Trận Marathon 490 TCN: Nguồn gốc đường chạy 42km",
+            "date_place": "Năm 490 TCN, Đồng bằng Marathon đến Athens, Hy Lạp",
+            "premise": "Phe Athens đánh tan quân Ba Tư xâm lược, người lính chạy liên tục không nghỉ 42km về báo tin mừng rồi ngã xuống.",
+            "opening_visual": "Đội hình người que chiến binh Spartan và Athens đồng loạt giơ khiên giáo lao thẳng vào cung thủ Ba Tư.",
+            "conflict": "Hạm đội Ba Tư rút lui toan dong buồm vòng qua eo biển để tập kích thành Athens đang bỏ trống.",
+            "outcome": "Chiến thắng cứu nền dân chủ sơ khai và tạo nên cự ly Marathon huyền thoại ngày nay.",
+            "duration": "60s (6 clips x 10s)",
+            "difficulty": "Dễ (Hành động kịch tính, nhịp chạy dồn dập)",
+        },
+    ]
+
+
+def build_stickman_system_prompt() -> str:
+    return (
+        "You are the master Historical Stickman Animation Director, Writer, Character Designer, and Prompt Engineer, "
+        "following the exact specifications of 'Historical Stickman Video Instructions'.\n\n"
+        "STRICT PRODUCTION REQUIREMENTS:\n"
+        "1. FORMAT: Vertical 9:16 frame. Exactly 6 editorial clips x 10 seconds each = 60 seconds total.\n"
+        "2. STYLE: Expressive 2D historical stickman animation on textured matte parchment / clean documentary background. "
+        "High readability, bold black outlines, distinctive historical headwear/hats, simple historical tunics/uniforms with distinctive color accents. "
+        "No modern photorealism, no 3D uncanny valley. Clean cinematic lighting and clear visual staging.\n"
+        "3. STORY & NARRATION: Fast, punchy, engaging factual storytelling. 18 to 24 spoken words per 10-second clip. "
+        "Clip 1 must hook immediately within the first 2 seconds. Every clip must clarify cause and effect or advance the turning point.\n"
+        "4. PROMPTS PER CLIP:\n"
+        "   - 'image_prompt_en': The starting still frame (clean vertical 9:16, locked stickman style, exact character poses, accessories, uncluttered lower third for subtitles).\n"
+        "   - 'animation_prompt_en': 200-350 words specifying that the scene image is the starting frame. Account for all 10 seconds using the 4-phase local timing: "
+        "0.0-2.0s (establish hook), 2.0-5.0s (main body action & prop interaction), 5.0-8.0s (escalation, reaction, factual reveal), 8.0-10.0s (land outcome & explicitly describe final pose). "
+        "All motion physically understandable, seamless continuation.\n"
+        "5. CHARACTER CONSISTENCY: Provide a complete Character Reference Sheet Prompt and standalone Consistency Agent Instructions.\n"
+        "6. Output ONLY a valid JSON object matching the requested schema."
+    )
+
+
+def build_stickman_user_prompt(topic: str, language: str = "vi") -> str:
+    lang_instruction = (
+        "Viết phần 'narration' (lời bình) bằng TIẾNG VIỆT tự nhiên, dứt khoát, dồn dập (18-24 từ mỗi cảnh). "
+        "Phần prompt kỹ thuật ('image_prompt_en', 'animation_prompt_en', 'character_reference_sheet_prompt', 'consistency_agent_prompt') "
+        "BẮT BUỘC viết bằng TIẾNG ANH chuyên nghiệp cho Google Flow (Veo 3.1 & Omni 1.2)."
+        if language == "vi" else
+        "Write narration in punchy English (18-24 words per clip). All generation prompts in English."
+    )
+    return (
+        f"Create a complete 60-second Historical Stickman Video Production Package for the event: '{topic}'.\n\n"
+        f"Language requirement: {lang_instruction}\n"
+        f"Make sure there are exactly 6 clips of 10.0 seconds each (0.0-10.0s, 10.0-20.0s, 20.0-30.0s, 30.0-40.0s, 40.0-50.0s, 50.0-60.0s). "
+        f"Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
+    )
+
+
+def generate_stickman_production_package(
     topic: str,
-    style: str = "amber_noir",
+    language: str = "vi",
+    voice_name: str = "vanthanhthu",
+    speed_rate: float = 1.34,
 ) -> Dict[str, Any]:
-    """Gọi LLM (Gemini Thinking / Free LLM reasoning) để tạo kịch bản phân cảnh Người Que cho BẤT KỲ chủ đề nào."""
-    prompt = render_stickman_director_prompt(topic, style=style)
-    res = call_gemini_thinking_structured(
-        prompt=prompt,
+    """Tạo gói sản xuất Video Lịch Sử Người Que hoàn chỉnh từ A-Z."""
+    sys_prompt = build_stickman_system_prompt()
+    user_prompt = build_stickman_user_prompt(topic, language=language)
+
+    print(f"\n[Stickman Director] Đang nghiên cứu lịch sử và thiết kế kịch bản 60s cho: '{topic}'...")
+    parsed_json = call_gemini_thinking_structured(
+        prompt=user_prompt,
         response_schema=STICKMAN_GEMINI_SCHEMA,
-        system_instruction=STICKMAN_DIRECTOR_SYSTEM_INSTRUCTION,
-    )
-    if res and res.get("scenes"):
-        return res
-
-    print(f" [AI Director Engine] Tự động suy luận & thiết kế kịch bản Người Que cho chủ đề: '{topic}'...")
-    return _generate_dynamic_storyboard(topic, style=style)
-
-
-def _infer_visual_theme(topic: str) -> Dict[str, str]:
-    """Tự động suy luận các đạo cụ ẩn dụ trực quan 100% tiếng Anh phù hợp cho từng chủ đề."""
-    t = topic.lower()
-    if any(k in t for k in ["do thái", "kinh tế", "tiền", "giàu", "tài chính", "ngân hàng", "wealth", "money", "jewish"]):
-        return {
-            "prop_1": "stickman in orange hoodie standing beside a towering glowing golden amber balance scale and ancient leather-bound ledgers in a moody dark library",
-            "prop_2": "stickman uncovering a giant intricate vault clockwork mechanism with interlocking golden gears and glowing financial network lines",
-            "prop_3": "stickman pulling a massive glowing amber power lever, triggering an explosive cascade of glowing trade connections and light pathways",
-            "prop_4": "stickman calmly holding a glowing golden compass of financial wisdom while turbulent shadowy waves swirl around",
-            "prop_5": "triumphant stickman in orange hoodie standing atop a golden summit, holding a brilliant glowing amber lantern casting warm light over a grand metropolis skyline",
-        }
-    elif any(k in t for k in ["điện biên", "chiến dịch", "chiến tranh", "lịch sử", "quân sự", "đế chế", "war", "battle", "1954"]):
-        return {
-            "prop_1": "stickman in vintage military hat standing arrogantly on top of a massive fortified concrete bunker overlooking a misty mountain valley",
-            "prop_2": "line of determined stickman soldiers in orange and green coats hauling heavy artillery cannons with thick ropes up a steep muddy mountain slope in torrential rain",
-            "prop_3": "stickman soldiers advancing stealthily through deep zigzag muddy trenches, encircling a heavily guarded fortress in the distance",
-            "prop_4": "courageous stickman charging across a smoky battlefield illuminated by dramatic warm amber explosion flashes cutting through deep plum night",
-            "prop_5": "triumphant stickman waving a vibrant victory flag atop the captured commander bunker under a magnificent golden sunset sky",
-        }
-    elif any(k in t for k in ["80/20", "pareto", "nỗ lực", "thành công", "tư duy", "quy luật", "kỷ luật", "thói quen"]):
-        return {
-            "prop_1": "stickman in orange hoodie examining a giant unbalanced golden amber scale where a tiny 20% weight easily lifts a massive 80% boulder",
-            "prop_2": "stickman peering into an intricate transparent mechanism, discovering the single golden master gear that drives all secondary wheels",
-            "prop_3": "stickman pushing a glowing amber high-leverage button, multiplying output ten-fold with radiant energy lines across the darkness",
-            "prop_4": "stickman calmly standing in laser-sharp focus while unnecessary clutter and shadowy distractions dissolve away into thin air",
-            "prop_5": "triumphant stickman standing proudly on an uncluttered minimalist peak with a radiant glowing amber idea light bulb shining brilliant light",
-        }
-    else:
-        # Tổng quát cho mọi chủ đề trừu tượng khác
-        return {
-            "prop_1": "stickman in orange hoodie thoughtfully examining a glowing golden amber puzzle artifact radiating warm rim light in a dark plum studio",
-            "prop_2": "stickman stepping onto a mysterious platform, revealing a colossal hidden mechanism of glowing amber gears beneath deep shadows",
-            "prop_3": "stickman pulling a giant glowing amber lever that ignites a brilliant cascade of golden energy pathways cutting through darkness",
-            "prop_4": "stickman standing calm and focused in the eye of a storm, holding a steady glowing golden compass pointing the way forward",
-            "prop_5": "triumphant stickman standing on a high mountain summit, lifting a brilliant radiant amber beacon that illuminates the entire horizon",
-        }
-
-
-def _generate_dynamic_storyboard(topic: str, style: str = "amber_noir") -> Dict[str, Any]:
-    """Tự động thiết kế kịch bản 5 giai đoạn cảm xúc Người Que theo đúng chủ đề (100% tiếng Anh cho visual prompts)."""
-    style_info = resolve_style_info(style)
-    clean_topic = topic.strip().rstrip(".?!")
-    theme = _infer_visual_theme(clean_topic)
-
-    scenes = [
-        {
-            "scene_idx": 1,
-            "narration_vn": f"Sự thật trớ trêu đằng sau {clean_topic} mà 99% chúng ta đều hiểu sai.",
-            "visual_concept": f"Mở đầu tò mò về {clean_topic}",
-            "stickman_action": "Stickman character with matte-black head and orange hoodie looking thoughtfully at a glowing golden amber artifact",
-            "image_prompt_en": theme["prop_1"],
-            "sfx_cue": "pop",
-            "camera_motion": "zoom_in",
-        },
-        {
-            "scene_idx": 2,
-            "narration_vn": "Hầu hết mọi người chỉ nhìn thấy bề nổi, nhưng cơ chế bí mật bên dưới lại hoàn toàn khác biệt.",
-            "visual_concept": "Bóc tách sự thật",
-            "stickman_action": "Stickman standing on a platform looking down into deep shadows where an intricate mechanism is hidden",
-            "image_prompt_en": theme["prop_2"],
-            "sfx_cue": "subtle_whoosh",
-            "camera_motion": "tilt_down",
-        },
-        {
-            "scene_idx": 3,
-            "narration_vn": "Khi cơ chế âm thầm này vận hành, nó tạo ra một sức mạnh vượt trội thay đổi toàn bộ cuộc chơi.",
-            "visual_concept": "Đòn bẩy sức mạnh",
-            "stickman_action": "Stickman pulling a glowing amber lever, setting off a massive chain reaction",
-            "image_prompt_en": theme["prop_3"],
-            "sfx_cue": "deep_sub_drop",
-            "camera_motion": "pan_right",
-        },
-        {
-            "scene_idx": 4,
-            "narration_vn": "Những người nắm giữ nguyên tắc này không bao giờ hành động theo trực giác của số đông.",
-            "visual_concept": "Chiến lược đỉnh cao",
-            "stickman_action": "Stickman standing calmly amidst turbulent shadows, holding a glowing amber compass",
-            "image_prompt_en": theme["prop_4"],
-            "sfx_cue": "clock_tick_stop",
-            "camera_motion": "pan_left",
-        },
-        {
-            "scene_idx": 5,
-            "narration_vn": f"Và đó chính là bí mật cốt lõi giúp {clean_topic} tạo nên kỳ tích khác biệt.",
-            "visual_concept": "Đúc kết đắt giá",
-            "stickman_action": "Stickman standing victorious on a high peak, holding a brilliant glowing amber beacon",
-            "image_prompt_en": theme["prop_5"],
-            "sfx_cue": "camera_click",
-            "camera_motion": "zoom_out",
-        },
-    ]
-    return {
-        "topic_title": clean_topic,
-        "chosen_style": style_info["name"],
-        "style_anchor_en": style_info["dna"],
-        "music_mood": "dark_mystery_synth",
-        "scenes": scenes,
-        "tiktok_caption": f"Sự thật bất ngờ về {clean_topic}! Khám phá ngay. #shorts #nguoique #khampha #tuduy",
-    }
-
-
-def render_native_git_stickman_frame(
-    dest: Path,
-    scene_idx: int,
-    total_scenes: int,
-    headline: str,
-    subtitle: str,
-    concept: str,
-    dark_mode: bool = True,
-    width: int = IMAGE_WIDTH,
-    height: int = IMAGE_HEIGHT,
-) -> bool:
-    """
-    Render khung hình Người Que 9:16 sử dụng NGUYÊN BẢN TÀI NGUYÊN TỪ REPO GỐC:
-      1. Character Pose Sheet chính thức (`assets/b1/character-pose-sheet-v6.png`)
-      2. Font chữ Archivo Black & Nunito chính thức (`assets/fonts/`)
-      3. Bộ Hand-drawn Crayon Props chính thức (`assets/b1/*.png`)
-    """
-    # 1. Bảng màu chuẩn
-    bg_color = (15, 23, 42) if dark_mode else (255, 255, 255)
-    text_color = (255, 255, 255) if dark_mode else (15, 23, 42)
-    accent_color = (245, 158, 11) if dark_mode else (225, 29, 72)
-    sub_color = (148, 163, 184) if dark_mode else (100, 116, 139)
-
-    canvas = Image.new("RGB", (width, height), color=bg_color)
-    draw = ImageDraw.Draw(canvas)
-
-    # 2. Cắt và phóng to Người Que từ Character Pose Sheet gốc
-    sheet_path = GIT_ASSETS / "b1" / "character-pose-sheet-v6.png"
-    if sheet_path.exists():
-        sheet = Image.open(sheet_path).convert("RGBA")
-        sw = sheet.width // 3
-        # Xoay vòng 3 tư thế diễn hoạt: 0 = Nói/Giới thiệu, 1 = Suy nghĩ/Chỉ tay, 2 = Giải thích/Hành động
-        pose_idx = (scene_idx - 1) % 3
-        pose = sheet.crop((pose_idx * sw, 0, (pose_idx + 1) * sw, sheet.height)).convert("RGBA")
-
-        if dark_mode:
-            r, g, b, a = pose.split()
-            inv_rgb = ImageOps.invert(Image.merge("RGB", (r, g, b)))
-            pose = Image.merge("RGBA", (*inv_rgb.split(), a))
-
-        target_w = int(width * 0.68)
-        scale = target_w / float(pose.width)
-        target_h = int(pose.height * scale)
-        pose_resized = pose.resize((target_w, target_h), Image.Resampling.LANCZOS)
-
-        # Đặt vị trí người que cân đối ở nửa dưới màn hình dọc
-        char_x = (width - target_w) // 2 + (40 if pose_idx == 1 else -20)
-        char_y = height - target_h - 160
-        canvas.paste(pose_resized, (char_x, char_y), pose_resized)
-
-    # 3. Chèn Đạo Cụ Hand-Drawn Crayon Props chính hãng từ repo
-    props_list = [
-        "idea-bulb-crayon.png",
-        "idea-note-crayon.png",
-        "camera-handdrawn.png",
-        "clapper-crayon.png",
-        "calendar-crayon.png",
-        "open-source-crayon.png",
-        "script-page-crayon.png",
-        "youtube-crayon.png",
-    ]
-    prop_name = props_list[(scene_idx - 1) % len(props_list)]
-    prop_path = GIT_ASSETS / "b1" / prop_name
-    if prop_path.exists():
-        prop_img = Image.open(prop_path).convert("RGBA")
-        prop_w = 160
-        prop_scale = prop_w / float(prop_img.width)
-        prop_h = int(prop_img.height * prop_scale)
-        prop_resized = prop_img.resize((prop_w, prop_h), Image.Resampling.LANCZOS)
-        # Đặt đạo cụ ở góc trái hoặc góc phải cạnh người que
-        prop_x = 60 if pose_idx != 2 else width - prop_w - 60
-        prop_y = height // 2 - 40
-        canvas.paste(prop_resized, (prop_x, prop_y), prop_resized)
-
-    # 4. Kiểu chữ Typo chuẩn hỗ trợ 100% tiếng Việt
-    font_dir = GIT_ASSETS / "fonts"
-    font_main_path = Path("C:/Windows/Fonts/arialbd.ttf") if Path("C:/Windows/Fonts/arialbd.ttf").exists() else font_dir / "NotoSans.ttf"
-    font_sub_path = Path("C:/Windows/Fonts/arial.ttf") if Path("C:/Windows/Fonts/arial.ttf").exists() else font_dir / "NotoSans.ttf"
-
-    font_main = ImageFont.truetype(str(font_main_path), 42) if font_main_path.exists() else ImageFont.load_default()
-    font_sub = ImageFont.truetype(str(font_sub_path), 26) if font_sub_path.exists() else ImageFont.load_default()
-    font_badge = ImageFont.truetype(str(font_main_path), 22) if font_main_path.exists() else ImageFont.load_default()
-
-    # Huy hiệu số cảnh
-    draw.rounded_rectangle([width // 2 - 75, 90, width // 2 + 75, 130], radius=10, fill=(30, 41, 59) if dark_mode else (241, 245, 249))
-    draw.text((width // 2, 110), f"PHẦN {scene_idx:02d}", fill=accent_color, font=font_badge, anchor="mm")
-
-    # Tiêu đề chính ngắn gọn, giật gân
-    clean_title = (headline or f"BƯỚC NGOẶT #{scene_idx}").upper()[:30]
-    draw.text((width // 2, 185), clean_title, fill=text_color, font=font_main, anchor="mm")
-
-    # Mô tả ý tưởng trực quan
-    clean_sub = (subtitle or concept or "")[:45]
-    if clean_sub:
-        draw.text((width // 2, 245), clean_sub, fill=sub_color, font=font_sub, anchor="mm")
-
-    # Viền trang trí tối giản
-    draw.rectangle([16, 16, width - 16, height - 16], outline=(30, 41, 59) if dark_mode else (226, 232, 240), width=2)
-
-    canvas.save(str(dest), quality=95)
-    return True
-
-
-def run_stickman_pipeline(
-    topic: str,
-    style: str = "modern_tech",
-    voice: Optional[str] = None,
-    rate: Optional[str] = None,
-    speed_factor: float = 1.0,
-    sub_mode: str = "narration_full",
-    sub_style: str = "tiktok_yellow",
-    base_dir: Optional[Path] = None,
-) -> Dict[str, Any]:
-    """
-    Quy trình Đạo diễn Người Que hoàn chỉnh từ A - Z (tích hợp từ `stickman-video-director`):
-      1. Sinh kịch bản ẩn dụ Stickman chuẩn 5 giai đoạn
-      2. Thu âm giọng đọc Studio 1.5x + Nhạc nền
-      3. Tự động vẽ 100% tranh Stickman sử dụng Character Pose Sheet & Crayon Props chính hãng từ repo
-      4. Ghép video dọc 9:16 với chuyển động sống động + Phụ đề CapCut
-    """
-    root_ws = base_dir or WORKSPACE_DIR
-    run_dir = root_ws / f"stickman_{_slugify_vn(topic)}_{time.strftime('%m%d_%H%M%S')}"
-    img_dir = run_dir / "frames"
-    img_dir.mkdir(parents=True, exist_ok=True)
-
-    style_info = resolve_style_info(style)
-    is_dark = "light" not in style.lower()
-
-    print("=" * 96)
-    print(f"🎬 STICKMAN VIDEO DIRECTOR: {topic}")
-    print(f"🎨 Phong cách: {style_info['name']}")
-    print(f"📁 Tài nguyên Người Que: assets/stickman/")
-    print(f"📦 Sử dụng nguyên bản: Character Pose Sheet, Archivo Black font & Hand-Drawn Props")
-    print("=" * 96)
-
-    # 1. Sinh kịch bản
-    print(" [1/4] Đang gọi AI Đạo diễn thiết kế phân cảnh Người Que & Ẩn dụ trực quan...")
-    storyboard = create_stickman_storyboard(topic, style=style)
-    scenes = storyboard.get("scenes") or []
-    if not scenes:
-        raise RuntimeError("Không có danh sách cảnh từ AI Đạo diễn.")
-    print(f"       -> Đã tạo {len(scenes)} phân cảnh người que sắc bén.")
-
-    # 2. Sinh giọng đọc 1.5x
-    print(f" [2/4] Đang thu âm giọng đọc AI Studio 1.5x ({voice or TTS_VOICE}) & hòa âm nhạc nền...")
-    scene_texts = [s.get("narration_vn") or s.get("narration") or s.get("text") or "" for s in scenes]
-    sfx_cues = [s.get("sfx_cue") or "pop" for s in scenes]
-    wav_path, timings = synthesize_scene_voiceover(
-        scene_texts=scene_texts,
-        output_filename=run_dir / "audio_16k_mono.wav",
-        sfx_cues=sfx_cues,
-        music_mood=storyboard.get("music_mood", "cinematic_piano_ambient"),
-        engine=TTS_ENGINE,
-        voice=voice or TTS_VOICE,
-        rate=rate or TTS_RATE,
-    )
-    hook = scene_texts[0] if scene_texts else ""
-    deep = " ".join(scene_texts[1:-1]) if len(scene_texts) > 2 else (scene_texts[-1] if scene_texts else "")
-    outro = scene_texts[-1] if scene_texts else ""
-    sync_feats = extract_waveform_sync_features(wav_path, hook, deep, outro, fps=VIDEO_FPS)
-    total_audio_sec = float(sync_feats["duration_sec"])
-    print(f"       -> Tổng thời lượng âm thanh: {total_audio_sec:.2f}s (tốc độ đọc chuẩn cuốn hút).")
-
-    # 3. Tự động vẽ hình Người Que chuẩn từ repo gốc cho 100% các cảnh
-    print(" [3/4] Đang vẽ tranh Người Que sử dụng Character Pose Sheet & Crayon Props chính hãng...")
-    for idx, sc in enumerate(scenes, 1):
-        frame_path = img_dir / f"scene_{idx:02d}.jpg"
-        concept = (
-            sc.get("visual_concept")
-            or sc.get("visual_metaphor")
-            or sc.get("stickman_action")
-            or sc.get("concept")
-            or sc.get("description")
-            or f"Cảnh {idx}"
-        )
-        sfx = sc.get("sfx_cue") or "pop"
-        headline = (sc.get("stickman_action") or concept).split(",")[0].strip()
-
-        # Render khung hình từ kho tài nguyên gốc của Git
-        render_native_git_stickman_frame(
-            dest=frame_path,
-            scene_idx=idx,
-            total_scenes=len(scenes),
-            headline=headline,
-            subtitle=concept,
-            concept=concept,
-            dark_mode=is_dark,
-            width=IMAGE_WIDTH,
-            height=IMAGE_HEIGHT,
-        )
-
-        size_kb = frame_path.stat().st_size / 1024.0
-        print(f"   ├─ Cảnh {idx}/{len(scenes)}: {concept[:42]}... ✅ [Tạo hình Git chuẩn: {size_kb:.0f} KB | SFX: {sfx}]")
-
-        sc["media_path"] = str(frame_path)
-        sc["media_type"] = "image"
-        sc["narration_vn"] = sc.get("narration_vn") or sc.get("narration") or ""
-        cam = sc.get("camera_motion") or sc.get("camera") or ("zoom_in" if idx % 2 == 1 else "pan_right")
-        sc["camera"] = "zoom_in" if cam == "pop_zoom" else cam
-
-    # 4. Render video hoàn chỉnh bằng FFmpeg
-    print(" [4/4] Đang dựng video 9:16 với chuyển động máy quay & phụ đề động CapCut...")
-    w, h = IMAGE_WIDTH, IMAGE_HEIGHT
-    fps = VIDEO_FPS
-    durations = compute_scene_durations(timings, total_audio_sec)
-    n_sc = len(scenes)
-
-    clips: List[Path] = []
-    for i, (sc, dur) in enumerate(zip(scenes, durations)):
-        length = dur + (TRANSITION_SEC if i < n_sc - 1 else 0.0)
-        clip_path = run_dir / f"clip_{i + 1}.mp4"
-        _make_scene_clip(sc, clip_path, length, w, h, fps)
-        clips.append(clip_path)
-
-    merged = _merge_clips_xfade(clips, durations, run_dir / "raw_visual_merged.mp4", fps)
-    rendered = _finalize_master_video(
-        run_dir=run_dir,
-        merged=merged,
-        wav_path=wav_path,
-        scenes=scenes,
-        timings=timings,
-        durations=durations,
-        total_audio_sec=total_audio_sec,
-        topic_title=storyboard.get("topic_title", topic),
-        genre="stickman_animation",
-        w=w,
-        h=h,
-        fps=fps,
-        cleanup_intermediates=True,
-        clips_to_clean=clips,
-        delete_scene_media=False,
-        sub_mode=sub_mode,
-        sub_style=sub_style,
+        system_instruction=sys_prompt,
     )
 
-    final_video = Path(rendered["final_master_video_path"])
+    if not parsed_json or not parsed_json.get("clips"):
+        raise RuntimeError(f"Không thể tạo kịch bản Stickman cho chủ đề '{topic}'. Vui lòng kiểm tra lại kết nối mạng hoặc API Key.")
 
-    # Nếu người dùng chọn tăng tốc speed_factor (vd 1.5x)
-    if speed_factor and abs(speed_factor - 1.0) > 0.02:
-        sp = speed_factor
-        fast_video = run_dir / f"final_master_fast_{sp:.2f}x.mp4"
-        import subprocess
-        import imageio_ffmpeg
-        ff = imageio_ffmpeg.get_ffmpeg_exe()
-        cmd = [
-            ff, "-y", "-i", str(final_video),
-            "-filter_complex", f"[0:v]setpts=PTS/{sp}[v];[0:a]atempo={sp}[a]",
-            "-map", "[v]", "-map", "[a]",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
-            "-c:a", "aac", "-b:a", "192k",
-            "-map_metadata", "-1",
-            "-metadata", "make=Sony",
-            "-metadata", "model=ILCE-7M4",
-            "-metadata", "encoder=Sony XAVC-S Video",
-            str(fast_video),
-        ]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode == 0 and fast_video.exists():
-            final_video = fast_video
-
-    # Lưu lại storyboard.json & storyboard.txt
-    (run_dir / "storyboard.json").write_text(json.dumps(storyboard, ensure_ascii=False, indent=2), encoding="utf-8")
-    
-    txt_lines = [
-        "=" * 88,
-        f"STICKMAN STORYBOARD — {storyboard.get('topic_title', topic)}",
-        f"Style: {style_info['name']} | Tổng thời lượng: {total_audio_sec:.2f}s | Số cảnh: {len(scenes)}",
-        "=" * 88,
-        f"CAPTION TIKTOK: {storyboard.get('tiktok_caption', '')}",
-        "=" * 88,
-        "",
-    ]
-    for idx_s, s in enumerate(scenes, 1):
-        c_idx = s.get("scene_idx", idx_s)
-        sfx = s.get("sfx_cue", "pop")
-        cam = s.get("camera_motion", "zoom_in")
-        narr = s.get("narration_vn") or s.get("narration") or ""
-        concept = s.get("visual_concept") or s.get("stickman_action") or s.get("concept") or ""
-        prompt = s.get("image_prompt_en") or s.get("prompt") or ""
-        txt_lines += [
-            f"--- CẢNH {c_idx}/{len(scenes)} | SFX: {sfx} | Cam: {cam} ---",
-            f"Lời đọc: {narr}",
-            f"Ẩn dụ Stickman: {concept}",
-            f"Prompt: {prompt}",
-            "",
-        ]
-    (run_dir / "storyboard.txt").write_text("\n".join(txt_lines), encoding="utf-8")
-
-    print("\n" + "=" * 96)
-    print(f"🎉 HOÀN THÀNH VIDEO NGƯỜI QUE: {storyboard.get('topic_title', topic)}")
-    print("=" * 96)
-    print(f" • File Video Thành Phẩm : {final_video}")
-    print(f" • Thư mục ảnh vẽ        : {img_dir}")
-    print(f" • Storyboard chi tiết   : {run_dir / 'storyboard.txt'}")
-    print(f" • Caption TikTok gợi ý  : {storyboard.get('tiktok_caption')}")
-    print("=" * 96)
-
-    return {
-        "status": "success",
-        "run_dir": str(run_dir),
-        "final_master_video_path": str(final_video),
-        "storyboard": storyboard,
-        "tiktok_caption": storyboard.get("tiktok_caption"),
-    }
-
-
-def prepare_stickman_flow_workspace(
-    topic: str,
-    style: str = "amber_noir",
-    voice: Optional[str] = None,
-    rate: Optional[str] = None,
-    speed_factor: float = 1.45,
-    target_block_sec: float = 7.0,
-    max_blocks: int = 4,
-    base_dir: Optional[Path] = None,
-) -> Dict[str, Any]:
-    """
-    Quy trình chuẩn bị Prompt Google Flow (Veo 3.1) chuẩn Phong Cách Người Que (Amber Noir Style 6 từ git kaomei):
-      1. AI Đạo diễn thiết kế kịch bản ẩn dụ Stickman
-      2. Thu âm giọng đọc Studio 1.5x + Âm nhạc
-      3. Gom cảnh thành các Flow Block mượt mà với style DNA của Amber Noir
-      4. Xuất `flow_prompts.txt` & `flow_manifest.json` sẵn sàng copy sang Google Flow
-    """
-    from graph.flow_bundler import bundle_scenes_for_flow, format_flow_prompts_txt
-
-    root_ws = base_dir or WORKSPACE_DIR
-    topic_clean = topic.strip()
-    style_info = resolve_style_info(style)
-
-    run_dir = root_ws / f"flow_{_slugify_vn(topic_clean)}_{time.strftime('%m%d_%H%M%S')}"
+    # Tạo thư mục chạy
+    slug = _slugify(parsed_json.get("event_title") or topic)
+    run_dir = WORKSPACE_DIR / f"stickman_{slug}_{time.strftime('%m%d_%H%M%S')}"
     clips_dir = run_dir / "flow_clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 96)
-    print(f"🎬 STICKMAN FLOW PREP: {topic_clean}")
-    print(f"   Phong cách: {style_info['name']}")
-    print("=" * 96)
-    print(" [1/3] Đang gọi AI Đạo diễn thiết kế kịch bản Người Que (Visual Metaphor)...")
-    storyboard = create_stickman_storyboard(topic_clean, style=style)
-    scenes = storyboard.get("scenes") or []
-    if not scenes:
-        raise RuntimeError("Không có phân cảnh nào được tạo từ AI Đạo diễn.")
-
-    for idx_s, s in enumerate(scenes, 1):
-        if "camera" not in s and "camera_motion" in s:
-            s["camera"] = s["camera_motion"]
-        if "subtitle_vn" not in s:
-            s["subtitle_vn"] = s.get("narration_vn", "")
-
-    print(f"       -> Đã tạo {len(scenes)} cảnh người que sắc sảo.")
-
-    print(f" [2/3] Đang thu âm giọng đọc AI Studio ({voice or TTS_VOICE}) & hòa âm nhạc nền...")
-    effective_rate = rate or (f"+{int((speed_factor - 1.0) * 100)}%" if speed_factor > 1.05 else TTS_RATE)
+    clips = parsed_json.get("clips", [])
+    # 1. Thu âm lời bình (6 cảnh) + Nhạc nền Phonk kịch tính với Auto-Ducking
+    narrations = [c["narration"] for c in clips]
+    sfx_cues = [c.get("sfx_cue", "none") for c in clips]
     wav_path, timings = synthesize_scene_voiceover(
-        [s["narration_vn"] for s in scenes],
+        scene_texts=narrations,
         output_filename=run_dir / "audio_16k_mono.wav",
-        sfx_cues=[str(s.get("sfx_cue", "none")) for s in scenes],
-        music_mood=storyboard.get("music_mood") or "dark_mystery_synth",
-        engine=TTS_ENGINE,
-        voice=voice or TTS_VOICE,
-        rate=effective_rate,
-    )
-    hook = scenes[0]["narration_vn"]
-    deep = " ".join(s["narration_vn"] for s in scenes[1:-1])
-    outro = scenes[-1]["narration_vn"]
-    audio_sync_features = extract_waveform_sync_features(
-        wav_path=wav_path, scene_narration=hook, outro_reflection=deep, closing_prayer=outro, fps=VIDEO_FPS
-    )
-    total_audio_sec = float(audio_sync_features["duration_sec"])
-    durations = compute_scene_durations(timings, total_audio_sec)
-    print(f"       -> Tổng thời lượng âm thanh: {total_audio_sec:.2f}s (tốc độ đọc {speed_factor:.2f}x).")
-
-    print(" [3/3] Đang đóng gói kịch bản thành các Block chuyển động mượt cho Google Flow...")
-    blocks = bundle_scenes_for_flow(
-        scenes=scenes,
-        durations=durations,
-        style_anchor_en=style_info["dna"],
-        intent_mode="STICKMAN_AMBER_NOIR",
-        target_block_sec=target_block_sec,
-        max_blocks=max_blocks,
+        sfx_cues=sfx_cues,
+        voice_name=voice_name,
+        speed_rate=speed_rate,
+        music_mood="cinematic_mystery_suspense",
     )
 
-    manifest = {
-        "topic_title": storyboard.get("topic_title", topic_clean),
-        "genre": "stickman_animation",
-        "narrative_model": "stickman_director",
-        "intent_mode": "STICKMAN_AMBER_NOIR",
-        "effective_intent_mode": "STICKMAN_AMBER_NOIR",
-        "style_anchor_en": style_info["dna"],
-        "style_name": style_info["name"],
-        "tiktok_caption": storyboard.get("tiktok_caption", ""),
+    # 2. Xuất gói tài liệu Markdown và JSON chuẩn Google Flow
+    package_md_path = run_dir / "historical_stickman_package.md"
+    prompts_txt_path = run_dir / "flow_prompts.txt"
+    manifest_json_path = run_dir / "flow_manifest.json"
+
+    md_content = _format_stickman_markdown_package(parsed_json, wav_path, clips_dir, run_dir)
+    package_md_path.write_text(md_content, encoding="utf-8")
+
+    flow_txt_content = _format_flow_prompts_for_user(parsed_json, clips_dir, run_dir)
+    prompts_txt_path.write_text(flow_txt_content, encoding="utf-8")
+
+    # Lưu manifest tương thích với flow_bundler để lệnh --flow-render dựng được ngay
+    flow_blocks = []
+    t_cursor = 0.0
+    for idx, c in enumerate(clips, 1):
+        dur = 10.0
+        if idx - 1 < len(timings):
+            st, en = timings[idx - 1]
+            dur = max(6.0, round(en - st + 0.3, 2))
+        flow_blocks.append({
+            "block_index": idx,
+            "scene_indices": [idx],
+            "start_sec": round(t_cursor, 2),
+            "end_sec": round(t_cursor + dur, 2),
+            "duration_sec": dur,
+            "narration_vn": c["narration"],
+            "flow_prompt": c["animation_prompt_en"],
+        })
+        t_cursor += dur
+
+    manifest_data = {
+        "topic_title": parsed_json.get("event_title") or topic,
+        "mode": "STICKMAN_HISTORY",
+        "style_anchor_en": parsed_json.get("visual_style_anchor", ""),
         "wav_path": str(wav_path),
-        "audio_duration_sec": total_audio_sec,
-        "audio_sync_features": audio_sync_features,
-        "timings": timings,
-        "durations": durations,
-        "scenes": scenes,
-        "blocks": blocks,
         "clips_dir": str(clips_dir),
+        "blocks": flow_blocks,
+        "scenes": [
+            {
+                "narration_vn": c["narration"],
+                "subtitle_vn": c["narration"],
+                "image_prompt_en": c["image_prompt_en"],
+                "animation_prompt_en": c["animation_prompt_en"],
+            }
+            for c in clips
+        ],
     }
-    manifest_path = run_dir / "flow_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    prompts_txt = format_flow_prompts_txt(
-        topic_title=f"{storyboard.get('topic_title', topic_clean)} ({style_info['name']})",
-        intent_mode="STICKMAN_AMBER_NOIR",
-        total_audio_sec=total_audio_sec,
-        blocks=blocks,
-        clips_dir=clips_dir,
-        run_dir=run_dir,
-    )
-    prompts_path = run_dir / "flow_prompts.txt"
-    prompts_path.write_text(prompts_txt, encoding="utf-8")
-
-    print("\n" + "=" * 96)
-    print(f"🎉 ĐÃ TẠO GÓI FLOW PROMPT PHONG CÁCH NGƯỜI QUE: {storyboard.get('topic_title', topic_clean)}")
-    print("=" * 96)
-    print(f" • Thư mục dự án    : {run_dir}")
-    print(f" • File copy Prompt : {prompts_path}")
-    print(f" • Thư mục đặt clip : {clips_dir}")
-    print(f" • Số lượng block   : {len(blocks)} blocks ({total_audio_sec:.1f}s)")
-    print("=" * 96)
-    print("\n📋 CÁC PROMPT DÁN VÀO GOOGLE FLOW (Veo 3.1 Fast, 9:16):")
-    for b in blocks:
-        print(f"\n--- BLOCK {b['block_index']} ({b['duration_sec']:.1f}s) ---")
-        print(f"PROMPT: {b['flow_prompt']}")
-    print("\n" + "=" * 96)
-    print(f"👉 Sau khi tải các clip (.mp4) vào thư mục '{clips_dir.name}', chạy lệnh:")
-    print(f"   python main.py --flow-render latest")
-    print("=" * 96)
+    manifest_json_path.write_text(json.dumps(manifest_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {
-        "run_dir": str(run_dir),
-        "workspace_dir": str(run_dir),
-        "clips_dir": str(clips_dir),
-        "manifest_path": str(manifest_path),
-        "prompts_path": str(prompts_path),
-        "blocks": blocks,
-        "audio_duration_sec": total_audio_sec,
+        "run_dir": run_dir,
+        "clips_dir": clips_dir,
+        "package_md_path": package_md_path,
+        "prompts_txt_path": prompts_txt_path,
+        "wav_path": wav_path,
+        "parsed_json": parsed_json,
     }
+
+
+def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clips_dir: Path, run_dir: Path) -> str:
+    hb = data.get("historical_brief", {})
+    chars = data.get("characters", [])
+    clips = data.get("clips", [])
+
+    lines = [
+        f"# 🎬 GÓI SẢN XUẤT HOẠT HÌNH LỊCH SỬ NGƯỜI QUE: {data.get('event_title', '')}",
+        f"**Địa điểm & Thời gian**: {data.get('date_and_location', '')} | **Thời lượng**: 60 giây (6 clips x 10s)",
+        f"**Thư mục làm việc**: `{run_dir}`",
+        "",
+        "---",
+        "## 1. Tóm Tắt Sự Thật Lịch Sử & Nguồn Kiểm Chứng",
+        f"- **Nguyên nhân cốt lõi**: {hb.get('core_cause', '')}",
+        f"- **Nhân vật then chốt**: {', '.join(hb.get('key_figures', []))}",
+        f"- **Bước ngoặt sự kiện**: {hb.get('turning_point', '')}",
+        f"- **Kết quả thực tế**: {hb.get('factual_outcome', '')}",
+        "- **Nguồn tài liệu tham khảo**:",
+    ]
+    for s in hb.get("sources", []):
+        lines.append(f"  - {s}")
+
+    lines.extend([
+        "",
+        "---",
+        "## 2. Phong Cách Hình Ảnh & Thiết Kế Nhân Vật (Locked Stickman Style)",
+        f"**Visual Style Anchor**: `{data.get('visual_style_anchor', '')}`",
+        "",
+        "### Danh Sách Nhân Vật Cốt Lõi:",
+    ])
+    for c in chars:
+        lines.append(f"#### 👤 {c.get('name')} ({c.get('historical_role')})")
+        lines.append(f"- **Dáng vóc & Trang phục**: {c.get('silhouette_and_costume')}")
+        lines.append(f"- **Mũ nón / Tóc**: {c.get('headwear_or_hair')}")
+        lines.append(f"- **Vật dụng đặc trưng**: {c.get('signature_props')}")
+        lines.append(f"- **Mã màu nhận diện**: `{c.get('color_tag')}`")
+        lines.append("")
+
+    lines.extend([
+        "---",
+        "## 3. Prompt Tạo Bảng Nhân Vật Mẫu (Character Reference Sheet Prompt)",
+        "> *Copy prompt này dán vào Google Flow / Imagen 3 để tạo ảnh mẫu chuẩn hóa nhân vật trước:*",
+        "```text",
+        data.get("character_reference_sheet_prompt", ""),
+        "```",
+        "",
+        "---",
+        "## 4. Chỉ Dẫn Agent Giữ Tính Nhất Quán (Consistency Agent Instructions)",
+        "```text",
+        data.get("consistency_agent_prompt", ""),
+        "```",
+        "",
+        "---",
+        "## 5. Kịch Bản & Cặp Prompt Cho Từng Cảnh (Clip 1 -> Clip 6)",
+    ])
+
+    for c in clips:
+        idx = c.get("clip_index", 1)
+        lines.extend([
+            f"### 🎞️ CLIP {idx} ({c.get('time_range', '10s')}) — {c.get('story_purpose', '')}",
+            f"**🎙️ Lời bình ({c.get('narration_word_count', len(c.get('narration','').split()))} từ)**: {c.get('narration')}",
+            f"**🎬 Hành động chính**: {c.get('main_visual_action')}",
+            f"**🔊 Hiệu ứng âm thanh (SFX)**: `{c.get('sfx_cue', 'none')}`",
+            "",
+            f"**🖼️ Prompt Ảnh Bắt Đầu (Starting Frame Image Prompt)**:",
+            "```text",
+            c.get("image_prompt_en", ""),
+            "```",
+            "",
+            f"**🎥 Prompt Video Animation (Veo 3.1 / Omni 1.2 — 4 Nhịp Thời Gian)**:",
+            "```text",
+            c.get("animation_prompt_en", ""),
+            "```",
+            "",
+            f"**🚫 Negative Constraints**: `{c.get('negative_constraints_en', '')}`",
+            f"**🔗 Khớp nối sang cảnh tiếp theo**: {c.get('continuity_outgoing_state', '')}",
+            "",
+            "---",
+        ])
+
+    lines.extend([
+        "## 6. Hướng Dẫn Dựng & Hoàn Tất Video Bằng 1 Lệnh",
+        "1. Mở Google Flow trên trình duyệt, dán các Prompt ở trên vào để tạo 6 clip.",
+        f"2. Tải 6 clip về đổi tên thành `1.mp4`, `2.mp4`... `6.mp4` và thả vào thư mục:",
+        f"   `{clips_dir}`",
+        "3. Chạy lệnh dựng tự động (cắt sạch watermark Veo, khớp giọng đọc, ghép nhạc, làm phụ đề Safe Zone):",
+        f"   ```bash",
+        f"   ./run.sh --flow-render \"{run_dir}\"",
+        f"   ```",
+    ])
+    return "\n".join(lines)
+
+
+def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir: Path) -> str:
+    lines = [
+        "=" * 92,
+        f"📋 GOOGLE FLOW READY PROMPTS: {data.get('event_title', '')}",
+        f"Tỷ lệ: 9:16 dọc | 6 clips x 10s = 60s | Thư mục ném clip: {clips_dir}",
+        "=" * 92,
+        "",
+        "📌 [BƯỚC 1] TẠO BẢNG NHÂN VẬT MẪU (CHARACTER REFERENCE SHEET):",
+        "-" * 92,
+        data.get("character_reference_sheet_prompt", ""),
+        "-" * 92,
+        "",
+    ]
+    for c in data.get("clips", []):
+        idx = c.get("clip_index", 1)
+        lines.extend([
+            f"🎬 [CLIP {idx}/6] ({c.get('time_range', '10s')}):",
+            f"Lời bình: \"{c.get('narration', '')}\"",
+            "",
+            f"▶ 1. Prompt Tạo Ảnh Tĩnh (Starting Frame):",
+            c.get("image_prompt_en", ""),
+            "",
+            f"▶ 2. Prompt Tạo Video Veo / Omni (Animation):",
+            c.get("animation_prompt_en", ""),
+            "",
+            "-" * 92,
+            "",
+        ])
+
+    lines.extend([
+        "=" * 92,
+        "💡 HƯỚNG DẪN DỰNG HOÀN THIỆN:",
+        f"Sau khi tạo xong 6 clip trên Flow, bạn tải về thả vào: {clips_dir}",
+        f"Rồi chạy lệnh sau trên terminal để tự động cắt watermark & xuất video 60s hoàn chỉnh:",
+        f"./run.sh --flow-render \"{run_dir}\"",
+        "=" * 92,
+    ])
+    return "\n".join(lines)
