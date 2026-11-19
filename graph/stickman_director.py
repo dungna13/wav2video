@@ -325,10 +325,14 @@ def build_stickman_user_prompt(topic: str, num_clips: int = 4, clip_sec: float =
         "- Clip 2 (15.0-30.0s): Preparing the wooden river posts trap under high tide & the antagonist sailing in with arrogance.\n"
         "- Clip 3 (30.0-45.0s): Water level recedes rapidly, wooden river posts emerge, boats come to a halt, antagonist panics.\n"
         "- Clip 4 (45.0-60.0s): Tactical encirclement, peaceful white flag surrender & triumphant historic celebration.\n\n"
-        "CHARACTER ROSTER & MASTER REFERENCE SHEET MANDATE:\n"
-        "1. In 'character_reference_sheet_prompt': Produce ONE SINGLE master lineup image prompt containing ALL recurring main characters side-by-side in separated panels (Left side vs Right side). "
-        "Ensure high contrast between characters: completely different costume colors (e.g. vibrant crimson red vs imperial navy blue), different headwear/hair, different distinct facial expressions, so they NEVER duplicate or look alike. Only generic nameless rowers in background share simple brown peasant tunics.\n"
-        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-3s, 3-7s, 7-11s, 11-15s timing. Explicitly describe 2D OverSimplified cartoon style, light skin tone, large white cartoon eyes with black pupils, expressive mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a shadow figure'.\n"
+        "CHARACTER ROSTER & SOLDIER UNIFORMS MANDATE:\n"
+        "1. Friendly Vietnamese soldiers wear crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, and conical hats (non la). "
+        "Opposing Nam Han soldiers wear navy blue uniforms (#1976D2) with yellow trim and metal helmets with ear flaps (#546E7A). "
+        "STRICT FACTION SEPARATION: Hero (Ngo Quyen) and friendly Vietnamese troops ONLY in Clip 1 (strictly no Luu Hoang Thao, no enemy troops); "
+        "Antagonist (Luu Hoang Thao) and opposing Nam Han troops ONLY in Clip 2 (strictly no Ngo Quyen, no Vietnamese soldiers); "
+        "Clip 3: Two factions strictly separated across the river (Vietnamese on left shore, Nam Han boats caught in river posts on right); "
+        "Clip 4: Vietnamese victorious in foreground, Luu Hoang Thao waving white peace banner in background.\n"
+        f"2. In all 'animation_prompt_en': Standalone {clip_sec:.0f}-second video prompt with 0-3s, 3-7s, 7-11s, 11-15s timing. Explicitly describe Pure flat 2D vector cartoon animation in OverSimplified style, flat vibrant colors, clean bold black outlines, strictly non-photorealistic illustration. Round cartoon heads, light skin tone, large white cartoon eyes with black pupils, expressive mouth, hair, and specific colored attire. ALWAYS append 'NOT a black silhouette, NOT a shadow figure'.\n"
         "Ensure zero markdown or technical brackets inside the generation prompts so they paste cleanly into Google Flow."
     )
 
@@ -435,56 +439,56 @@ def generate_stickman_production_package(
 
 
 def _build_standalone_clip_prompt(clip: Dict[str, Any], data: Dict[str, Any], clip_sec: float = 15.0) -> str:
-    """Tạo 1 prompt video 15s độc lập, tách biệt chiến tuyến ta và địch, đúng chuẩn Character Sheet."""
+    """Tạo 1 prompt video 15s độc lập, tách biệt chiến tuyến ta và địch, khóa chết hoạt hình 2D chống người thật."""
     idx = clip.get("clip_index", 1)
     raw_anim = clip.get("animation_prompt_en", "")
     safe_anim = _sanitize_for_google_safety_policy(raw_anim)
-    raw_neg = clip.get("negative_constraints_en", "no black silhouettes, no shadow figures, no 3D")
-    safe_neg = _sanitize_for_google_safety_policy(raw_neg)
+    # Loại bỏ cụm từ cũ nếu có
+    safe_anim = safe_anim.replace("soldiers in brown tunics", "Vietnamese soldiers in crimson red tunics with yellow trim and conical hats")
+    safe_anim = safe_anim.replace("rowers and villagers in brown tunics", "Vietnamese soldiers in crimson red tunics with yellow trim and conical hats")
 
     # Định nghĩa trang phục chuẩn theo Character Reference Sheets
-    ngo_quyen_spec = "Ngo Quyen: heroic leader with light tan skin, wearing crimson red tunic (#D32F2F) with golden trim and bronze armor plates, golden lotus crown with topknot, holding golden command sword"
+    ngo_quyen_spec = "Ngo Quyen: heroic leader with light tan skin, wearing crimson red tunic (#D32F2F) with golden trim and bronze armor cuirass, golden lotus crown with topknot, holding golden command sword"
     hoang_thao_spec = "Luu Hoang Thao: arrogant general with fair skin, wearing imperial navy blue robe (#1976D2) with gold embroidery, black official winged cap (mandarin cap), smug sneering face"
-    vn_soldiers_spec = "Vietnamese soldiers: light tan skin, wearing crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, traditional conical hats (non la), carrying round wooden shields"
+    vn_soldiers_spec = "Vietnamese soldiers: light tan skin, wearing crimson red tunics (#D32F2F) with yellow collar trim (#FFD54F), dark brown belts, traditional conical hats (non la), holding wooden oars and round wooden shields"
     han_soldiers_spec = "Nam Han soldiers: fair skin, wearing navy blue uniforms (#1976D2) with yellow trim, grey metal helmets with ear flaps (#546E7A)"
 
     # Tách biệt chiến tuyến theo từng Clip để không bao giờ để tướng địch chung thuyền/chiến tuyến với ta
     if idx == 1:
-        # Clip 1: CHỈ CÓ Ngô Quyền và quân ta
-        char_cast = f"Heroic Lead: {ngo_quyen_spec}. Allied Crew: {vn_soldiers_spec}. (STRICTLY NO ENEMY TROOPS, NO LUu HOANG THAO IN THIS SCENE)."
+        char_cast = f"Heroic Lead: {ngo_quyen_spec}. Allied Crew: {vn_soldiers_spec}. (STRICTLY NO ENEMY TROOPS, NO LUU HOANG THAO IN THIS SCENE)."
+        neg_faction = "enemy soldiers, blue robes, mandarin caps, "
     elif idx == 2:
-        # Clip 2: CHỈ CÓ Hoằng Thao và quân Nam Hán
         char_cast = f"Antagonist Lead: {hoang_thao_spec}. Opposing Crew: {han_soldiers_spec}. (STRICTLY NO NGO QUYEN, NO VIETNAMESE SOLDIERS IN THIS SCENE)."
+        neg_faction = "friendly soldiers, red tunics, conical hats, lotus crown, "
     elif idx == 3:
-        # Clip 3: Hai bên đối đầu rõ rệt 2 chiến tuyến
         char_cast = (
             f"STRICT OPPOSING FACTIONS: "
-            f"Screen Left (Foreground/Far Left): {ngo_quyen_spec} with {vn_soldiers_spec}. "
-            f"Screen Right (Background/Trapped Fleet): {hoang_thao_spec} with {han_soldiers_spec} on tilting wooden boats caught by vertical wooden river posts. "
+            f"Screen Left (Foreground Shore): {ngo_quyen_spec} with {vn_soldiers_spec}. "
+            f"Screen Right (Middle-ground River): {hoang_thao_spec} with {han_soldiers_spec} on wooden warships tilting against vertical wooden river posts. "
             f"Clear physical separation across the river water, never mixing sides."
         )
+        neg_faction = ""
     else:
-        # Clip 4: Chiến thắng - Quân ta tiền cảnh, Địch đầu hàng hậu cảnh
         char_cast = (
             f"VICTORY HIERARCHY: "
-            f"Foreground Center-Left: {ngo_quyen_spec} standing triumphant with cheering {vn_soldiers_spec}. "
-            f"Distant Background Right: {hoang_thao_spec} and panicked {han_soldiers_spec} waving a white peace banner in comical cartoon surrender."
+            f"Foreground Center-Left: {ngo_quyen_spec} standing triumphant with cheering {vn_soldiers_spec} raising oars and shields. "
+            f"Distant Background Right: {hoang_thao_spec} and panicked {han_soldiers_spec} comically waving a white peace banner in cartoon surrender."
         )
+        neg_faction = ""
 
     prompt = (
-        f"2D colorful cartoon illustration in OverSimplified animation style, minimalist historical aesthetic, clean bold outlines, flat vibrant colors. "
+        f"Pure flat 2D vector cartoon animation in OverSimplified style, flat vibrant colors, clean bold black outlines, strictly non-photorealistic illustration. "
         f"Round cartoon heads, visible expressive cartoon faces with large white eyes and black pupils, dynamic mouth animations. "
         f"NOT a black silhouette, NOT a shadow figure. "
-        f"Character & Faction Design: {char_cast}. "
+        f"Character & Faction Design: {char_cast} "
         f"Scene action ({clip_sec:.0f}-second duration in 9:16 vertical format): {safe_anim} "
-        f"Negative constraints: {safe_neg}, no black silhouettes, no shadow figures, no realistic gore, no photorealism, no 3D render."
+        f"Negative constraints: {neg_faction}real humans, live-action actors, real people, photorealistic, photograph, 3D CGI, 3D render, realistic faces, realistic skin, cinematography, realistic violence, gore, black silhouettes, shadow figures."
     )
     return re.sub(r"\s+", " ", prompt).strip()
 
 
 def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clips_dir: Path, run_dir: Path) -> str:
     hb = data.get("historical_brief", {})
-    chars = data.get("characters", [])
     clips = data.get("clips", [])
     total_clips = len(clips)
     clip_sec = 15.0 if total_clips == 4 else 10.0
@@ -509,33 +513,7 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
     lines.extend([
         "",
         "---",
-        "## 2. [BƯỚC 1: ẢNH THAM CHIẾU DUY NHẤT] Prompt Bảng Nhân Vật Toàn Diện (Master Character Lineup Sheet)",
-        "> *💡 TIẾT KIỆM CREDIT: Bạn CHỈ CẦN tạo 1 ảnh duy nhất này lúc đầu làm ảnh tham chiếu (Image Reference) cho toàn bộ nhân vật. Tất cả các nhân vật chính đều xuất hiện chung trên 1 ảnh với màu sắc và trang phục đối lập, không bao giờ bị trùng lặp!*",
-        "```text",
-        _sanitize_for_google_safety_policy(data.get("character_reference_sheet_prompt", "")),
-        "```",
-        "",
-        "---",
-        "## 3. Quy Tắc Nhân Vật, Đa Nhân Vật & Nhân Vật Quần Chúng (Characters & Continuity Instructions)",
-        "### 👥 Danh Sách Nhân Vật Cốt Lõi:",
-    ])
-    for c in chars:
-        lines.append(f"- **{c.get('name')} ({c.get('historical_role')})**: {c.get('silhouette_and_costume')}, {c.get('headwear_or_hair')}, prop: {c.get('signature_props')}, mã màu: `{c.get('color_tag')}`.")
-
-    lines.extend([
-        "",
-        "### 🎭 Quy Tắc Khi Nhiều Nhân Vật Chính Cùng Xuất Hiện Trong 1 Bối Cảnh:",
-        "- **Bố cục khung hình**: Nhân vật chính diện (Ngô Quyền) luôn đứng bên Trái khung hình hướng về bên Phải. Nhân vật phản diện (Hoằng Thao) luôn đứng bên Phải khung hình hướng về bên Trái.",
-        "- **Màu sắc đối lập tuyệt đối**: Đỏ truyền thống (#D32F2F) đối lập với Xanh hoàng gia (#1976D2). Không bao giờ được đổi màu áo của nhau.",
-        "- **Khoảng cách hình học**: Luôn giữ khoảng cách rõ ràng giữa 2 nhân vật chính, không vẽ dính chùm hoặc đè nét lên nhau.",
-        "",
-        "### 🌾 Quy Tắc Cho Nhân Vật Quần Chúng (Lính & Dân Làng):",
-        "- **Kích thước**: Vẽ nhỏ hơn nhân vật chính (chỉ bằng khoảng 70% chiều cao nhân vật chính).",
-        "- **Trang phục đơn giản**: Lính ta mặc áo nâu sồng tối giản (#8D6E63) đội nón nan. Lính địch mặc áo xám/be (#78909C).",
-        "- **Không có đặc điểm anh hùng**: Không vẽ mặt mũi riêng biệt, không cầm vật phẩm đặc trưng của tướng, tuyệt đối không làm lu mờ nhân vật chính.",
-        "",
-        "---",
-        f"## 4. 🎬 [BƯỚC 2: {total_clips} PROMPTS VIDEO ĐỘC LẬP - MỖI PROMPT {clip_sec:.0f}S CHUẨN VEO - 100% SẠCH POLICY]",
+        f"## 2. 🎬 [4 PROMPTS VIDEO ĐỘC LẬP - MỖI PROMPT {clip_sec:.0f}S CHUẨN VEO - 100% HOẠT HÌNH 2D - TÁCH BIỆT CHIẾN TUYẾN]",
         "> *💡 Bạn chỉ cần copy từng Prompt độc lập dưới đây ném thẳng vào ô prompt Text-to-Video của Google Veo:*",
         "",
     ])
@@ -557,7 +535,7 @@ def _format_stickman_markdown_package(data: Dict[str, Any], wav_path: Path, clip
 
     lines.extend([
         "---",
-        "## 5. Hướng Dẫn Dựng & Hoàn Tất Video Bằng 1 Lệnh",
+        "## 3. Hướng Dẫn Dựng & Hoàn Tất Video Bằng 1 Lệnh",
         f"1. Tạo xong {total_clips} clip trên Google Flow, tải về đổi tên lần lượt: " + ", ".join([f"`{i+1}.mp4`" for i in range(total_clips)]),
         f"2. Thả tất cả clip vào thư mục:",
         f"   `{clips_dir}`",
@@ -577,19 +555,39 @@ def _format_flow_prompts_for_user(data: Dict[str, Any], clips_dir: Path, run_dir
 
     lines = [
         "=" * 92,
-        f"📋 GOOGLE FLOW VEO PROMPTS ({total_clips} PROMPTS ĐỘC LẬP - MỖI PROMPT {clip_sec:.0f}S - 100% POLICY SAFE)",
+        f"📋 GOOGLE FLOW VEO PROMPTS ({total_clips} PROMPTS ĐỘC LẬP - MỖI PROMPT {clip_sec:.0f}S - 100% HOẠT HÌNH 2D)",
         f"Sự kiện: {data.get('event_title', '')} | Tỷ lệ: 9:16 dọc | Tổng {total_sec}s | Thư mục ném clip: {clips_dir}",
         "=" * 92,
         "",
-        "📌 [BƯỚC 1: TẠO 1 ẢNH DUY NHẤT] BẢNG TOÀN BỘ NHÂN VẬT (MASTER CHARACTER LINEUP SHEET):",
-        "   (💡 Chỉ tạo 1 ảnh này duy nhất lúc đầu làm ảnh tham chiếu. Toàn bộ nhân vật chính đều có mặt, trang phục & màu sắc đối lập, không trùng lặp)",
-        "-" * 92,
-        _sanitize_for_google_safety_policy(data.get("character_reference_sheet_prompt", "")),
-        "-" * 92,
-        "",
-        f"🎬 [BƯỚC 2: {total_clips} PROMPTS VIDEO ĐỘC LẬP - COPY PASTE TỪNG PROMPT VÀO GOOGLE VEO]:",
+        f"🎬 [4 PROMPTS VIDEO ĐỘC LẬP - COPY PASTE TỪNG PROMPT VÀO GOOGLE VEO]:",
         "=" * 92,
     ]
+
+    for c in clips:
+        idx = c.get("clip_index", 1)
+        t_range = c.get("time_range", f"{(idx-1)*clip_sec:.1f}-{idx*clip_sec:.1f}s")
+        purpose = _sanitize_for_google_safety_policy(c.get("story_purpose", ""))
+        clip_prompt = _build_standalone_clip_prompt(c, data, clip_sec=clip_sec)
+
+        lines.extend([
+            f"🎬 >>> PROMPT CLIP {idx}/{total_clips} ({t_range}) | {purpose}:",
+            "-" * 92,
+            clip_prompt,
+            "-" * 92,
+            f"🎙️ Lời bình tiếng Việt: \"{c.get('narration', '')}\"",
+            "",
+        ])
+
+    lines.extend([
+        "=" * 92,
+        "💡 HƯỚNG DẪN DỰNG HOÀN THIỆN:",
+        f"Sau khi tạo xong {total_clips} clip trên Flow, bạn tải về đổi tên {', '.join([f'{i+1}.mp4' for i in range(total_clips)])} thả vào:",
+        f"{clips_dir}",
+        f"Rồi chạy lệnh sau trên terminal để tự động cắt watermark & xuất video hoàn chỉnh:",
+        f"./run.sh --flow-render \"{run_dir}\"",
+        "=" * 92,
+    ])
+    return "\n".join(lines)
 
     for c in clips:
         idx = c.get("clip_index", 1)
