@@ -56,8 +56,8 @@ def _parse_args(argv) -> Dict[str, Any]:
         "clean": "",
         "hitl": "",
         "clips_dir": "",
-        "sub_mode": "narration_full",
-        "sub_style": "tiktok_yellow",
+        "sub_mode": "none",
+        "sub_style": "none",
         "batch": "",
         "list_voices": False,
         "block_sec": 14.0,
@@ -97,6 +97,9 @@ def _parse_args(argv) -> Dict[str, Any]:
             if not val or val in ("default", "preview", "voice-preview", "auto"):
                 val = "/home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3"
             opts["audio"] = val
+            opts["broll"] = True
+        elif a in ("--script-file", "--custom-script"):
+            opts["script_file"] = next(it, "").strip()
             opts["broll"] = True
         elif a in ("--script-only", "--script", "--kich-ban"):
             opts["script_only"] = True
@@ -352,6 +355,7 @@ def main():
             speed=opts["speed"],
             aspect_ratio=opts["aspect"],
             sub_style=opts["sub_style"],
+            script_file=opts.get("script_file") or None,
         )
         return
 

@@ -124,8 +124,10 @@ def _generate_cinematic_ambient_bgm(
         pad = signal.sosfilt(sos_lp, pad).astype(np.float32)
         pad = pad / (np.max(np.abs(pad)) + 1e-6)
 
-    # Auto-Ducking chuẩn TikTok: khi có giọng đọc thì hạ xuống 26%; khi nghỉ câu thì ngân dồn dập lên 48%
-    ducking_gain = 0.48 - 0.22 * np.clip(voice_env * 2.2, 0.0, 1.0)
+    # Auto-Ducking chuẩn studio:
+    # Khi có giọng đọc: hạ nhạc nền xuống 40% để giọng luôn nổi rõ, trong trẻo
+    # Khi nghỉ câu: nhạc nền ngân lên 65% giữ không khí kịch tính
+    ducking_gain = 0.65 - 0.25 * np.clip(voice_env * 2.5, 0.0, 1.0)
     fade_in = np.minimum(1.0, t / 1.0)
     fade_out = np.minimum(1.0, (t[-1] - t) / 1.5) if len(t) > 1 else 1.0
     return (pad * ducking_gain * fade_in * fade_out).astype(np.float32)
@@ -358,32 +360,38 @@ def _master_and_mix(
     sfx_events: Optional[List[Tuple[float, str]]] = None,
     music_mood: str = "",
     engine_name: str = "Edge-TTS Studio",
+    skip_dsp: bool = False,
 ) -> Path:
-    if vits_sr != sample_rate:
+    eff_sr = vits_sr if skip_dsp else sample_rate
+    if not skip_dsp and vits_sr != sample_rate:
         target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
         raw_voice = signal.resample(raw_voice, target_len).astype(np.float32)
 
-    mastered_voice = _apply_studio_broadcast_dsp(raw_voice, sample_rate)
-    win_len = max(1, int(0.08 * sample_rate))
+    mastered_voice = raw_voice if skip_dsp else _apply_studio_broadcast_dsp(raw_voice, eff_sr)
+    win_len = max(1, int(0.08 * eff_sr))
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
-    bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env, music_mood=music_mood)
-    # Giọng đọc nổi bật rõ nét 100%, nhạc nền êm ái phía sau (không át tiếng)
-    final_mix = mastered_voice * 1.0 + bgm * 0.28
+    bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), eff_sr, voice_env, music_mood=music_mood)
+    bgm_weight = 0.40 if skip_dsp else 0.45
+    final_mix = mastered_voice * 1.0 + bgm * bgm_weight
     if sfx_events:
         for t_sec, cue in sfx_events:
-            sfx = _synth_sfx(cue, sample_rate)
+            sfx = _synth_sfx(cue, eff_sr)
             if len(sfx) > 0:
-                idx = max(0, int(t_sec * sample_rate))
+                idx = max(0, int(t_sec * eff_sr))
                 end = min(len(final_mix), idx + len(sfx))
                 if end > idx:
                     final_mix[idx:end] += sfx[: end - idx]
-    final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.90
+    final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.89
     wav_path = Path(wav_path)
     wav_path.parent.mkdir(parents=True, exist_ok=True)
-    wavfile.write(str(wav_path), sample_rate, (final_mix * 32767.0).astype(np.int16))
-    lufs_ok = _normalize_loudness_lufs(wav_path, sample_rate, target_lufs=-14.0)
-    lufs_tag = " + -14 LUFS" if lufs_ok else ""
-    print(f"[TTS Studio Master] Đã sinh giọng đọc (`{engine_name}` + Studio EQ + BGM{lufs_tag}) -> {wav_path.name}")
+    wavfile.write(str(wav_path), eff_sr, (final_mix * 32767.0).astype(np.int16))
+    if not skip_dsp:
+        lufs_ok = _normalize_loudness_lufs(wav_path, eff_sr, target_lufs=-14.0)
+        lufs_tag = " + -14 LUFS" if lufs_ok else ""
+    else:
+        lufs_tag = ""
+    dsp_tag = "Nguyên bản" if skip_dsp else "Studio EQ"
+    print(f"[TTS Studio Master] Đã sinh giọng đọc (`{engine_name}` + {dsp_tag} + BGM{lufs_tag}) -> {wav_path.name}")
     return wav_path
 
 
@@ -458,6 +466,13 @@ VOICE_PROFILES = {
         "default_speed": 1.40,
         "scene_gap": 0.06,
         "desc": "Nam Review Hiện Đại: Nhanh, hiện đại, dứt khoát (tài chính/công nghệ)",
+    },
+    "clone": {
+        "voice": "clone",
+        "pitch": "+0Hz",
+        "default_speed": 0.68,
+        "scene_gap": 0.12,
+        "desc": "Voice Clone Offline Tiếng Việt (F5-TTS từ workspace/voice-preview.mp3)",
     },
 
     # ── NHÓM 2: CÁC PHONG CÁCH TRUYỀN THỐNG ──────────────────────────────
@@ -541,7 +556,7 @@ def print_voices_table() -> None:
     print("-" * 84)
     print(f"{'MÃ GIỌNG (--voice)':<18} | {'TỐC ĐỘ':<7} | {'PITCH':<7} | {'MÔ TẢ PHONG CÁCH'}")
     print("-" * 84)
-    new_styles = ["vanthanhthu", "review_phim", "gen_z", "giat_gan", "nam_review"]
+    new_styles = ["vanthanhthu", "clone", "review_phim", "gen_z", "giat_gan", "nam_review"]
     for code in new_styles:
         info = VOICE_PROFILES[code]
         spd = f"{info['default_speed']:.2f}x"
@@ -707,7 +722,10 @@ def synthesize_scene_voiceover(
     pitch_str = profile["pitch"]
     eff_speed = profile.get("default_speed", speed_rate) if (abs(speed_rate - 1.35) < 0.01 and "default_speed" in profile) else speed_rate
     eff_gap = profile.get("scene_gap", scene_gap_sec)
-    use_edge = v_key not in ("mms", "vits", "local")
+    is_clone = v_key in ("clone", "f5tts", "offline_clone")
+    if is_clone:
+        eff_speed = 0.68
+    use_edge = not is_clone and v_key not in ("mms", "vits", "local")
     rate_percent = int((eff_speed - 1.0) * 100) if eff_speed > 0 else 0
 
     lead = 0.15
@@ -716,7 +734,48 @@ def synthesize_scene_voiceover(
     chunks: List[np.ndarray] = []
     working_sr = 24000
 
-    if use_edge:
+    clone_done = False
+    if is_clone:
+        try:
+            from graph.voice_clone_vietnamese import clone_vietnamese_speech
+            cursor = lead
+            chunks.append(np.zeros(int(lead * working_sr), dtype=np.float32))
+            for i, text in enumerate(scene_texts):
+                norm_text = normalize_vi_text_for_tts(text)
+                tmp_wav = wav_path.parent / f"_tmp_clone_sec_{i:02d}.wav"
+                print(f"🎙️ [Voice Clone Vi] Đang sinh giọng phân đoạn {i+1}/{len(scene_texts)}: \"{norm_text[:40]}...\"")
+                clone_vietnamese_speech(norm_text, tmp_wav, speed=eff_speed)
+                sr, audio = wavfile.read(str(tmp_wav))
+                if audio.ndim > 1:
+                    audio = audio[:, 0]
+                if audio.dtype == np.int16:
+                    audio = audio.astype(np.float32) / 32768.0
+                elif audio.dtype == np.int32:
+                    audio = audio.astype(np.float32) / 2147483648.0
+                if sr != working_sr:
+                    audio = signal.resample(audio, int(len(audio) * working_sr / sr)).astype(np.float32)
+                dur = len(audio) / float(working_sr)
+                timings.append((round(cursor, 3), round(cursor + dur, 3)))
+                if sfx_cues and i < len(sfx_cues):
+                    cue = str(sfx_cues[i] or "none").strip().lower()
+                    if cue != "none":
+                        sfx_events.append((max(0.0, cursor - 0.08), cue))
+                chunks.append(audio)
+                chunks.append(np.zeros(int(eff_gap * working_sr), dtype=np.float32))
+                cursor += dur + eff_gap
+                if tmp_wav.exists():
+                    try:
+                        tmp_wav.unlink()
+                    except Exception:
+                        pass
+            clone_done = True
+        except Exception as e_clone:
+            print(f"⚠️ [Voice Clone Fallback] Lỗi khi sinh giọng clone ({e_clone}) -> Chuyển sang Edge-TTS!")
+            use_edge = True
+            timings = []
+            chunks = []
+
+    if not clone_done and use_edge:
         cursor = lead
         chunks.append(np.zeros(int(lead * working_sr), dtype=np.float32))
         for i, text in enumerate(scene_texts):
@@ -740,7 +799,7 @@ def synthesize_scene_voiceover(
             chunks.append(np.zeros(int(eff_gap * working_sr), dtype=np.float32))
             cursor += dur + eff_gap
 
-    if not use_edge:
+    if not clone_done and not use_edge:
         model, tokenizer = _get_local_vits_vietnamese_model()
         vits_sr = int(model.config.sampling_rate)
         working_sr = vits_sr
@@ -764,6 +823,7 @@ def synthesize_scene_voiceover(
             cursor += dur + scene_gap_sec
 
     chunks.append(np.zeros(int(0.35 * working_sr), dtype=np.float32))
+    engine_label = "F5-TTS Voice Clone" if clone_done else (f"Edge-TTS {edge_voice}" if use_edge else "facebook/mms-tts-vie")
     _master_and_mix(
         np.concatenate(chunks),
         working_sr,
@@ -771,7 +831,8 @@ def synthesize_scene_voiceover(
         wav_path,
         sfx_events=sfx_events,
         music_mood=music_mood,
-        engine_name=f"Edge-TTS {edge_voice}" if use_edge else "facebook/mms-tts-vie",
+        engine_name=engine_label,
+        skip_dsp=clone_done,
     )
     return wav_path, timings
 

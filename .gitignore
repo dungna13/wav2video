@@ -28,6 +28,13 @@ assets/continuity_state/
 *.docx
 books/
 
+# Models weights (tránh đẩy file nặng >100MB lên GitHub)
+models/**/*.safetensors
+models/**/*.pt
+models/**/*.pth
+models/**/*.bin
+models/**/*.onnx
+
 # Python cache & môi trường ảo
 __pycache__/
 *.py[cod]

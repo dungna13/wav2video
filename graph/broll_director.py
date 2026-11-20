@@ -163,6 +163,14 @@ YÊU CẦU VỀ TÌM KIẾM B-ROLL FOOTAGE:
 def _fallback_script(topic: str, duration_mins: float) -> Dict[str, Any]:
     """Kịch bản dự phòng khi offline hoặc LLM nghẽn mạng."""
     clean_title = topic.strip()
+    # Nếu là chủ đề Lăng mộ Tần Thủy Hoàng và có file kịch bản 3 phút chuẩn sâu sắc
+    tth_script_file = Path(WORKSPACE_DIR) / "script_tan_thuy_hoang_3min.json"
+    if any(k in clean_title.lower() for k in ("tần thủy hoàng", "tan thuy hoang", "tomb of qin")) and tth_script_file.exists():
+        try:
+            return json.loads(tth_script_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
     return {
         "title": f"Bí ẩn chưa có lời giải: {clean_title}",
         "topic_summary_vn": f"Khám phá toàn cảnh những bí mật kỳ lạ nhất về {clean_title}.",
@@ -278,12 +286,17 @@ def fetch_broll_footage(
     # Trường hợp 3: Dự phòng các video sẵn có trong workspace/
     ws_dir = run_dir.parent
     ref_candidates = [
+        ws_dir / "footage_tan_thuy_hoang",
         ws_dir / "tiktok_ref.mp4",
         ws_dir.parent / "workspace" / "tiktok_ref.mp4",
-        run_dir.parent.parent / "Ngo_Quyen_pointing_baton_forward_343cea7e.mp4",
     ]
     for cand in ref_candidates:
-        if cand.exists() and cand.stat().st_size > 100_000:
+        if cand.is_dir():
+            found = [f for f in cand.iterdir() if f.is_file() and f.suffix.lower() in valid_exts]
+            if found:
+                print(f"🎬 [B-Roll Auto-Fetch] Sử dụng video từ thư mục tư liệu dự phòng: {cand}")
+                return found
+        elif cand.exists() and cand.stat().st_size > 100_000:
             print(f"⚠️ [B-Roll Auto-Fetch] Không có mạng/yt-dlp -> Sử dụng video tư liệu dự phòng: {cand.name}")
             return [cand]
 
@@ -315,6 +328,10 @@ def synthesize_broll_narration(
     """
     wav_path = run_dir / "voiceover_studio.wav"
     scene_texts = [s["narration_vn"].strip() for s in sections]
+
+    # Với giọng Clone, đặt tốc độ 0.68x để bù lại nhịp nói rất nhanh của file mẫu, giúp giọng trầm tĩnh, rõ chữ, chuẩn phim tài liệu (không bị tua nhanh)
+    if voice_name.lower().strip() in ("clone", "f5tts", "offline_clone"):
+        speed_rate = 0.68
 
     print(f"\n🎙️ [B-Roll Audio] Đang lồng tiếng {len(scene_texts)} phân đoạn (Giọng: {voice_name}, Tốc độ: {speed_rate}x)...")
     out_wav, timings = synthesize_scene_voiceover(
@@ -356,6 +373,36 @@ def _get_video_duration(video_path: Path) -> float:
         hours, mins, secs = float(m.group(1)), float(m.group(2)), float(m.group(3))
         return hours * 3600 + mins * 60 + secs
     return 60.0
+
+
+def _is_cut_usable(cut_path: Path, min_brightness: float = 28.0, max_sub_density: float = 0.035) -> bool:
+    """
+    Kiểm duyệt chất lượng hình ảnh của đoạn cắt:
+    - Bỏ qua các đoạn cắt quá tối / màn hình đen / intro đen (độ sáng trung bình < min_brightness).
+    - Bỏ qua các đoạn cắt có chữ/phụ đề/ticker ở đáy video.
+    """
+    ff = _get_ffmpeg_bin()
+    cmd = [
+        ff, "-ss", "0.5", "-i", str(cut_path),
+        "-vframes", "1", "-f", "image2pipe",
+        "-vcodec", "rawvideo", "-pix_fmt", "gray", "-"
+    ]
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if not res.stdout:
+            return False
+        raw_bytes = res.stdout
+        avg = sum(raw_bytes) / float(len(raw_bytes))
+        if avg < min_brightness:
+            return False
+        # Kiểm tra 25% phía đáy: nếu có chữ trắng phụ đề (> 235), bỏ qua để video không dính chữ
+        bottom_bytes = raw_bytes[int(len(raw_bytes) * 0.75):]
+        white_count = sum(1 for b in bottom_bytes if b > 235)
+        if (white_count / float(len(bottom_bytes))) > max_sub_density:
+            return False
+        return True
+    except Exception:
+        return True
 
 
 def assemble_broll_video(
@@ -417,33 +464,37 @@ def assemble_broll_video(
             f"crop={target_w}:{target_h},setsar=1,fps={VIDEO_FPS}"
         )
 
-        cmd = [
-            ff, "-y",
-            "-ss", f"{start_sec:.2f}",
-            "-t", f"{curr_shot_dur:.2f}",
-            "-i", str(src_path),
-            "-vf", vf,
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "22",
-            "-an",
-            str(cut_filename),
-        ]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if res.returncode == 0 and cut_filename.exists():
+        cut_ok = False
+        attempt_start = start_sec
+        for attempt in range(5):
+            cmd = [
+                ff, "-y",
+                "-ss", f"{attempt_start:.2f}",
+                "-t", f"{curr_shot_dur:.2f}",
+                "-i", str(src_path),
+                "-vf", vf,
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-crf", "22",
+                "-an",
+                str(cut_filename),
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if res.returncode == 0 and cut_filename.exists() and _is_cut_usable(cut_filename):
+                cut_ok = True
+                break
+            # Nếu đoạn cắt bị đen hoặc lỗi, nhảy tới 4.5s tiếp theo để tìm khung hình sáng đẹp
+            attempt_start += 4.5
+            if attempt_start > (src_dur - curr_shot_dur - 1.0):
+                attempt_start = 3.0
+
+        if cut_ok:
             cut_files.append(cut_filename)
             current_time += curr_shot_dur
             shot_index += 1
         else:
-            # Nếu ffmpeg báo lỗi ở timestamp đó, thử điểm 0.0s
-            cmd[3] = "0.0"
-            res2 = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if res2.returncode == 0 and cut_filename.exists():
-                cut_files.append(cut_filename)
-                current_time += curr_shot_dur
-                shot_index += 1
-            else:
-                break
+            shot_index += 1
+            continue
 
     print(f"   ├─ Đã tạo {len(cut_files)} phân đoạn B-roll liên tiếp.")
 
@@ -559,14 +610,14 @@ def render_final_master_video(
     timings: List[Tuple[float, float]],
     run_dir: Path,
     aspect_ratio: str = "9:16",
-    sub_style: str = "tiktok_yellow",
+    sub_style: str = "none",
 ) -> Path:
     """Mux video, audio và burn subtitles thành final_master.mp4."""
     ff = _get_ffmpeg_bin()
     target_w, target_h = (1080, 1920) if aspect_ratio == "9:16" else (1920, 1080)
     final_output = run_dir / "final_master.mp4"
 
-    has_subs = bool(sections and timings)
+    has_subs = bool(sections and timings and sub_style not in ("none", "off", "no_sub", "no-sub", "", "karaoke_off"))
     sub_filter = ""
     if has_subs:
         # 1. Xuất file phụ đề .ass
@@ -640,8 +691,9 @@ def run_broll_pipeline(
     voice: str = "vanthanhthu",
     speed: float = 1.35,
     aspect_ratio: str = "9:16",
-    sub_style: str = "tiktok_yellow",
+    sub_style: str = "none",
     output_dir: Optional[str] = None,
+    script_file: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Điểm vào duy nhất cho chế độ B-Roll (Cắt video có sẵn/tự lấy + ghép Audio 3-5 phút + Subtitles).
@@ -704,11 +756,15 @@ def run_broll_pipeline(
 
     # TRƯỜNG HỢP B: LLM soạn kịch bản và sinh giọng đọc AI theo số phút yêu cầu
     else:
-        # BƯỚC 1: LLM soạn kịch bản dài phù hợp số phút yêu cầu
-        script_data = generate_broll_script(
-            topic=topic,
-            duration_mins=duration_mins,
-        )
+        # BƯỚC 1: LLM soạn kịch bản dài phù hợp số phút yêu cầu (hoặc lấy từ script_file)
+        if script_file and Path(script_file).exists():
+            print(f"\n📋 [B-Roll Director] Nạp kịch bản 3-5 phút từ file: {script_file}")
+            script_data = json.loads(Path(script_file).read_text(encoding="utf-8"))
+        else:
+            script_data = generate_broll_script(
+                topic=topic,
+                duration_mins=duration_mins,
+            )
         (run_dir / "broll_script.json").write_text(
             json.dumps(script_data, ensure_ascii=False, indent=2), encoding="utf-8"
         )

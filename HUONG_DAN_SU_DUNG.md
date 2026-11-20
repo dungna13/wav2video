@@ -95,6 +95,9 @@ Tạo video hoàn chỉnh tự động từ A-Z trong 30 giây:
 
 # Giọng Nam Review hiện đại (tài chính, kinh tế, công nghệ):
 ./run.sh --voice nam_review "Chủ đề..."
+
+# Giọng Clone Offline từ file workspace/voice-preview.mp3 (F5-TTS chuẩn nhịp phim tài liệu, 0đ tốn phí):
+./run.sh --broll "Bí ẩn lăng mộ Tần Thủy Hoàng" --duration 3 --voice clone
 ```
 
 ---
