@@ -566,28 +566,32 @@ def render_final_master_video(
     target_w, target_h = (1080, 1920) if aspect_ratio == "9:16" else (1920, 1080)
     final_output = run_dir / "final_master.mp4"
 
-    # 1. Xuất file phụ đề .ass
-    ass_content = build_broll_ass_subtitles(
-        sections=sections,
-        timings=timings,
-        target_w=target_w,
-        target_h=target_h,
-        title=sections[0].get("title", "Video"),
-        sub_style=sub_style,
-    )
-    ass_path = run_dir / "subtitles.ass"
-    ass_path.write_text(ass_content, encoding="utf-8")
+    has_subs = bool(sections and timings)
+    sub_filter = ""
+    if has_subs:
+        # 1. Xuất file phụ đề .ass
+        ass_content = build_broll_ass_subtitles(
+            sections=sections,
+            timings=timings,
+            target_w=target_w,
+            target_h=target_h,
+            title=sections[0].get("title", "Video"),
+            sub_style=sub_style,
+        )
+        ass_path = run_dir / "subtitles.ass"
+        ass_path.write_text(ass_content, encoding="utf-8")
+        sub_filter = f"ass='{ass_path.name}'"
+        print(f"\n🎨 [B-Roll Render] Đang hoàn thiện Master Video 1080p và ép phụ đề {sub_style}...")
+    else:
+        print("\n🎨 [B-Roll Render] Đang ghép luồng video B-Roll với âm thanh gốc 1080p...")
 
-    print(f"\n🎨 [B-Roll Render] Đang hoàn thiện Master Video 1080p và ép phụ đề {sub_style}...")
-
-    # Filter ép phụ đề
-    sub_filter = f"ass='{ass_path.name}'"
+    vf_args = ["-vf", f"{sub_filter},format=yuv420p"] if sub_filter else []
 
     cmd = [
         ff, "-y",
         "-i", str(video_path),
         "-i", str(wav_path),
-        "-vf", f"{sub_filter},format=yuv420p",
+        *vf_args,
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-c:v", "libx264",
@@ -604,8 +608,6 @@ def render_final_master_video(
 
     res = subprocess.run(cmd, cwd=str(run_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if res.returncode != 0:
-        # Nếu filter ass bị lỗi đường dẫn, thử dùng subtiles filter srt
-        print(f"⚠️ Thử chế độ phụ đề cơ bản nếu filter ASS chưa sẵn sàng: {res.stderr[:200]}")
         cmd_no_sub = [
             ff, "-y",
             "-i", str(video_path),
@@ -634,6 +636,7 @@ def run_broll_pipeline(
     topic: str,
     duration_mins: float = 3.0,
     footage: Optional[str] = None,
+    audio: Optional[str] = None,
     voice: str = "vanthanhthu",
     speed: float = 1.35,
     aspect_ratio: str = "9:16",
@@ -643,41 +646,84 @@ def run_broll_pipeline(
     """
     Điểm vào duy nhất cho chế độ B-Roll (Cắt video có sẵn/tự lấy + ghép Audio 3-5 phút + Subtitles).
     Hoàn toàn thuần Python tuyến tính, không dùng bất kỳ thư viện vẽ đồ thị hay DAG nào.
+    - Hỗ trợ `--audio <file_video_hoặc_audio>`: Sử dụng trực tiếp giọng đọc từ video tham chiếu (như tiktok_ref.mp4).
     """
     ts = time.strftime("%m%d_%H%M%S")
-    slug = _slugify(topic)[:32]
+    slug = _slugify(topic or "ref_audio")[:32]
     run_name = f"broll_{slug}_{ts}"
 
     run_dir = Path(output_dir) if output_dir else Path(WORKSPACE_DIR) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 96)
-    print(f"🚀 BẮT ĐẦU CHẾ ĐỘ B-ROLL DÀI {duration_mins:.1f} PHÚT (ZERO GRAPH LIBRARIES)")
-    print(f"📌 Chủ đề      : {topic}")
-    print(f"⏱️  Thời lượng  : {duration_mins:.1f} phút")
+    print(f"🚀 BẮT ĐẦU CHẾ ĐỘ B-ROLL (ZERO GRAPH LIBRARIES)")
+    print(f"📌 Chủ đề      : {topic or '(Sử dụng âm thanh tham chiếu có sẵn)'}")
+    if audio:
+        print(f"🎙️ Âm thanh gốc: {audio}")
+    else:
+        print(f"⏱️  Thời lượng  : {duration_mins:.1f} phút")
     print(f"📁 Thư mục xuất: {run_dir.resolve()}")
     print("=" * 96)
 
-    # BƯỚC 1: LLM soạn kịch bản dài phù hợp số phút yêu cầu
-    script_data = generate_broll_script(
-        topic=topic,
-        duration_mins=duration_mins,
-    )
-    (run_dir / "broll_script.json").write_text(
-        json.dumps(script_data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    sections: List[Dict[str, Any]] = []
+    timings: List[Tuple[float, float]] = []
 
-    # BƯỚC 2: Thu âm thuyết minh & nhạc nền auto-ducking
-    sections = script_data.get("sections", [])
-    wav_path, timings, total_audio_sec = synthesize_broll_narration(
-        sections=sections,
-        run_dir=run_dir,
-        voice_name=voice,
-        speed_rate=speed,
-    )
+    # TRƯỜNG HỢP A: Người dùng cung cấp trực tiếp file Audio/Video tham chiếu (như tiktok_ref.mp4)
+    if audio:
+        p_audio = Path(audio)
+        if not p_audio.exists():
+            raise FileNotFoundError(f"Không tìm thấy file audio/video: {audio}")
+        wav_path = run_dir / "voiceover_studio.wav"
+        ff = _get_ffmpeg_bin()
+        print(f"\n🎙️ [B-Roll Audio] Đang trích xuất toàn bộ âm thanh từ: {p_audio.name}...")
+        cmd_extract = [
+            ff, "-y",
+            "-i", str(p_audio),
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", "44100",
+            "-ac", "1",
+            str(wav_path),
+        ]
+        subprocess.run(cmd_extract, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        total_audio_sec = _get_video_duration(wav_path)
+        print(f"✅ Đã trích xuất âm thanh: {total_audio_sec:.1f}s (~{total_audio_sec/60:.2f} phút)")
+
+        # Tạo từ khóa tìm kiếm B-roll
+        broll_query_topic = topic or p_audio.stem.replace("tiktok_ref", "stonehenge mystery")
+        queries = [
+            f"{broll_query_topic} 4k cinematic documentary b-roll",
+            f"{broll_query_topic} aerial drone 4k footage",
+            "ancient mysteries history documentary footage 4k",
+        ]
+        script_data = {
+            "title": topic or p_audio.stem,
+            "broll_search_queries": queries,
+            "sections": [],
+        }
+
+    # TRƯỜNG HỢP B: LLM soạn kịch bản và sinh giọng đọc AI theo số phút yêu cầu
+    else:
+        # BƯỚC 1: LLM soạn kịch bản dài phù hợp số phút yêu cầu
+        script_data = generate_broll_script(
+            topic=topic,
+            duration_mins=duration_mins,
+        )
+        (run_dir / "broll_script.json").write_text(
+            json.dumps(script_data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        # BƯỚC 2: Thu âm thuyết minh & nhạc nền auto-ducking
+        sections = script_data.get("sections", [])
+        wav_path, timings, total_audio_sec = synthesize_broll_narration(
+            sections=sections,
+            run_dir=run_dir,
+            voice_name=voice,
+            speed_rate=speed,
+        )
+        queries = script_data.get("broll_search_queries", [])
 
     # BƯỚC 3: Tự động tìm & tải B-roll footage (hoặc lấy từ tham số người dùng đưa vào)
-    queries = script_data.get("broll_search_queries", [])
     footage_files = fetch_broll_footage(
         search_queries=queries,
         run_dir=run_dir,

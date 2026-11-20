@@ -70,6 +70,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "broll": False,  # CHẾ ĐỘ B-ROLL FOOTAGE DÀI (1-10P) ZERO GRAPH LIBRARIES
         "duration": 3.0,  # THỜI LƯỢNG MỤC TIÊU TÍNH BẰNG PHÚT (MẶC ĐỊNH 3P, CÓ THỂ ĐẶT 5P, 10P)
         "footage": "",  # ĐƯỜNG DẪN VIDEO HOẶC THƯ MỤC FOOTAGE CÓ SẴN (NẾU ĐỂ TRỐNG SẼ TỰ TẢI QUA YT-DLP)
+        "audio": "",  # ĐƯỜNG DẪN FILE AUDIO/VIDEO THAM CHIẾU (DÙNG TRỰC TIẾP GIỌNG ĐỌC CỦA VIDEO MẪU)
         "aspect": "9:16",  # 9:16 CHO TIKTOK/SHORTS, 16:9 CHO YOUTUBE
         "topic": "",
     }
@@ -89,6 +90,9 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["broll"] = True
         elif a in ("--footage", "--video-source", "--broll-source"):
             opts["footage"] = next(it, "").strip()
+            opts["broll"] = True
+        elif a in ("--audio", "--voice-from", "--ref-audio", "--voice-file"):
+            opts["audio"] = next(it, "").strip()
             opts["broll"] = True
         elif a in ("--aspect", "--ratio", "--ar"):
             opts["aspect"] = next(it, "9:16").strip()
@@ -305,18 +309,19 @@ def main():
         print("-" * 96)
         return
 
-    if opts["broll"]:
+    if opts["broll"] or opts["footage"] or opts["audio"]:
         from graph.broll_director import run_broll_pipeline
         topic_input = opts["topic"]
-        if not topic_input:
+        if not topic_input and not opts["audio"]:
             print("❌ Vui lòng nhập chủ đề cho video B-roll. Ví dụ:")
             print("   ./run.sh --broll \"Bí ẩn bãi đá Stonehenge\" --duration 5")
-            print("   ./run.sh --broll \"Tam giác quỷ Bermuda\" --duration 3 --footage /path/to/video.mp4")
+            print("   ./run.sh --broll --audio /home/blue/Downloads/Projects/wav2video/workspace/tiktok_ref.mp4")
             return
         run_broll_pipeline(
             topic=topic_input,
             duration_mins=opts["duration"],
             footage=opts["footage"] or None,
+            audio=opts["audio"] or None,
             voice=opts["voice"],
             speed=opts["speed"],
             aspect_ratio=opts["aspect"],

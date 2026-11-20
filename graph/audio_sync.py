@@ -133,39 +133,30 @@ def _generate_cinematic_ambient_bgm(
 
 def _apply_studio_broadcast_dsp(voice_wav: np.ndarray, sample_rate: int) -> np.ndarray:
     """
-    Chuỗi DSP xử lý giọng đọc chuẩn Studio Podcast / Phim Tài Liệu:
-    1. High-pass 75Hz khử ù nền.
-    2. Warm Chest Boost (+3.5dB quanh 155Hz) giúp giọng nam dày và trầm ấm.
-    3. Clarity Presence (+2.0dB quanh 3100Hz) giúp phát âm tiếng Việt rõ nét.
-    4. Soft-Knee Dynamic Tanh Compressor + Subtle Studio Early Reflection.
+    Chuỗi DSP xử lý giọng đọc trong trẻo, tự nhiên, không vang hốc:
+    1. High-pass 75Hz khử ù xì dải trầm.
+    2. Subtle Warmth (+1.5dB quanh 160Hz) giúp giọng dày dặn.
+    3. Clarity (+1.2dB quanh 3200Hz) giúp phụ âm tiếng Việt rõ ràng, sắc nét.
+    4. Giữ nguyên độ trong trẻo (KHÔNG dùng reverb/delay gây vang méo tiếng).
     """
     nyq = sample_rate * 0.5
     # 1. High-pass 75Hz
     sos_hp = signal.butter(2, 75.0 / nyq, btype="high", output="sos")
     y = signal.sosfilt(sos_hp, voice_wav).astype(np.float32)
 
-    # 2. Warm Chest Bandpass Boost (110Hz - 240Hz)
-    sos_warm = signal.butter(2, [110.0 / nyq, 240.0 / nyq], btype="band", output="sos")
+    # 2. Warmth dịu nhẹ (120Hz - 240Hz)
+    sos_warm = signal.butter(2, [120.0 / nyq, 240.0 / nyq], btype="band", output="sos")
     warm_band = signal.sosfilt(sos_warm, y).astype(np.float32)
-    y = y + 0.42 * warm_band
+    y = y + 0.15 * warm_band
 
-    # 3. Clarity Presence Band (2400Hz - 4200Hz)
-    sos_pres = signal.butter(2, [2400.0 / nyq, min(0.92, 4200.0 / nyq)], btype="band", output="sos")
+    # 3. Clarity Presence Band (2600Hz - 4000Hz)
+    sos_pres = signal.butter(2, [2600.0 / nyq, min(0.92, 4000.0 / nyq)], btype="band", output="sos")
     pres_band = signal.sosfilt(sos_pres, y).astype(np.float32)
-    y = y + 0.22 * pres_band
+    y = y + 0.12 * pres_band
 
-    # 4. Subtle Studio Room Early Reflection (28ms & 54ms delay nhẹ 6%)
-    d1 = int(0.028 * sample_rate)
-    d2 = int(0.054 * sample_rate)
-    reverb = np.zeros_like(y)
-    if len(y) > d2:
-        reverb[d1:] += 0.055 * y[:-d1]
-        reverb[d2:] += 0.030 * y[:-d2]
-    y = y + reverb
-
-    # 5. Soft-Knee Broadcast Tube Saturation & Normalization
-    y = y / (np.max(np.abs(y)) + 1e-6)
-    y = np.tanh(y * 1.35) / np.tanh(1.35)
+    # Chuẩn hóa âm lượng sạch
+    max_val = np.max(np.abs(y)) + 1e-6
+    y = y / max_val
     return y.astype(np.float32)
 
 
@@ -376,7 +367,8 @@ def _master_and_mix(
     win_len = max(1, int(0.08 * sample_rate))
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
     bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), sample_rate, voice_env, music_mood=music_mood)
-    final_mix = mastered_voice * 0.82 + bgm * 1.15
+    # Giọng đọc nổi bật rõ nét 100%, nhạc nền êm ái phía sau (không át tiếng)
+    final_mix = mastered_voice * 1.0 + bgm * 0.28
     if sfx_events:
         for t_sec, cue in sfx_events:
             sfx = _synth_sfx(cue, sample_rate)
