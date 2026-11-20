@@ -67,6 +67,10 @@ def _parse_args(argv) -> Dict[str, Any]:
         "stickman": False,
         "stickman_topics": False,
         "clips": 4,  # MẶC ĐỊNH 4 CLIPS = 60s (4 clips x 15s) TỐI ƯU GOOGLE VEO VÀ TIẾT KIỆM CREDIT
+        "broll": False,  # CHẾ ĐỘ B-ROLL FOOTAGE DÀI (1-10P) ZERO GRAPH LIBRARIES
+        "duration": 3.0,  # THỜI LƯỢNG MỤC TIÊU TÍNH BẰNG PHÚT (MẶC ĐỊNH 3P, CÓ THỂ ĐẶT 5P, 10P)
+        "footage": "",  # ĐƯỜNG DẪN VIDEO HOẶC THƯ MỤC FOOTAGE CÓ SẴN (NẾU ĐỂ TRỐNG SẼ TỰ TẢI QUA YT-DLP)
+        "aspect": "9:16",  # 9:16 CHO TIKTOK/SHORTS, 16:9 CHO YOUTUBE
         "topic": "",
     }
     words = []
@@ -74,6 +78,20 @@ def _parse_args(argv) -> Dict[str, Any]:
     for a in it:
         if a in ("--list-voices", "--voices"):
             opts["list_voices"] = True
+        elif a in ("--broll", "-b", "--doc", "--documentary"):
+            opts["broll"] = True
+        elif a in ("--duration", "-d", "--time", "--mins", "--min"):
+            raw = next(it, "3").strip().lower().replace("m", "").replace("p", "")
+            try:
+                opts["duration"] = max(0.5, min(30.0, float(raw)))
+            except ValueError:
+                opts["duration"] = 3.0
+            opts["broll"] = True
+        elif a in ("--footage", "--video-source", "--broll-source"):
+            opts["footage"] = next(it, "").strip()
+            opts["broll"] = True
+        elif a in ("--aspect", "--ratio", "--ar"):
+            opts["aspect"] = next(it, "9:16").strip()
         elif a in ("--stickman-topics", "--topics", "--historical-topics"):
             opts["stickman_topics"] = True
         elif a in ("--stickman", "-s", "--stickman-history"):
@@ -285,6 +303,25 @@ def main():
         except Exception as pe:
             print(f"[Không thể đọc file prompts: {pe}]")
         print("-" * 96)
+        return
+
+    if opts["broll"]:
+        from graph.broll_director import run_broll_pipeline
+        topic_input = opts["topic"]
+        if not topic_input:
+            print("❌ Vui lòng nhập chủ đề cho video B-roll. Ví dụ:")
+            print("   ./run.sh --broll \"Bí ẩn bãi đá Stonehenge\" --duration 5")
+            print("   ./run.sh --broll \"Tam giác quỷ Bermuda\" --duration 3 --footage /path/to/video.mp4")
+            return
+        run_broll_pipeline(
+            topic=topic_input,
+            duration_mins=opts["duration"],
+            footage=opts["footage"] or None,
+            voice=opts["voice"],
+            speed=opts["speed"],
+            aspect_ratio=opts["aspect"],
+            sub_style=opts["sub_style"],
+        )
         return
 
     if opts["batch"]:

@@ -1,8 +1,9 @@
 # 🎬 HƯỚNG DẪN SẢN XUẤT VIDEO TỰ ĐỘNG CHUẨN TIKTOK TRIỆU VIEW
 
-> Hệ thống hỗ trợ 2 mô hình sản xuất nội dung hàng đầu hiện nay:
-> 1. **Hoạt Hình Người Que Lịch Sử (Historical Stickman)**: Chuẩn tài liệu `Historical_Stickman_Video_Instructions.docx` (6 cảnh x 10s = 60s, Character Sheet, Veo/Omni prompts 4 nhịp thời gian, BGM dồn dập).
-> 2. **Điện Ảnh B-Roll Thực Tế (Web Cinematic Auto)**: Tự động tải video thật HD từ web, ghép lồng giọng đọc và nhạc nền xuất file ngay trong 30s.
+> Hệ thống hỗ trợ 3 mô hình sản xuất nội dung hàng đầu hiện nay:
+> 1. **Video Dài 3 Phút – 5 Phút B-Roll Tư Liệu Tự Động (Chuẩn @vanthanhthu09)**: Tự động LLM viết kịch bản dài 5p/3p, tự động tìm và tải video tư liệu 4K phù hợp trên mạng hoặc nhận video có sẵn, tự động cắt ghép 3-5s và lồng tiếng + phụ đề TikTok. **Chi phí 0 credit AI, không dùng thư viện pipeline đồ thị phức tạp**.
+> 2. **Hoạt Hình Người Que Lịch Sử (Historical Stickman)**: Chuẩn tài liệu `Historical_Stickman_Video_Instructions.docx` (4-6 cảnh x 8-10s, Character Sheet, Veo/Omni prompts, BGM dồn dập).
+> 3. **Điện Ảnh B-Roll Ngắn 30s-60s (Web Cinematic Auto)**: Tự động tải video thật HD từ web, ghép lồng giọng đọc và nhạc nền xuất file ngay.
 
 ---
 
@@ -44,6 +45,34 @@ Hệ thống sẽ tự động ghép 6 clip, cắt bỏ watermark Veo, phủ h�
 ---
 
 ## 🎥 PHẦN 2: VIDEO REVIEW / KHOA HỌC / ĐỜI SỐNG (B-ROLL TỰ ĐỘNG)
+
+---
+
+## 🏛️ PHẦN 3: VIDEO DÀI 3P - 5P B-ROLL TỰ ĐỘNG (CHUẨN KÊNH @VANTHANHTHU09)
+
+Mô hình sản xuất video dài 3 đến 5 phút (hoặc tùy ý 1–10 phút) giống hệt các kênh tài liệu triệu view:
+- **Tự động viết kịch bản dài**: LLM tính toán chính xác số từ (~155 từ/phút ở tốc độ 1.35x), chia thành 10–22 phân đoạn lôi cuốn.
+- **Tự động tìm & tải B-roll 4K**: Hệ thống tự động dịch từ khóa sang tiếng Anh và dùng `yt-dlp` kéo các thước phim tư liệu sắc nét từ YouTube về máy.
+- **Hỗ trợ video có sẵn**: Nếu bạn đã có sẵn video tư liệu, chỉ cần đưa đường dẫn vào `--footage <file_hoặc_thư_mục>`.
+- **Dựng phim tự động**: Cắt thành các nhịp 3s–5s đan xen, phủ kín 100% thời lượng audio, tự động căn tỉ lệ 9:16 (TikTok) hoặc 16:9 (YouTube).
+- **Phụ đề TikTok Safe Zone**: Chữ vàng viền đen nổi bật, căn chỉnh vị trí an toàn tránh bị che bởi UI của TikTok.
+- **Thuần Python (Zero Graph Libraries)**: Tuyệt đối không dùng các thư viện pipeline vẽ đồ thị phức tạp.
+
+### Cách chạy:
+```bash
+# 1. Tự động từ A-Z (Hệ thống tự viết kịch bản 5 phút + tự tìm tải video tư liệu + render):
+./run.sh --broll "Bí ẩn bãi đá Stonehenge" --duration 5
+
+# 2. Làm video 3 phút với chủ đề bí ẩn khác:
+./run.sh --broll "Bí mật bên dưới Kim Tự Tháp Giza" --duration 3
+
+# 3. Sử dụng video tư liệu có sẵn của bạn:
+./run.sh --broll "Bí ẩn Stonehenge" --duration 5 --footage /duong/dan/video_stonehenge.mp4
+
+# 4. Xuất video ngang 16:9 cho YouTube:
+./run.sh --broll "Hố đen vũ trụ" --duration 5 --aspect 16:9
+```
+
 
 Tạo video hoàn chỉnh tự động từ A-Z trong 30 giây:
 ```bash
