@@ -71,6 +71,7 @@ def _parse_args(argv) -> Dict[str, Any]:
         "duration": 3.0,  # THỜI LƯỢNG MỤC TIÊU TÍNH BẰNG PHÚT (MẶC ĐỊNH 3P, CÓ THỂ ĐẶT 5P, 10P)
         "footage": "",  # ĐƯỜNG DẪN VIDEO HOẶC THƯ MỤC FOOTAGE CÓ SẴN (NẾU ĐỂ TRỐNG SẼ TỰ TẢI QUA YT-DLP)
         "audio": "",  # ĐƯỜNG DẪN FILE AUDIO/VIDEO THAM CHIẾU (DÙNG TRỰC TIẾP GIỌNG ĐỌC CỦA VIDEO MẪU)
+        "script_only": False,  # CHỈ XUẤT KỊCH BẢN ĐỂ COPY DÁN VÀO ELEVENLABS / CAPCUT
         "aspect": "9:16",  # 9:16 CHO TIKTOK/SHORTS, 16:9 CHO YOUTUBE
         "topic": "",
     }
@@ -92,7 +93,13 @@ def _parse_args(argv) -> Dict[str, Any]:
             opts["footage"] = next(it, "").strip()
             opts["broll"] = True
         elif a in ("--audio", "--voice-from", "--ref-audio", "--voice-file"):
-            opts["audio"] = next(it, "").strip()
+            val = next(it, "").strip()
+            if not val or val in ("default", "preview", "voice-preview", "auto"):
+                val = "/home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3"
+            opts["audio"] = val
+            opts["broll"] = True
+        elif a in ("--script-only", "--script", "--kich-ban"):
+            opts["script_only"] = True
             opts["broll"] = True
         elif a in ("--aspect", "--ratio", "--ar"):
             opts["aspect"] = next(it, "9:16").strip()
@@ -315,8 +322,27 @@ def main():
         if not topic_input and not opts["audio"]:
             print("❌ Vui lòng nhập chủ đề cho video B-roll. Ví dụ:")
             print("   ./run.sh --broll \"Bí ẩn bãi đá Stonehenge\" --duration 5")
-            print("   ./run.sh --broll --audio /home/blue/Downloads/Projects/wav2video/workspace/tiktok_ref.mp4")
+            print("   ./run.sh --broll --audio workspace/voice-preview.mp3")
             return
+
+        if opts.get("script_only"):
+            from graph.broll_director import generate_broll_script
+            from config.settings import WORKSPACE_DIR
+            script_data = generate_broll_script(topic=topic_input, duration_mins=opts["duration"])
+            full_text = "\n\n".join(s["narration_vn"] for s in script_data.get("sections", []))
+            out_file = Path(WORKSPACE_DIR) / "script_to_read.txt"
+            out_file.write_text(full_text, encoding="utf-8")
+            print("\n" + "=" * 96)
+            print(f"📋 TOÀN VĂN KỊCH BẢN ĐỂ COPY DÁN VÀO ELEVENLABS / CAPCUT ({opts['duration']:.1f} PHÚT):")
+            print("=" * 96)
+            print(full_text)
+            print("=" * 96)
+            print(f"👉 Đã lưu kịch bản sạch vào: {out_file.resolve()}")
+            print("💡 Sau khi tạo giọng và tải file mp3 về máy, chỉ cần chạy lệnh:")
+            print(f"   ./run.sh --broll \"{topic_input}\" --audio /duong/dan/file_audio.mp3")
+            print("=" * 96)
+            return
+
         run_broll_pipeline(
             topic=topic_input,
             duration_mins=opts["duration"],
