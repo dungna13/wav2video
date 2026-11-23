@@ -1,267 +1,331 @@
 <div align="center">
 
-# 🎬 wav2video — Agentic Short Documentary & Book-to-Video Pipeline (9:16)
+# 🎬 wav2video
 
-**Biến một chủ đề tự do hoặc cả một cuốn sách (`.epub` / `.txt` / `.docx` / `.pdf`) thành video tài liệu ngắn dọc 9:16 hoàn chỉnh — tự động biên kịch theo 13 mô hình tự sự & 14 chuyên gia lĩnh vực, kiểm định Groundedness 0-token, lồng tiếng Neural VITS tiếng Việt, tải ảnh tư liệu thật Wikimedia, hỗ trợ Google Flow 4-Block, Giao diện Web UX/UI Studio, HITL CLI và Tự động Đăng TikTok (Anti-AI Metadata).**
+### Hệ Thống Tự Động Sản Xuất Phim Tài Liệu & Video Dọc 9:16 Chuẩn TikTok / Shorts
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/Workflow-LangGraph%20StateGraph-1C3C3C?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
-[![Gemini](https://img.shields.io/badge/LLM-Google%20Gemini%20Cascade-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Embeddings](https://img.shields.io/badge/Local%20RAG-multilingual--e5--small%20%2B%20FTS5-0F766E?style=for-the-badge)](https://huggingface.co/intfloat/multilingual-e5-small)
-[![FFmpeg](https://img.shields.io/badge/Video%20Engine-FFmpeg%209%3A16%2030fps-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+**Biến một chủ đề tự do, tư liệu B-Roll hoặc cả cuốn sách (`.epub` / `.txt` / `.docx` / `.pdf`) thành video tài liệu ngắn dọc 9:16 hoàn chỉnh — tự động biên kịch đa tầng, nhân bản giọng nói Offline tiếng Việt F5-TTS, cắt ghép B-Roll thông minh, hoạt hình người que lịch sử và xuất bản đa nền tảng.**
+
+---
+
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Video Engine](https://img.shields.io/badge/Video%20Engine-FFmpeg%209%3A16%2030fps-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![Voice Clone](https://img.shields.io/badge/Voice%20Clone-F5--TTS%20Vietnamese-FF6F00?style=for-the-badge)](https://github.com/SWivid/F5-TTS)
+[![LLM Engine](https://img.shields.io/badge/LLM-Google%20Gemini%20Thinking-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Local RAG](https://img.shields.io/badge/Local%20RAG-multilingual--e5--small%20%2B%20FTS5-0F766E?style=for-the-badge)](https://huggingface.co/intfloat/multilingual-e5-small)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 </div>
 
 ---
 
-## ✨ Điểm khác biệt cốt lõi
+## 📖 Mục Lục (Table of Contents)
 
-Thay vì sinh video kiểu *"slide ảnh vô hồn, hoạt hình trẻ con, hình một đằng – tiếng một nẻo"*, `wav2video` được thiết kế theo chuẩn **Đạo diễn Phim Tài liệu Ngắn**:
-
-* **📚 Book RAG Hybrid Search & Hàng đợi Đăng Hằng Ngày**: Nạp cả cuốn sách vào SQLite một lần duy nhất (< 0.1s tách chương, nhúng vector local `intfloat/multilingual-e5-small` + chỉ mục FTS5 BM25). Tự động khai thác góc kể (`Angle Miner`) và xuất đều đặn mỗi ngày 1 video sâu từng chi tiết mà **không tốn token đọc lại cả sách**.
-* **🧠 12 Mô hình Kịch bản & 4 Nguyên lý Nhận thức**: Tự chấm điểm chủ đề để chọn Beat Sheet tối ưu (`ABT`, `In Medias Res`, `Myth vs. Reality`, `Open Loops`, `Rule of Three`, `SCQA`, `PAS`, `AIDA`...), áp dụng *Information Gap* cho Hook 6–11 từ và *Habituation Break* xen cảnh Twist ngắn gắt.
-* **🛡️ Groundedness 0-Token & QueryRewriter Loop**: Chấm mức độ bám sát sách ngay trên CPU bằng Vector Cosine (0 tốn token LLM Scorer); nếu kịch bản lệch nguồn hoặc topic quá trừu tượng (`S_rag < 0.78`), hệ thống tự mở rộng từ khóa qua `QueryRewriter` và tìm lại chunk khác.
-* **🗣️ Tách đôi Giọng đọc (`narration_vn`) & Phụ đề Mắt đọc (`subtitle_vn`)**: TTS đọc thuần chữ tự nhiên (*"năm một nghìn chín trăm năm mươi tư"*), còn màn hình hiện gọn *"năm 1954"*, *"20%"* kèm highlight từng từ và Safe-Zone 1/3 dưới.
-* **🎞️ Tự động săn Footage HD thật + Chấm CLIP 0-Token + Nhạc nền `-14 LUFS`**: Lấy đa ứng viên video stock (Mixkit / Pexels / Pixabay) chống trùng lặp giữa các cảnh, trích keyframe bằng `ffmpeg` và chấm khớp ngữ nghĩa + lọc dính người ngay trên CPU bằng `openai/clip-vit-base-patch32` (0-token API), cân bằng màu liên tục (`ContinuityHarmonizer` qua Reinhard / `lutrgb`), lồng tiếng Neural VITS tiếng Việt (`facebook/mms-tts-vie`), trộn SFX và chuẩn hóa âm lượng `-14 LUFS`.
-* **🌊 Luồng Google Flow 4 Block Liền Mạch (`--flow-prep` / `--flow-render`)**: Tự động đo thời lượng audio thật để chia kịch bản thành 4 Block cân bằng (`flow_prompts.txt`) kèm neo nối cảnh (*seamless continuation*); khi bạn tải clip Flow về `flow_clips/`, hệ thống tự khớp đúng block theo tên file gốc và dựng hoàn chỉnh không tốn thêm token LLM.
-* **🩺 Checkpoint từng Node & Error Logs SQLite**: Lưu trạng thái sau mỗi node vào `wav2vid_checkpoints.sqlite`, ghi log phiên chạy vào `workspace/logs/latest.log` và bảng `error_logs` để truy vết lỗi tức thì qua `--logs`.
+- [Giới Thiệu Dự Án](#-giới-thiệu-dự-án)
+- [Điểm Khác Biệt Cốt Lõi](#-điểm-khác-biệt-cốt-lõi)
+- [4 Trụ Cột Sản Xuất Chính](#-4-trụ-cột-sản-xuất-chính)
+- [Công Nghệ Sử Dụng (Tech Stack)](#-công-nghệ-sử-dụng-tech-stack)
+- [Yêu Cầu Hệ Thống (Prerequisites)](#-yêu-cầu-hệ-thống-prerequisites)
+- [Cài Đặt & Khởi Chạy (Installation)](#-cài-đặt--khởi-chạy-installation)
+- [Cấu Hình Biến Môi Trường (.env)](#-cấu-hình-biến-môi-trường-env)
+- [Hướng Dẫn Sử Dụng Chi Tiết (Usage)](#-hướng-dẫn-sử-dụng-chi-tiết-usage)
+  - [1. Phim Tài Liệu B-Roll Dài 3–5 Phút Tự Động](#1-phim-tài-liệu-b-roll-dài-35-phút-tự-động-chuẩn-vanthanhthu09)
+  - [2. Hoạt Hình Người Que Lịch Sử 60s](#2-hoạt-hình-người-que-lịch-sử-historical-stickman-60s)
+  - [3. Tự Động Nhân Bản Giọng Đọc Offline (F5-TTS Clone)](#3-tự-động-nhân-bản-giọng-đọc-offline-f5-tts-vietnamese)
+  - [4. Biến Sách Thành Chuỗi Video Hằng Ngày (Book RAG)](#4-quy-trình-làm-video-hằng-ngày-từ-sách-book-rag)
+  - [5. Bán Tự Động Với Google Flow (4 Block Liền Mạch)](#5-luồng-bán-tự-động-với-google-flow-4-block-liền-mạch)
+  - [6. Bảng Tra Cứu Giọng Đọc TikTok Trendy](#6-bảng-tra-cứu-giọng-đọc-tiktok-trendy)
+- [Cấu Trúc Thư Mục Dự Án (Project Structure)](#-cấu-trúc-thư-mục-dự-án-project-structure)
+- [Xử Lý Sự Cố Thường Gặp (Troubleshooting & FAQ)](#-xử-lý-sự-cố-thường-gặp-troubleshooting--faq)
+- [Lộ Trình Phát Triển (Roadmap)](#-lộ-trình-phát-triển-roadmap)
+- [Đóng Góp & Giấy Phép (Contributing & License)](#-đóng-góp--giấy-phép-contributing--license)
 
 ---
 
-## 🏗️ Kiến trúc Luồng Xử lý (LangGraph StateGraph)
+## 💡 Giới Thiệu Dự Án
 
-```mermaid
-flowchart TD
-    Start(["CLI: Topic / --book / --daily / --mine"]) --> N1["Node 1: filter_context_node\nBook RAG Hybrid (FTS5 BM25 + multilingual-e5-small)\n+ QueryRewriter (khi S_rag < 0.78)"]
-    N1 --> N15{"Node 1.5: intent_router_node\nPhân luồng 3 chế độ hình ảnh"}
+**`wav2video`** ra đời nhằm giải quyết vấn đề lớn nhất của các nhà sáng tạo nội dung dạng ngắn: **Làm thế nào để sản xuất video tài liệu, khoa học, lịch sử chất lượng điện ảnh với chi phí 0 đồng, không dính bản quyền và hoàn toàn tự động?**
 
-    N15 -->|"NO_HUMAN_BROLL / HUMAN_NO_LIPSYNC"| N2["Node 2: prompt_architect_node\nChọn 1/12 Narrative Models + Beat Sheet 8–10 cảnh\nGemini Multi-Model Cascade"]
-    N15 -.->|"HUMAN_WITH_LIPSYNC (Phase 2)"| N2
+Thay vì tạo ra những video *"ghép slide ảnh vô hồn, giọng đọc Google Translate đơ cứng, hình ảnh một đằng – tiếng một nẻo"*, `wav2video` áp dụng tư duy của một **Đạo diễn Phim Tài liệu Ngắn**:
+- Soạn kịch bản theo nhịp kể dồn dập, có nút thắt (Twist), kịch tính (Hook 3s đầu).
+- Cắt dựng video tư liệu (B-Roll) theo nhịp 3s–5s chuyển cảnh linh hoạt.
+- Tự động kiểm duyệt khung hình sạch, chống dính chữ/phụ đề gốc từ tư liệu.
+- Giọng đọc trầm ấm tự nhiên với F5-TTS tiếng Việt chạy Offline 100% trên CPU.
 
-    N2 --> N3{"Node 3: prompt_scorer_node\n1. Deterministic Rules + Safe-Zone 9:16\n2. Local Groundedness 0-Token\n3. Gemini Editorial Critic"}
+---
 
-    N3 -->|"retry_rag (Groundedness thấp, < 3 lần)"| N1
-    N3 -->|"Viết lại kịch bản / cảnh lỗi"| N2
-    N3 -->|"Pass / Đạt ngưỡng"| N4["Node 4: media_generator_node\n• VITS TTS + SFX + FFmpeg -14 LUFS\n• Đa ứng viên chống trùng + Local CLIP 0-Token\n• ContinuityHarmonizer (Reinhard / lutrgb)\n• FFmpeg 9:16 xfade + Color Grade + .ASS Karaoke"]
+## ✨ Điểm Khác Biệt Cốt Lõi
 
-    N4 --> N5["Node 5: visual_judge_node\nĐo lệch A/V (frames), kiểm định đầu ra\n& sinh Caption TikTok"]
-    N5 --> Done(["final_master.mp4 + JSON Reports"])
+* ⚡ **Zero Graph Overhead (Chế độ B-Roll thuần Python)**: Thực thi trực tiếp không phụ thuộc các framework đồ thị cồng kềnh, tối ưu tốc độ và độ ổn định.
+* 🎙️ **Offline Vietnamese Voice Clone (F5-TTS)**: Nhân bản giọng nói bất kỳ từ file mẫu `.mp3`, giữ nguyên ngữ điệu tiếng Việt, tự động chuẩn hóa tốc độ `0.68x` (~175 từ/phút) chuẩn phim tài liệu, 0đ chi phí API.
+* 🛡️ **Kiểm Duyệt Khung Hình Sạch 100%**: Thuật toán `_is_cut_usable` tự động phát hiện và loại bỏ các cảnh bị tối đen hoặc có chữ phụ đề/ticker dính từ video tư liệu YouTube.
+* 🎚️ **Chuẩn Âm Thanh Studio `-14 LUFS` & Auto-Ducking**: Tự động hạ âm lượng nhạc nền xuống khi có giọng đọc và đẩy ngân vang khi ngắt nghỉ câu thoại, khóa mức trần `0.89` tránh rè vỡ tiếng.
+* 📚 **Book RAG Local 0-Token**: Nạp toàn bộ sách vào SQLite, nhúng vector bằng `intfloat/multilingual-e5-small` kết hợp FTS5 BM25. Chấm điểm độ bám sát (Groundedness) bằng Vector Cosine trên CPU (0 token LLM).
+* ⚔️ **Historical Stickman Suite**: Tự động sinh kịch bản 60s, Character Reference Sheet và Prompt 2 tầng cho Veo / Omni / Google Flow.
 
-    DB[("SQLite Storage\n• book_rag.sqlite (Chunks + Vectors + Queue)\n• wav2vid_checkpoints.sqlite (Per-Node + error_logs)")] -.-> N1
-    DB -.-> N5
+---
+
+## 🏛️ 4 Trụ Cột Sản Xuất Chính
+
+```
+                           ┌────────────────────────────────────────────────────────┐
+                           │                      wav2video                         │
+                           └──────────────────────────┬─────────────────────────────┘
+                                                      │
+         ┌────────────────────────┬───────────────────┴────────────────┬────────────────────────┐
+         │                        │                                    │                        │
+         ▼                        ▼                                    ▼                        ▼
+ 1. B-Roll Phim Dài      2. Người Que Lịch Sử                 3. Book RAG Shorts       4. F5-TTS Voice Clone
+  (3–5 phút tự động)       (Stickman 60s Viral)                 (Sách -> Video ngày)     (Nhân bản giọng Offline)
+  • Kịch bản 10-22 đoạn    • 6 cảnh x 10 giây                   • Nạp .epub / .pdf       • Mẫu từ voice-preview.mp3
+  • Tự tải B-roll 4K       • Veo/Flow Prompts                   • Hybrid Search BM25+E5  • Tách câu đơn tự nhiên
+  • Cắt ghép nhịp 3-5s     • Nhạc chiến trận dồn dập            • Khai thác góc kể       • Tốc độ 0.68x trầm ấm
+  • Khung hình sạch 100%   • Nhân vật nhất quán                 • Tự động bốc hàng đợi   • Chi phí 0đ API
 ```
 
 ---
 
-## 🎯 Chi tiết Tính năng Hệ thống
+## 🛠️ Công Nghệ Sử Dụng (Tech Stack)
 
-### 1. Kho 12 Mô hình Kịch bản ([`prompts/narrative_models.py`](prompts/narrative_models.py))
-| Nhóm mục tiêu | ID Mô hình | Cấu trúc cốt lõi |
+| Hạng mục | Công nghệ / Thư viện | Vai trò |
 |---|---|---|
-| **Phim Tài liệu / Kể chuyện** | `abt` | Bối cảnh (*And*) → Mâu thuẫn (*But*) → Hệ quả (*Therefore*) |
-| | `in_medias_res` | Nhảy thẳng vào khoảnh khắc căng nhất → Tua ngược → Kết cục |
-| | `freytag_3_act` | Thiết lập → Leo thang → Cao trào → Hạ nhiệt → Kết cục |
-| | `pixar_story_spine` | *Ngày xửa... Mỗi ngày... Cho đến một ngày... Vì thế...* |
-| | `scqa` | Situation → Complication → Question → Answer (McKinsey) |
-| **Short-Form Viral (9:16)** | `hook_retain_payoff` | Hook 3s sốc → Leo thang dữ kiện mới → Payoff bùng nổ |
-| | `myth_vs_reality` | Lầm tưởng phổ biến → Phá định kiến → Sự thật ẩn → Bằng chứng |
-| | `open_loops` | Mở vòng lặp A → Mở vòng lặp B → Giải mã B → Đóng trọn A |
-| | `rule_of_three` | Hook tổng → Điểm 1 → Điểm 2 → Twist → Điểm 3 đắt giá nhất |
-| **Thuyết phục / B2B** | `pas` | Problem (Vấn đề) → Agitate (Khoét nỗi đau) → Solution |
-| | `bab` | Before (Trước) → After (Sau) → Bridge (Cầu nối giải pháp) |
-| | `aida` | Attention → Interest → Desire → Action |
-
-### 2. Bộ định tuyến Ý định 3 Chế độ ([`graph/nodes/intent_router.py`](graph/nodes/intent_router.py))
-| Chế độ (`--mode`) | Mục đích & Quy tắc hình ảnh | Trạng thái hiện tại |
-|---|---|---|
-| `NO_HUMAN_BROLL` *(Mặc định)* | Không có người trong khung hình; tập trung tư liệu, địa điểm, vật thể, kiến trúc. | ✅ **Hoàn thiện** |
-| `HUMAN_NO_LIPSYNC` | `≥ 60%` cảnh có người hành động tự nhiên (góc nghiêng/sau lưng/đôi tay), không nhìn thẳng nhép môi. | ✅ **Hoàn thiện MVP** |
-| `HUMAN_WITH_LIPSYNC` | Nhân vật/Avatar nói trực diện khớp khẩu hình miệng. | 🚧 *Phase 2 (tự hạ an toàn về `HUMAN_NO_LIPSYNC`)* |
+| **Ngôn ngữ** | Python 3.10+ | Lõi xử lý logic toàn bộ pipeline |
+| **Xử lý Video & Audio** | FFmpeg (qua `imageio_ffmpeg`) | Cắt, crop 9:16, rescale, cross-fade, mix audio, burn sub |
+| **Trí tuệ nhân tạo (LLM)** | Google Gemini (Cascade / Thinking) | Soạn kịch bản, chấm điểm biên tập, gợi ý từ khóa B-roll |
+| **Voice Clone Offline** | F5-TTS (DiT + Vocos 24kHz) | Nhân bản giọng đọc tiếng Việt mộc tự nhiên từ file mẫu |
+| **Cloud TTS (Fallback)** | Edge-TTS / gTTS | 10+ phong cách giọng đọc TikTok trendy (Hoài My, Nam Minh...) |
+| **Vector RAG & Search** | `multilingual-e5-small` + SQLite FTS5 | Nhúng vector & tìm kiếm lai tri thức sách nội bộ |
+| **Tải tư liệu tự động** | `yt-dlp` | Tự động tìm và tải footage 4K/1080p từ YouTube theo từ khóa |
+| **Đánh giá hình ảnh** | OpenAI CLIP ViT-B/32 | Chấm điểm khớp ngữ nghĩa ảnh tư liệu 0-token trên CPU |
 
 ---
 
-## 📁 Cấu trúc Dự án
+## 📋 Yêu Cầu Hệ Thống (Prerequisites)
 
-```text
-wav2video/
-├── main.py                         # CLI Entrypoint (--ingest, --mine, --book, --daily, --model, --logs)
-├── config/
-│   └── settings.py                 # Nạp cấu hình từ .env (API keys, FPS, kích thước 9:16, ngưỡng điểm)
-├── prompts/
-│   ├── narrative_models.py         # 12 mô hình kịch bản + 4 nguyên lý nhận thức + bộ chấm điểm tự chọn
-│   ├── architect_prompt.py         # Prompt Đạo diễn/Biên kịch 8–10 cảnh + Safe-Zone 9:16
-│   ├── scorer_prompt.py            # Prompt Giám khảo Biên tập (Hook 30%, Visual 35%, Story 35%)
-│   ├── angle_miner_prompt.py       # Prompt khai thác 3–6 góc kể độc lập từ 1 chunk sách
-│   └── outro_moral_prompt.py       # Prompt chuốt Voiceover TTS & Subtitle đồng bộ 8–10 cảnh
-├── graph/
-│   ├── workflow.py                 # StateGraph, Per-Node SqliteSaver Checkpointer & Error Log DB
-│   ├── state.py                    # TypedDict State, Reducers (`error_logs`, `characters`) & Pydantic Schemas
-│   ├── llm_client.py               # Gemini Multi-Model Cascade (gemini-3.1-flash-lite -> 3-flash) + Free LLM fallback
-│   ├── book_rag.py                 # Parser (.epub/.txt/.md/.docx/.pdf), FTS5 + multilingual-e5 Hybrid Search, 0-Token Groundedness
-│   ├── asset_fetcher.py            # Đa ứng viên Video HD (Mixkit / Pexels / Pixabay), chống trùng & Ảnh AI Pollinations
-│   ├── visual_scorer.py            # VisualFeatureScorer 0-token (ffmpeg keyframe, local CLIP, dark/static) & ContinuityHarmonizer
-│   ├── flow_bundler.py             # Chia 4 Block cân bằng cho Google Flow (--flow-prep) & dựng phim từ clip Flow (--flow-render)
-│   ├── audio_sync.py               # Local VITS TTS (facebook/mms-tts-vie), DSP Broadcast, Auto-Ducking BGM, SFX & -14 LUFS
-│   ├── video_renderer.py           # FFmpeg 9:16 Composer (Zoom/Pan, lutrgb, Xfade, Genre Grade, .ASS Karaoke, Auto-Cleanup)
-│   ├── run_logger.py               # Auto Tee File Logger (`workspace/logs/latest.log`) & CLI Diagnostics
-│   └── nodes/
-│       ├── filter_context.py       # Node 1: Book RAG Retrieval + QueryRewriter
-│       ├── intent_router.py        # Node 1.5: 3-Mode Intent Router
-│       ├── prompt_architect.py     # Node 2: Đạo diễn & Sinh kịch bản JSON
-│       ├── prompt_scorer.py        # Node 3: Deterministic Rules + Local Groundedness + LLM Critic
-│       ├── media_generator.py      # Node 4: Điều phối TTS, Visual Assets, Harmonizer & FFmpeg Render
-│       └── visual_judge.py         # Node 5: Kiểm định đồng bộ A/V & xuất báo cáo duyệt thủ công
-├── tests/
-│   └── test_visual_phase2.py       # Bộ unit & E2E tests cho Tầng 2 (CLIP, Harmonizer, -14 LUFS, Flow pipeline)
-└── workspace/
-    ├── book_rag.sqlite             # Kho chunk sách + vector embeddings + hàng đợi đăng hằng ngày
-    ├── wav2vid_checkpoints.sqlite  # Checkpoints từng node & bảng `error_logs`
-    └── logs/                       # File log chi tiết từng lần chạy (latest.log)
-```
+* **Hệ điều hành:** Linux (Ubuntu 20.04+, Debian, Arch) hoặc macOS, Windows (WSL2 khuyến nghị).
+* **Python:** Phiên bản `3.10` trở lên.
+* **FFmpeg:** Đã tích hợp sẵn binary qua package `imageio-ffmpeg` (không bắt buộc cài ngoài).
+* **RAM:** Tối thiểu 8 GB (khuyến nghị 16 GB để chạy model F5-TTS mượt mà).
+* **Dung lượng ổ cứng:** Trống tối thiểu 5 GB cho model F5-TTS và thư viện đệm.
 
 ---
 
-## ⚙️ Cài đặt
+## 🚀 Cài Đặt & Khởi Chạy (Installation)
 
-### 1. Môi trường Python & Thư viện
+### 1. Tải mã nguồn về máy:
 ```bash
 git clone https://github.com/dungna13/wav2video.git
 cd wav2video
+```
 
+### 2. Thiết lập môi trường ảo Python:
+```bash
 python3 -m venv .venv
-source .venv/bin/activate        # Trên Windows: .venv\Scripts\activate
+source .venv/bin/activate       # Trên Windows: .venv\Scripts\activate
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2. Cấu hình `.env`
+### 3. Cấu hình quyền thực thi cho script runner:
+```bash
+chmod +x run.sh
+```
+
+---
+
+## 🔐 Cấu Hình Biến Môi Trường (.env)
+
+Tạo file `.env` từ file mẫu:
 ```bash
 cp .env.example .env
 ```
-Mở `.env` và điền khóa API của bạn (tuyệt đối không commit file `.env`):
+
+Mở `.env` và điền khóa API của bạn:
 ```env
-GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE"
+# Google Gemini API Key (Bắt buộc để LLM viết kịch bản)
+GEMINI_API_KEY="AIzaSy..."
 GEMINI_MODEL="gemini-3.1-flash-lite-preview"
 
-# (Tùy chọn) Video stock chất lượng cao qua API ngoài Mixkit miễn phí sẵn có
+# API Footage Stock ngoài (Tùy chọn, hệ thống có sẵn YouTube/Mixkit tự động)
 PEXELS_API_KEY=""
 PIXABAY_API_KEY=""
 ```
-> *Ghi chú: Hệ thống tự dùng **Mixkit HD Scraper** (không cần API key), **Local VITS Vietnamese TTS** và **Local `intfloat/multilingual-e5-small`** chạy offline/CPU sau lần tải đầu tiên.*
+
+> [!IMPORTANT]
+> **Bảo mật**: File `.env` chứa API Key đã được khai báo trong `.gitignore`. Tuyệt đối không commit file này lên GitHub.
 
 ---
 
-## 🚀 Hướng dẫn Sử dụng trên Terminal
+## 📖 Hướng Dẫn Sử Dụng Chi Tiết (Usage)
 
-### 1. Chạy từ Chủ đề tự do
+### 1. Phim Tài Liệu B-Roll Dài 3–5 Phút Tự Động (Chuẩn @vanthanhthu09)
+
+Hệ thống tự động biên soạn kịch bản dài, tính toán đúng số từ (~155 từ/phút), tự tải footage 4K, cắt nhịp 3s–5s và lồng tiếng:
+
 ```bash
-# Tự động chọn mô hình kịch bản & chế độ hình ảnh phù hợp
-python main.py "Bí ẩn sự sụp đổ đột ngột của nền văn minh Maya"
+# Tự động từ A-Z với kịch bản 5 phút:
+./run.sh --broll "Bí ẩn bãi đá Stonehenge" --duration 5
 
-# Chỉ định chế độ có người minh họa (không nhép môi) & mô hình kịch bản
-python main.py --mode HUMAN_NO_LIPSYNC --model myth_vs_reality "Tại sao người bán hàng pha lê sợ ước mơ thành sự thật"
-```
+# Làm video 3.2 phút với giọng Clone tiếng Việt:
+./run.sh --broll "Bí mật lăng mộ Tần Thủy Hoàng" --duration 3.2 --voice clone
 
-### 2. Quy trình Làm Video Hằng Ngày từ Sách (`.epub`, `.txt`, `.md`, `.docx`, `.pdf`)
-```bash
-# Bước 1: Nạp sách 1 lần duy nhất (tự tách chương, tạo vector local & hàng đợi topic)
-python main.py --ingest NhaGiaKim.epub
+# Sử dụng video tư liệu có sẵn của bạn:
+./run.sh --broll "Bí ẩn Stonehenge" --duration 5 --footage /duong/dan/thu_muc_video/
 
-# Bước 2: Xem toàn bộ hàng đợi chunk & trạng thái (WAIT / DONE)
-python main.py --list-book nha_gia_kim
+# Sử dụng kịch bản JSON có sẵn:
+./run.sh --broll "Lăng mộ Tần Thủy Hoàng" --duration 3 --script-file workspace/script_tan_thuy_hoang_3min.json
 
-# Bước 3 (Tùy chọn): Khai thác 4 góc kể sắc nét từ 1 chương sách bất kỳ
-python main.py --mine nha_gia_kim --chunk 21
-
-# Bước 4A: Chế độ ĐĂNG HẰNG NGÀY — tự bốc chunk WAIT kế tiếp, render video & đánh dấu DONE
-python main.py --book nha_gia_kim --daily
-
-# Bước 4B: Hoặc gõ topic tự do, RAG Hybrid Search tự tìm đúng đoạn sách tương ứng
-python main.py --book nha_gia_kim "Bí mật hạnh phúc qua câu chuyện hai giọt dầu"
-
-# Bước 4C: Hoặc ép chạy đúng một chunk cụ thể
-python main.py --book nha_gia_kim --chunk 14 --model abt
-```
-
-### 3. Luồng Bán Tự Động với Google Flow (4 Block Liền Mạch)
-
-Thay vì treo terminal chờ bạn gen clip trên trình duyệt, quy trình tách làm **3 bước gọn nhẹ** (lưu sẵn `audio_16k_mono.wav` và `flow_manifest.json` để dựng lại bất cứ lúc nào mà không tốn thêm token LLM):
-
-1. **Bước 1 — Chạy lệnh tạo file Prompts (`flow_prompts.txt`) & Audio (`-14 LUFS`):**
-   ```bash
-   # Từ chủ đề tự do (mặc định chia đều thành 4 Block; đổi số block bằng --blocks 3 hoặc --blocks 5)
-   python main.py --flow-prep "Bí ẩn sa mạc Sahara từng là vùng đất xanh tươi"
-
-   # Hoặc từ sách RAG (ví dụ Nhà Giả Kim, chương có nhân vật nên dùng HUMAN_NO_LIPSYNC)
-   python main.py --flow-prep --book nha_gia_kim --chunk 14 --mode HUMAN_NO_LIPSYNC
-   ```
-   Sau khi chạy xong, terminal sẽ in ra 3 đường dẫn trong `workspace/flow_<ten>_<thoi_gian>/`:
-   * `flow_prompts.txt` — chứa sẵn **4 Prompt** đã tính khớp giây và gắn câu nối *seamless continuation*.
-   * `flow_clips/` — thư mục để bạn thả clip tải về từ Google Flow.
-   * Lệnh `--flow-render` chuẩn bị sẵn cho Bước 3.
-
-2. **Bước 2 — Tạo 4 clip trên Google Flow & tải về:**
-   * Mở `flow_prompts.txt`, copy **Block 1** sang Google Flow (khổ dọc `9:16`) để tạo clip đầu.
-   * Từ **Block 2 → 4**, bấm **Extend** (hoặc dùng khung hình cuối của clip trước làm Start Frame) rồi dán Prompt Block tương ứng.
-   * Tải cả 4 file `.mp4` (hoặc 1 file dài duy nhất nếu bạn Extend liên hoàn) thả vào thư mục `flow_clips/` *(giữ nguyên tên file gốc của Google Flow, không cần đổi tên `1.mp4`...)*.
-
-3. **Bước 3 — Chạy lệnh ghép các clip Flow thành video hoàn chỉnh:**
-   ```bash
-   python main.py --flow-render "workspace/flow_<ten_thu_muc_vua_tao>"
-   # (Tùy chọn: thêm --clips-dir /duong/dan/khac nếu bạn để clip ở thư mục ngoài)
-   ```
-   Hệ thống sẽ tự khớp từng clip vào đúng Block, cân bằng màu (`ContinuityHarmonizer`), ghép với giọng đọc `-14 LUFS`, burn phụ đề Karaoke và xuất **`final_master.mp4`**.
-
-### 4. Giao diện Web UX/UI Studio & Tự động Đăng TikTok
-```bash
-# Khởi động Web Studio tại http://localhost:8000
-python main.py --ui
-
-# Hoặc chỉ định cổng tùy ý
-python main.py --ui --port 8080
-```
-Quy trình thao tác 3 bước trên Web:
-1. **Bước 1**: Nhập chủ đề video ➜ Bấm nút sinh kịch bản & 4 Prompts khối cho Google Flow.
-2. **Bước 2**: Nhấn nút "Copy Prompt Flow" từng block ➜ dán vào Google Flow để gen video ➜ Tải file video lên tương ứng từng Block trên web.
-3. **Bước 3**: Chọn chế độ phụ đề (mặc định hiện 100% lời đọc) ➜ Bấm "Ghép Video Hoàn Chỉnh".
-4. **Đăng TikTok**: Bấm nút "🔑 Đăng nhập / Đổi nick TikTok" để đăng nhập 1 lần ➜ Bấm "⚡ TỰ ĐỘNG ĐĂNG LÊN TIKTOK" để bot tự động upload, điền caption và bấm Post (hoặc bấm copy caption để đăng thủ công).
-
-### 5. Giao diện HITL CLI (Duyệt nhanh trên Terminal)
-```bash
-# Duyệt dashboard, preview thumbnail hoặc đổi riêng 1 clip cảnh lỗi
-python main.py --hitl workspace/flow_<ten_thu_muc>
-```
-
-### 6. Kiểm tra Log, Checkpoint & Chạy Test
-```bash
-# Xem 5 checkpoint gần nhất, bảng error_logs trong SQLite và 25 dòng cuối của latest.log
-python main.py --logs
-
-# Chạy toàn bộ bộ kiểm thử tự động
-python -m unittest discover -s tests -v
+# Xuất video khổ ngang 16:9 cho YouTube:
+./run.sh --broll "Hố đen vũ trụ" --duration 5 --aspect 16:9
 ```
 
 ---
 
-## 📦 Đầu ra mỗi lần chạy (`workspace/run_<topic>_<timestamp>/`)
+### 2. Hoạt Hình Người Que Lịch Sử (Historical Stickman 60s)
 
-Sau khi dựng xong `final_master.mp4`, hệ thống **tự động dọn sạch toàn bộ file trung gian** (`clip_*.mp4`, `scene_*`, `raw_visual_merged.mp4`), chỉ giữ lại đúng các thành phẩm gọn nhẹ (~10–14 MB/video):
+Chuẩn hóa 6 cảnh x 10 giây, Character Reference Sheet và Prompts cho Veo 3.1 / Google Flow:
 
-| File đầu ra | Mô tả |
-|---|---|
-| `final_master.mp4` | Video dọc 9:16 (30fps, H.264/AAC), đã ghép giọng đọc, nhạc nền ducking, SFX chuyển nhịp, chỉnh màu theo thể loại và phụ đề Karaoke |
-| `audio_16k_mono.wav` | Bản thu giọng đọc VITS Studio + Ambient BGM + SFX cues |
-| `subtitles.ass` | File phụ đề động 3 từ/nhịp + chữ in hoa từ khóa neo |
-| `scene_timeline.json` | Dữ liệu mốc thời gian từng cảnh (`voice_start`, `voice_end`, `sfx_cue`, `media_source`) |
-| `visual_score_report.json` & `output_score_report.json` | Báo cáo điểm thực tế và độ lệch khung hình A/V |
+```bash
+# Xem 8 chủ đề lịch sử mẫu đã được cấu trúc sẵn:
+./run.sh --stickman-topics
+
+# Tạo gói sản xuất hoàn chỉnh (Kịch bản, Prompt 2 tầng, Audio 60s):
+./run.sh --stickman "Trận Bạch Đằng 938: Bẫy cọc ngầm đánh tan quân Nam Hán"
+```
+
+Sau khi dán prompt vào Google Flow tạo 6 clip (`1.mp4` đến `6.mp4`), chỉ cần chạy:
+```bash
+./run.sh --flow-render "workspace/run_Stickman_..."
+```
 
 ---
 
-## 🗺️ Lộ trình Phát triển (So với [`wav2vid.md`](wav2vid.md))
+### 3. Tự Động Nhân Bản Giọng Đọc Offline (F5-TTS Vietnamese)
 
-* [x] **Tầng 1 (100%)**: Intent Router 3 chế độ, 13 Mô hình Kịch bản độc lập + 14 Chuyên gia miền, Book RAG Hybrid Search (`FTS5` + `multilingual-e5-small`), Angle Miner, Local Groundedness 0-Token & `QueryRewriter` Loop (`retry_rag < 3`).
-* [x] **Tầng 2 (100%)**: Săn Footage HD thật (Mixkit / Pexels / Pixabay), Tải ảnh tư liệu thật Wikimedia API (`real_photo`), Chấm CLIP 0-token, Lọc đứng hình/tối, Cân bằng màu `ContinuityHarmonizer`, DSP âm thanh `-14 LUFS` + 7 SFX cues.
-* [x] **Quy trình Google Flow (100%)**: Tự gom 4 Block cân bằng thời lượng (`--flow-prep`), neo chuyển cảnh *seamless continuation*, khớp âm thanh thực tế & dựng phim chuẩn phụ đề Karaoke (`--flow-render`).
-* [x] **Tầng HITL CLI (100%)**: Giao diện dòng lệnh tương tác (`--hitl`), duyệt dashboard từng block, trích xuất thumbnail và hoán đổi (Swap) clip cảnh lỗi tại chỗ không cần chạy lại LLM/TTS.
-* [x] **Giao diện Web UX/UI Studio (100%)**: Web Studio trực quan tại `http://localhost:8000` (`--ui`) — nhập topic ➜ copy 4 block prompts ➜ upload clips ➜ ghép và xem video thành phẩm trực tiếp trên trình duyệt.
-* [x] **Đăng tải TikTok Tự Động & Chống Nhãn AI (100%)**: Tự động loại bỏ siêu dữ liệu C2PA/SynthID, giả lập máy quay thực tế Sony Alpha 7 IV, tự động gõ Caption/Hashtags và click Post qua Playwright bot.
-* [ ] **Giai đoạn tiếp theo (`HUMAN_WITH_LIPSYNC`)**: Khẩu hình miệng AI chân dung (`Wav2Lip` + `GFPGAN` + `SyncNet` trên máy chủ GPU CUDA).
+Sử dụng trực tiếp giọng nói từ file mẫu [workspace/voice-preview.mp3](file:///home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3) mà không tốn bất kỳ chi phí API nào:
+
+```bash
+# Thêm cờ --voice clone vào lệnh chạy B-roll:
+./run.sh --broll "Bí ẩn đáy biển Mariana" --duration 3 --voice clone
+```
+
+**Cơ chế tối ưu hóa giọng đọc độc quyền trong `wav2video`:**
+* **Tách câu đơn tự nhiên**: Không dồn cả đoạn dài vào model làm một lượt; hệ thống tách theo dấu câu, gọi `infer_process` đơn lẻ giữ cao độ chuẩn `264–266 Hz`.
+* **Khóa tốc độ `0.68x`**: Bù trừ độ dồn dập của giọng mẫu, tạo nhịp đọc từ tốn (~175 từ/phút), chuẩn truyền cảm của phim tài liệu.
+* **Auto-Ducking**: Nhạc nền ngân vang khi ngắt câu và tự hạ xuống khi có tiếng người.
+
+---
+
+### 4. Quy Trình Làm Video Hằng Ngày Từ Sách (Book RAG)
+
+Biến một cuốn sách dày thành chuỗi video TikTok đều đặn mỗi ngày:
+
+```bash
+# Bước 1: Nạp sách vào cơ sở dữ liệu (tự tách chương, nhúng vector 0-token):
+./run.sh --ingest NhaGiaKim.epub
+
+# Bước 2: Xem toàn bộ danh sách chương và trạng thái hoàn thành:
+./run.sh --list-book nha_gia_kim
+
+# Bước 3: Chế độ ĐĂNG HẰNG NGÀY — tự lấy chương tiếp theo, render video & lưu DONE:
+./run.sh --book nha_gia_kim --daily
+
+# Bước 4: Khai thác 4 góc nhìn sắc bén từ 1 chương bất kỳ:
+./run.sh --mine nha_gia_kim --chunk 14
+```
+
+---
+
+### 5. Luồng Bán Tự Động Với Google Flow (4 Block Liền Mạch)
+
+```bash
+# Bước 1: Sinh 4 block prompt liền mạch & audio thuyết minh:
+./run.sh --flow-prep "Bí ẩn sa mạc Sahara từng là rừng xanh"
+
+# Bước 2: Tải các clip từ Google Flow về thư mục flow_clips/
+
+# Bước 3: Dựng thành phẩm hoàn chỉnh:
+./run.sh --flow-render "workspace/flow_Sahara_..."
+```
+
+---
+
+### 6. Bảng Tra Cứu Giọng Đọc TikTok Trendy
+
+| Mã giọng (`--voice`) | Giới tính / Phong cách | Tốc độ | Đặc điểm |
+|---|---|---|---|
+| `vanthanhthu` | Nam Trầm Điện Ảnh ⭐ | 1.34x | Chuẩn phong cách kênh khoa học vũ trụ triệu view |
+| `clone` | Offline F5-TTS Clone 🔥 | 0.68x | Giọng clone từ `voice-preview.mp3`, nhả chữ từ tốn |
+| `review_phim` | Nữ Review Phim | 1.40x | Dồn dập, ngắt nhịp punchy cực cuốn hút drama |
+| `gen_z` | Nữ Gen Z | 1.35x | Tươi sáng, bắt trend giới trẻ |
+| `giat_gan` | Nam Giật Gân | 1.35x | Kịch tính, bí ẩn, dẫn dắt câu chuyện giật tít |
+| `nam_review` | Nam Hiện Đại | 1.40x | Nhanh, dứt khoát, chuyên tài chính & công nghệ |
+
+---
+
+## 📁 Cấu Trúc Thư Mục Dự Án (Project Structure)
+
+```text
+wav2video/
+├── main.py                         # Điểm vào chính của ứng dụng CLI
+├── run.sh                          # Runner script tự động liên kết môi trường ảo .venv
+├── HUONG_DAN_SU_DUNG.md            # Tài liệu cẩm nang sản xuất chi tiết
+├── config/
+│   └── settings.py                 # Nạp cấu hình từ .env, FPS, thông số 9:16
+├── graph/
+│   ├── broll_director.py           # Pipeline B-roll tài liệu dài (Zero Graph Library)
+│   ├── voice_clone_vietnamese.py   # Mô-đun F5-TTS nhân bản giọng tiếng Việt cục bộ
+│   ├── stickman_director.py        # Pipeline hoạt hình người que lịch sử 60s
+│   ├── audio_sync.py               # Hòa âm Studio, Auto-Ducking BGM, LUFS -14
+│   ├── book_rag.py                 # Bộ xử lý sách (.epub/.pdf) & Hybrid Search
+│   ├── flow_bundler.py             # Bộ điều phối chia Block cho Google Flow
+│   └── video_renderer.py           # Bộ dựng phim FFmpeg 9:16 nâng cao
+├── models/
+│   └── f5tts_vi/
+│       ├── vocab.txt               # Từ điển phát âm tiếng Việt cho F5-TTS
+│       └── model_latest.safetensors# (Trọng số model F5-TTS - lưu cục bộ)
+├── assets/
+│   ├── bgm/                        # Nhạc nền điện ảnh, chiến trận bản quyền sạch
+│   └── stickman/                   # Tài liệu tham khảo phong cách người que
+└── workspace/                      # Thư mục lưu trữ video thành phẩm & dữ liệu tạm
+    ├── voice-preview.mp3           # File audio giọng mẫu để clone (Không xóa)
+    ├── footage_tan_thuy_hoang/     # Kho tư liệu video 4K sạch không chữ
+    └── logs/                       # Log chi tiết các lần chạy
+```
+
+---
+
+## ❓ Xử Lý Sự Cố Thường Gặp (Troubleshooting & FAQ)
+
+### Q1: Tại sao video tạo ra lại có chữ/phụ đề lạ ở góc dưới?
+> **Nguyên nhân**: Video tư liệu tải từ YouTube có thể bị gắn cứng phụ đề tin tức từ video gốc.  
+> **Giải pháp**: Hệ thống đã tích hợp thuật toán `_is_cut_usable` tự động phát hiện mật độ chữ trắng ở đáy khung hình để bỏ qua các đoạn này. Đồng thời, bạn có thể truyền video tư liệu sạch của riêng bạn qua tham số `--footage <đường_dẫn>`.
+
+### Q2: Giọng Clone F5-TTS trên CPU chạy mất bao lâu?
+> Model chạy hoàn toàn bằng CPU đa nhân (12 threads). Với đoạn kịch bản 3 phút (khoảng 500 từ), quá trình tổng hợp câu đơn mất khoảng **15–20 phút** nhưng đổi lại chất lượng âm thanh dày dặn, không tốn credit AI và không phụ thuộc kết nối mạng.
+
+### Q3: Làm sao để tắt hẳn phụ đề chữ chạy trên video?
+> Mặc định hệ thống đã đặt chế độ phụ đề là `none`. Video xuất ra sẽ hoàn toàn sạch sẽ, thuận tiện để bạn tự thêm caption bằng CapCut hoặc TikTok Editor.
+
+---
+
+## 🗺️ Lộ Trình Phát Triển (Roadmap)
+
+- [x] **Phase 1: Pure-Python B-Roll Engine** — Dựng phim 3–5 phút tự động, cắt nhịp 3s–5s, auto-ducking BGM.
+- [x] **Phase 2: Local Vietnamese F5-TTS** — Tích hợp nhân bản giọng tiếng Việt với nhịp đọc tài liệu `0.68x`.
+- [x] **Phase 3: Clean B-Roll Guard** — Lọc tự động cảnh tối và cảnh dính phụ đề gốc.
+- [x] **Phase 4: Historical Stickman 60s** — Khung chỉ dẫn sản xuất hoạt hình người que lịch sử.
+- [ ] **Phase 5: Auto Caption TikTok** — Tùy chọn bật/tắt preset phụ đề động CapCut style.
+- [ ] **Phase 6: Multi-voice Dialogue** — Hỗ trợ 2 nhân vật đối thoại luân phiên trong cùng 1 video.
+
+---
+
+## 🤝 Đóng Góp & Giấy Phép (Contributing & License)
+
+Mọi đóng góp, báo lỗi (Issues) hoặc yêu cầu tính năng mới (Pull Requests) đều được chào đón!
+
+Dự án được phân phối dưới giấy phép **MIT License**. Xem chi tiết tại file [LICENSE](LICENSE).
+
+<div align="center">
+  <b>Phát triển với sự tận tâm dành cho cộng đồng Content Creator & Developer Việt Nam 🇻🇳</b>
+</div>
