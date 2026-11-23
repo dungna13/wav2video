@@ -2,9 +2,9 @@
 
 # 🎬 wav2video
 
-### Hệ Thống Tự Động Sản Xuất Phim Tài Liệu & Video Dọc 9:16 Chuẩn TikTok / Shorts
+### Hệ Thống Tự Động Sản Xuất Phim Tài Liệu & Video B-Roll Dọc 9:16 Chuẩn TikTok / Shorts
 
-**Biến một chủ đề tự do, tư liệu B-Roll hoặc cả cuốn sách (`.epub` / `.txt` / `.docx` / `.pdf`) thành video tài liệu ngắn dọc 9:16 hoàn chỉnh — tự động biên kịch đa tầng, nhân bản giọng nói Offline tiếng Việt F5-TTS, cắt ghép B-Roll thông minh, hoạt hình người que lịch sử và xuất bản đa nền tảng.**
+**Biến một chủ đề tự do, tư liệu B-Roll hoặc cả cuốn sách (`.epub` / `.txt` / `.docx` / `.pdf`) thành video tài liệu ngắn dọc 9:16 hoàn chỉnh — tự động biên kịch đa tầng, nhân bản giọng nói Offline tiếng Việt F5-TTS, cắt ghép B-Roll thông minh và xuất bản đa nền tảng.**
 
 ---
 
@@ -23,18 +23,17 @@
 
 - [Giới Thiệu Dự Án](#-giới-thiệu-dự-án)
 - [Điểm Khác Biệt Cốt Lõi](#-điểm-khác-biệt-cốt-lõi)
-- [4 Trụ Cột Sản Xuất Chính](#-4-trụ-cột-sản-xuất-chính)
+- [3 Trụ Cột Sản Xuất Chính](#-3-trụ-cột-sản-xuất-chính)
 - [Công Nghệ Sử Dụng (Tech Stack)](#-công-nghệ-sử-dụng-tech-stack)
 - [Yêu Cầu Hệ Thống (Prerequisites)](#-yêu-cầu-hệ-thống-prerequisites)
 - [Cài Đặt & Khởi Chạy (Installation)](#-cài-đặt--khởi-chạy-installation)
 - [Cấu Hình Biến Môi Trường (.env)](#-cấu-hình-biến-môi-trường-env)
 - [Hướng Dẫn Sử Dụng Chi Tiết (Usage)](#-hướng-dẫn-sử-dụng-chi-tiết-usage)
   - [1. Phim Tài Liệu B-Roll Dài 3–5 Phút Tự Động](#1-phim-tài-liệu-b-roll-dài-35-phút-tự-động-chuẩn-vanthanhthu09)
-  - [2. Hoạt Hình Người Que Lịch Sử 60s](#2-hoạt-hình-người-que-lịch-sử-historical-stickman-60s)
-  - [3. Tự Động Nhân Bản Giọng Đọc Offline (F5-TTS Clone)](#3-tự-động-nhân-bản-giọng-đọc-offline-f5-tts-vietnamese)
-  - [4. Biến Sách Thành Chuỗi Video Hằng Ngày (Book RAG)](#4-quy-trình-làm-video-hằng-ngày-từ-sách-book-rag)
-  - [5. Bán Tự Động Với Google Flow (4 Block Liền Mạch)](#5-luồng-bán-tự-động-với-google-flow-4-block-liền-mạch)
-  - [6. Bảng Tra Cứu Giọng Đọc TikTok Trendy](#6-bảng-tra-cứu-giọng-đọc-tiktok-trendy)
+  - [2. Tự Động Nhân Bản Giọng Đọc Offline (F5-TTS Clone)](#2-tự-động-nhân-bản-giọng-đọc-offline-f5-tts-vietnamese)
+  - [3. Biến Sách Thành Chuỗi Video Hằng Ngày (Book RAG)](#3-quy-trình-làm-video-hằng-ngày-từ-sách-book-rag)
+  - [4. Bán Tự Động Với Google Flow (4 Block Liền Mạch)](#4-luồng-bán-tự-động-với-google-flow-4-block-liền-mạch)
+  - [5. Bảng Tra Cứu Giọng Đọc TikTok Trendy](#5-bảng-tra-cứu-giọng-đọc-tiktok-trendy)
 - [Cấu Trúc Thư Mục Dự Án (Project Structure)](#-cấu-trúc-thư-mục-dự-án-project-structure)
 - [Xử Lý Sự Cố Thường Gặp (Troubleshooting & FAQ)](#-xử-lý-sự-cố-thường-gặp-troubleshooting--faq)
 - [Lộ Trình Phát Triển (Roadmap)](#-lộ-trình-phát-triển-roadmap)
@@ -44,43 +43,43 @@
 
 ## 💡 Giới Thiệu Dự Án
 
-**`wav2video`** ra đời nhằm giải quyết vấn đề lớn nhất của các nhà sáng tạo nội dung dạng ngắn: **Làm thế nào để sản xuất video tài liệu, khoa học, lịch sử chất lượng điện ảnh với chi phí 0 đồng, không dính bản quyền và hoàn toàn tự động?**
+**`wav2video`** ra đời nhằm giải quyết bài toán cốt lõi của các nhà sáng tạo nội dung dạng ngắn: **Làm thế nào để sản xuất video tài liệu, khoa học, khám phá bí ẩn chất lượng điện ảnh với chi phí 0 đồng, không dính bản quyền và hoàn toàn tự động?**
 
 Thay vì tạo ra những video *"ghép slide ảnh vô hồn, giọng đọc Google Translate đơ cứng, hình ảnh một đằng – tiếng một nẻo"*, `wav2video` áp dụng tư duy của một **Đạo diễn Phim Tài liệu Ngắn**:
-- Soạn kịch bản theo nhịp kể dồn dập, có nút thắt (Twist), kịch tính (Hook 3s đầu).
+- Soạn kịch bản theo nhịp kể lôi cuốn, có cao trào, thắt nút (Hook 3s đầu).
 - Cắt dựng video tư liệu (B-Roll) theo nhịp 3s–5s chuyển cảnh linh hoạt.
-- Tự động kiểm duyệt khung hình sạch, chống dính chữ/phụ đề gốc từ tư liệu.
+- Tự động kiểm duyệt khung hình sạch, chống dính chữ/phụ đề gốc từ video tư liệu.
 - Giọng đọc trầm ấm tự nhiên với F5-TTS tiếng Việt chạy Offline 100% trên CPU.
 
 ---
 
 ## ✨ Điểm Khác Biệt Cốt Lõi
 
-* ⚡ **Zero Graph Overhead (Chế độ B-Roll thuần Python)**: Thực thi trực tiếp không phụ thuộc các framework đồ thị cồng kềnh, tối ưu tốc độ và độ ổn định.
+* ⚡ **Zero Graph Overhead (Thuần Python Tối Ưu)**: Thực thi trực tiếp không phụ thuộc các framework đồ thị cồng kềnh, tối ưu tốc độ và độ ổn định khi xuất file.
 * 🎙️ **Offline Vietnamese Voice Clone (F5-TTS)**: Nhân bản giọng nói bất kỳ từ file mẫu `.mp3`, giữ nguyên ngữ điệu tiếng Việt, tự động chuẩn hóa tốc độ `0.68x` (~175 từ/phút) chuẩn phim tài liệu, 0đ chi phí API.
 * 🛡️ **Kiểm Duyệt Khung Hình Sạch 100%**: Thuật toán `_is_cut_usable` tự động phát hiện và loại bỏ các cảnh bị tối đen hoặc có chữ phụ đề/ticker dính từ video tư liệu YouTube.
 * 🎚️ **Chuẩn Âm Thanh Studio `-14 LUFS` & Auto-Ducking**: Tự động hạ âm lượng nhạc nền xuống khi có giọng đọc và đẩy ngân vang khi ngắt nghỉ câu thoại, khóa mức trần `0.89` tránh rè vỡ tiếng.
 * 📚 **Book RAG Local 0-Token**: Nạp toàn bộ sách vào SQLite, nhúng vector bằng `intfloat/multilingual-e5-small` kết hợp FTS5 BM25. Chấm điểm độ bám sát (Groundedness) bằng Vector Cosine trên CPU (0 token LLM).
-* ⚔️ **Historical Stickman Suite**: Tự động sinh kịch bản 60s, Character Reference Sheet và Prompt 2 tầng cho Veo / Omni / Google Flow.
+* 🌊 **Quy Trình Google Flow 4-Block**: Tự động chia kịch bản thành 4 Block cân bằng thời lượng kèm câu nối liền mạch (*seamless continuation*) cho Google Flow / Veo.
 
 ---
 
-## 🏛️ 4 Trụ Cột Sản Xuất Chính
+## 🏛️ 3 Trụ Cột Sản Xuất Chính
 
 ```
                            ┌────────────────────────────────────────────────────────┐
                            │                      wav2video                         │
                            └──────────────────────────┬─────────────────────────────┘
                                                       │
-         ┌────────────────────────┬───────────────────┴────────────────┬────────────────────────┐
-         │                        │                                    │                        │
-         ▼                        ▼                                    ▼                        ▼
- 1. B-Roll Phim Dài      2. Người Que Lịch Sử                 3. Book RAG Shorts       4. F5-TTS Voice Clone
-  (3–5 phút tự động)       (Stickman 60s Viral)                 (Sách -> Video ngày)     (Nhân bản giọng Offline)
-  • Kịch bản 10-22 đoạn    • 6 cảnh x 10 giây                   • Nạp .epub / .pdf       • Mẫu từ voice-preview.mp3
-  • Tự tải B-roll 4K       • Veo/Flow Prompts                   • Hybrid Search BM25+E5  • Tách câu đơn tự nhiên
-  • Cắt ghép nhịp 3-5s     • Nhạc chiến trận dồn dập            • Khai thác góc kể       • Tốc độ 0.68x trầm ấm
-  • Khung hình sạch 100%   • Nhân vật nhất quán                 • Tự động bốc hàng đợi   • Chi phí 0đ API
+         ┌────────────────────────────────────────────┼────────────────────────────────────────────┐
+         │                                            │                                            │
+         ▼                                            ▼                                            ▼
+ 1. B-Roll Phim Dài 3–5 Phút                  2. F5-TTS Voice Clone                     3. Book RAG Shorts
+  (Chuẩn kênh @vanthanhthu09)                  (Nhân bản giọng Offline)                  (Sách -> Video ngày)
+  • Kịch bản 10-22 đoạn tự động                • Mẫu từ voice-preview.mp3                • Nạp .epub / .pdf / .txt
+  • Tự tải footage 4K qua yt-dlp               • Tách câu đơn tự nhiên                   • Hybrid Search BM25 + E5
+  • Cắt ghép nhịp 3-5s đan xen                 • Tốc độ 0.68x trầm ấm                    • Khai thác 4-6 góc kể
+  • Khung hình sạch 100% không chữ             • Chi phí 0đ API (chạy CPU)               • Tự động bốc hàng đợi
 ```
 
 ---
@@ -163,44 +162,25 @@ PIXABAY_API_KEY=""
 Hệ thống tự động biên soạn kịch bản dài, tính toán đúng số từ (~155 từ/phút), tự tải footage 4K, cắt nhịp 3s–5s và lồng tiếng:
 
 ```bash
-# Tự động từ A-Z với kịch bản 5 phút:
+# 1. Tự động từ A-Z với kịch bản 5 phút:
 ./run.sh --broll "Bí ẩn bãi đá Stonehenge" --duration 5
 
-# Làm video 3.2 phút với giọng Clone tiếng Việt:
+# 2. Làm video 3.2 phút với giọng Clone tiếng Việt:
 ./run.sh --broll "Bí mật lăng mộ Tần Thủy Hoàng" --duration 3.2 --voice clone
 
-# Sử dụng video tư liệu có sẵn của bạn:
+# 3. Sử dụng video tư liệu có sẵn của bạn:
 ./run.sh --broll "Bí ẩn Stonehenge" --duration 5 --footage /duong/dan/thu_muc_video/
 
-# Sử dụng kịch bản JSON có sẵn:
+# 4. Sử dụng kịch bản JSON có sẵn:
 ./run.sh --broll "Lăng mộ Tần Thủy Hoàng" --duration 3 --script-file workspace/script_tan_thuy_hoang_3min.json
 
-# Xuất video khổ ngang 16:9 cho YouTube:
+# 5. Xuất video khổ ngang 16:9 cho YouTube:
 ./run.sh --broll "Hố đen vũ trụ" --duration 5 --aspect 16:9
 ```
 
 ---
 
-### 2. Hoạt Hình Người Que Lịch Sử (Historical Stickman 60s)
-
-Chuẩn hóa 6 cảnh x 10 giây, Character Reference Sheet và Prompts cho Veo 3.1 / Google Flow:
-
-```bash
-# Xem 8 chủ đề lịch sử mẫu đã được cấu trúc sẵn:
-./run.sh --stickman-topics
-
-# Tạo gói sản xuất hoàn chỉnh (Kịch bản, Prompt 2 tầng, Audio 60s):
-./run.sh --stickman "Trận Bạch Đằng 938: Bẫy cọc ngầm đánh tan quân Nam Hán"
-```
-
-Sau khi dán prompt vào Google Flow tạo 6 clip (`1.mp4` đến `6.mp4`), chỉ cần chạy:
-```bash
-./run.sh --flow-render "workspace/run_Stickman_..."
-```
-
----
-
-### 3. Tự Động Nhân Bản Giọng Đọc Offline (F5-TTS Vietnamese)
+### 2. Tự Động Nhân Bản Giọng Đọc Offline (F5-TTS Vietnamese)
 
 Sử dụng trực tiếp giọng nói từ file mẫu [workspace/voice-preview.mp3](file:///home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3) mà không tốn bất kỳ chi phí API nào:
 
@@ -216,7 +196,7 @@ Sử dụng trực tiếp giọng nói từ file mẫu [workspace/voice-preview.
 
 ---
 
-### 4. Quy Trình Làm Video Hằng Ngày Từ Sách (Book RAG)
+### 3. Quy Trình Làm Video Hằng Ngày Từ Sách (Book RAG)
 
 Biến một cuốn sách dày thành chuỗi video TikTok đều đặn mỗi ngày:
 
@@ -236,7 +216,7 @@ Biến một cuốn sách dày thành chuỗi video TikTok đều đặn mỗi n
 
 ---
 
-### 5. Luồng Bán Tự Động Với Google Flow (4 Block Liền Mạch)
+### 4. Luồng Bán Tự Động Với Google Flow (4 Block Liền Mạch)
 
 ```bash
 # Bước 1: Sinh 4 block prompt liền mạch & audio thuyết minh:
@@ -250,7 +230,7 @@ Biến một cuốn sách dày thành chuỗi video TikTok đều đặn mỗi n
 
 ---
 
-### 6. Bảng Tra Cứu Giọng Đọc TikTok Trendy
+### 5. Bảng Tra Cứu Giọng Đọc TikTok Trendy
 
 | Mã giọng (`--voice`) | Giới tính / Phong cách | Tốc độ | Đặc điểm |
 |---|---|---|---|
@@ -275,7 +255,6 @@ wav2video/
 ├── graph/
 │   ├── broll_director.py           # Pipeline B-roll tài liệu dài (Zero Graph Library)
 │   ├── voice_clone_vietnamese.py   # Mô-đun F5-TTS nhân bản giọng tiếng Việt cục bộ
-│   ├── stickman_director.py        # Pipeline hoạt hình người que lịch sử 60s
 │   ├── audio_sync.py               # Hòa âm Studio, Auto-Ducking BGM, LUFS -14
 │   ├── book_rag.py                 # Bộ xử lý sách (.epub/.pdf) & Hybrid Search
 │   ├── flow_bundler.py             # Bộ điều phối chia Block cho Google Flow
@@ -285,8 +264,7 @@ wav2video/
 │       ├── vocab.txt               # Từ điển phát âm tiếng Việt cho F5-TTS
 │       └── model_latest.safetensors# (Trọng số model F5-TTS - lưu cục bộ)
 ├── assets/
-│   ├── bgm/                        # Nhạc nền điện ảnh, chiến trận bản quyền sạch
-│   └── stickman/                   # Tài liệu tham khảo phong cách người que
+│   └── bgm/                        # Nhạc nền điện ảnh bản quyền sạch
 └── workspace/                      # Thư mục lưu trữ video thành phẩm & dữ liệu tạm
     ├── voice-preview.mp3           # File audio giọng mẫu để clone (Không xóa)
     ├── footage_tan_thuy_hoang/     # Kho tư liệu video 4K sạch không chữ
@@ -314,7 +292,7 @@ wav2video/
 - [x] **Phase 1: Pure-Python B-Roll Engine** — Dựng phim 3–5 phút tự động, cắt nhịp 3s–5s, auto-ducking BGM.
 - [x] **Phase 2: Local Vietnamese F5-TTS** — Tích hợp nhân bản giọng tiếng Việt với nhịp đọc tài liệu `0.68x`.
 - [x] **Phase 3: Clean B-Roll Guard** — Lọc tự động cảnh tối và cảnh dính phụ đề gốc.
-- [x] **Phase 4: Historical Stickman 60s** — Khung chỉ dẫn sản xuất hoạt hình người que lịch sử.
+- [x] **Phase 4: Book RAG Daily Pipeline** — Tự động hóa sản xuất video từ sách với Hybrid Search BM25 + Vector.
 - [ ] **Phase 5: Auto Caption TikTok** — Tùy chọn bật/tắt preset phụ đề động CapCut style.
 - [ ] **Phase 6: Multi-voice Dialogue** — Hỗ trợ 2 nhân vật đối thoại luân phiên trong cùng 1 video.
 

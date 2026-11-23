@@ -1,61 +1,20 @@
-# 🎬 HƯỚNG DẪN SẢN XUẤT VIDEO TỰ ĐỘNG CHUẨN TIKTOK TRIỆU VIEW
+# 🎬 CẨM NANG SẢN XUẤT VIDEO TỰ ĐỘNG CHUẨN TIKTOK / SHORTS TRIỆU VIEW
 
 > Hệ thống hỗ trợ 3 mô hình sản xuất nội dung hàng đầu hiện nay:
-> 1. **Video Dài 3 Phút – 5 Phút B-Roll Tư Liệu Tự Động (Chuẩn @vanthanhthu09)**: Tự động LLM viết kịch bản dài 5p/3p, tự động tìm và tải video tư liệu 4K phù hợp trên mạng hoặc nhận video có sẵn, tự động cắt ghép 3-5s và lồng tiếng + phụ đề TikTok. **Chi phí 0 credit AI, không dùng thư viện pipeline đồ thị phức tạp**.
-> 2. **Hoạt Hình Người Que Lịch Sử (Historical Stickman)**: Chuẩn tài liệu `Historical_Stickman_Video_Instructions.docx` (4-6 cảnh x 8-10s, Character Sheet, Veo/Omni prompts, BGM dồn dập).
-> 3. **Điện Ảnh B-Roll Ngắn 30s-60s (Web Cinematic Auto)**: Tự động tải video thật HD từ web, ghép lồng giọng đọc và nhạc nền xuất file ngay.
+> 1. **Video Dài 3 Phút – 5 Phút B-Roll Tư Liệu Tự Động (Chuẩn @vanthanhthu09)**: Tự động LLM viết kịch bản dài 3p–5p, tự động tìm và tải video tư liệu 4K phù hợp trên mạng hoặc nhận video có sẵn, tự động cắt ghép 3-5s, lồng tiếng và kiểm duyệt khung hình sạch 100%. **Chi phí 0 credit AI, thuần Python tốc độ cao**.
+> 2. **Nhân Bản Giọng Đọc Offline Tiếng Việt F5-TTS**: Sử dụng giọng mẫu mộc từ file `workspace/voice-preview.mp3`, nhả chữ từ tốn 0.68x (~175 từ/phút), hòa âm chuẩn -14 LUFS với nhạc nền Auto-Ducking.
+> 3. **Quy Trình Tri Thức Sách Hằng Ngày (Book RAG Hybrid)**: Tự động nạp sách (.epub, .pdf, .txt), khai thác góc kể và xuất bản chuỗi video đều đặn mỗi ngày.
 
 ---
 
-## ⚔️ PHẦN 1: HOẠT HÌNH NGƯỜI QUE LỊCH SỬ (HISTORICAL STICKMAN 60S)
+## 🏛️ PHẦN 1: VIDEO DÀI 3P - 5P B-ROLL TỰ ĐỘNG (CHUẨN KÊNH @VANTHANHTHU09)
 
-Chuẩn 100% khung chỉ dẫn sản xuất chuyên nghiệp:
-- **Thời lượng:** Chuẩn 60 giây (6 clips x 10 giây). Tỷ lệ 9:16 dọc.
-- **Kịch bản:** 18–24 từ/cảnh. Hook kịch tính 2s đầu tiên, twist ở cảnh 4, cao trào cảnh 5, kết luận sâu sắc cảnh 6.
-- **Tính nhất quán nhân vật (Character Consistency):** Tự động sinh bảng Character Reference Sheet và chỉ thị hệ thống Continuity Agent.
-- **Prompt 2 tầng cho Veo / Omni / Flow:** 1 Ảnh tĩnh xuất phát điểm (Starting Frame) + 1 Video chuyển động 4 nhịp thời gian (0-2s, 2-5s, 5-8s, 8-10s).
-- **Âm thanh:** Tự động thu âm giọng đọc dồn dập, hòa âm nhạc nền chiến trận bí ẩn (Du Sơn Luyến x TCMHUC) với hiệu ứng Auto-Ducking chuẩn studio.
-
-### 1. Xem 8 chủ đề sự kiện lịch sử mẫu:
-```bash
-./run.sh --stickman-topics
-```
-
-### 2. Tạo toàn bộ gói sản xuất chỉ bằng 1 lệnh:
-```bash
-./run.sh --stickman "Trận Bạch Đằng 938: Bẫy cọc ngầm đánh tan quân Nam Hán"
-# Hoặc:
-./run.sh --stickman "The 1814 London Beer Flood: Đại hồng thủy bia ở London"
-```
-
-### 3. Kết quả xuất ra trong thư mục `workspace/run_Stickman_.../`:
-1. `historical_stickman_package.md`: Toàn văn hồ sơ sản xuất, kịch bản song ngữ, phân tích lịch sử, nhân vật mẫu và prompt chi tiết.
-2. `flow_prompts.txt`: Toàn bộ prompt ảnh & video đã được chuẩn hóa để dán thẳng vào Google Flow / Veo 3.1.
-3. `audio_16k_mono.wav`: File âm thanh 60 giây hoàn chỉnh (lời đọc + nhạc nền dồn dập).
-4. `flow_manifest.json`: Metadata kỹ thuật.
-5. `clips/`: Thư mục lưu 6 clip tải về từ Flow (`1.mp4` đến `6.mp4`).
-
-### 4. Dựng & xuất video 60s hoàn thiện sau khi tạo clip trên Flow:
-Sau khi tạo xong 6 clip trên Flow và tải về thả vào thư mục `clips/`:
-```bash
-./run.sh --flow-render "workspace/run_Stickman_..."
-```
-Hệ thống sẽ tự động ghép 6 clip, cắt bỏ watermark Veo, phủ hạt film grain, chèn phụ đề TikTok Safe Zone và xuất `final_master.mp4`.
-
----
-
-## 🎥 PHẦN 2: VIDEO REVIEW / KHOA HỌC / ĐỜI SỐNG (B-ROLL TỰ ĐỘNG)
-
----
-
-## 🏛️ PHẦN 3: VIDEO DÀI 3P - 5P B-ROLL TỰ ĐỘNG (CHUẨN KÊNH @VANTHANHTHU09)
-
-Mô hình sản xuất video dài 3 đến 5 phút (hoặc tùy ý 1–10 phút) giống hệt các kênh tài liệu triệu view:
-- **Tự động viết kịch bản dài**: LLM tính toán chính xác số từ (~155 từ/phút ở tốc độ 1.35x), chia thành 10–22 phân đoạn lôi cuốn.
+Mô hình sản xuất video tài liệu khám phá, khoa học, bí ẩn dài 3 đến 5 phút:
+- **Tự động viết kịch bản dài**: LLM tính toán chính xác số từ (~155 từ/phút ở tốc độ 1.35x hoặc ~175 từ/phút ở tốc độ 0.68x của giọng Clone), chia thành 10–22 phân đoạn lôi cuốn.
 - **Tự động tìm & tải B-roll 4K**: Hệ thống tự động dịch từ khóa sang tiếng Anh và dùng `yt-dlp` kéo các thước phim tư liệu sắc nét từ YouTube về máy.
 - **Hỗ trợ video có sẵn**: Nếu bạn đã có sẵn video tư liệu, chỉ cần đưa đường dẫn vào `--footage <file_hoặc_thư_mục>`.
 - **Dựng phim tự động**: Cắt thành các nhịp 3s–5s đan xen, phủ kín 100% thời lượng audio, tự động căn tỉ lệ 9:16 (TikTok) hoặc 16:9 (YouTube).
-- **Phụ đề TikTok Safe Zone**: Chữ vàng viền đen nổi bật, căn chỉnh vị trí an toàn tránh bị che bởi UI của TikTok.
+- **Kiểm duyệt khung hình sạch 100%**: Tự động phát hiện và loại bỏ cảnh tối hoặc cảnh dính phụ đề gốc từ YouTube qua `_is_cut_usable`.
 - **Thuần Python (Zero Graph Libraries)**: Tuyệt đối không dùng các thư viện pipeline vẽ đồ thị phức tạp.
 
 ### Cách chạy:
@@ -63,23 +22,30 @@ Mô hình sản xuất video dài 3 đến 5 phút (hoặc tùy ý 1–10 phút)
 # 1. Tự động từ A-Z (Hệ thống tự viết kịch bản 5 phút + tự tìm tải video tư liệu + render):
 ./run.sh --broll "Bí ẩn bãi đá Stonehenge" --duration 5
 
-# 2. Làm video 3 phút với chủ đề bí ẩn khác:
-./run.sh --broll "Bí mật bên dưới Kim Tự Tháp Giza" --duration 3
+# 2. Làm video 3.2 phút với giọng Clone tiếng Việt:
+./run.sh --broll "Bí mật lăng mộ Tần Thủy Hoàng" --duration 3.2 --voice clone
 
 # 3. Sử dụng video tư liệu có sẵn của bạn:
 ./run.sh --broll "Bí ẩn Stonehenge" --duration 5 --footage /duong/dan/video_stonehenge.mp4
 
-# 4. Xuất video ngang 16:9 cho YouTube:
+# 4. Sử dụng kịch bản JSON đã soạn sẵn:
+./run.sh --broll "Lăng mộ Tần Thủy Hoàng" --duration 3 --script-file workspace/script_tan_thuy_hoang_3min.json
+
+# 5. Xuất video ngang 16:9 cho YouTube:
 ./run.sh --broll "Hố đen vũ trụ" --duration 5 --aspect 16:9
 ```
 
+---
 
-Tạo video hoàn chỉnh tự động từ A-Z trong 30 giây:
+## 🎙️ PHẦN 2: HƯỚNG DẪN GIỌNG ĐỌC & VOICE CLONE TIẾNG VIỆT
+
+### 1. Giọng Clone F5-TTS Cục Bộ (Miễn phí 100% - Khuyên dùng):
+Chạy hoàn toàn trên máy local từ file mẫu [workspace/voice-preview.mp3](file:///home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3):
 ```bash
-./run.sh "Tại sao người trẻ không còn mặn mà mua nhà"
+./run.sh --broll "Bí ẩn lăng mộ Tần Thủy Hoàng" --duration 3 --voice clone
 ```
 
-### Các tùy chọn giọng đọc:
+### 2. Các giọng đọc Edge-TTS trực tuyến theo phong cách TikTok:
 ```bash
 # Giọng Nam Khoa học Vũ trụ (Chuẩn vanthanhthu09 - 1.34x dứt khoát):
 ./run.sh --voice vanthanhthu "Chủ đề..."
@@ -95,14 +61,30 @@ Tạo video hoàn chỉnh tự động từ A-Z trong 30 giây:
 
 # Giọng Nam Review hiện đại (tài chính, kinh tế, công nghệ):
 ./run.sh --voice nam_review "Chủ đề..."
-
-# Giọng Clone Offline từ file workspace/voice-preview.mp3 (F5-TTS chuẩn nhịp phim tài liệu, 0đ tốn phí):
-./run.sh --broll "Bí ẩn lăng mộ Tần Thủy Hoàng" --duration 3 --voice clone
 ```
 
 ---
 
-## 🎵 BẢN NHẠC NỀN & CHẤT LƯỢNG ÂM THANH MỚI
-- **Nhạc nền:** Đã tích hợp bản beat viral chuẩn từ kênh tham chiếu (**Du Sơn Luyến x TCMHUC beat**) đã tách lời bằng Demucs AI.
-- **Âm lượng:** Đã tăng âm lượng BGM lên mức dồn dập (26% khi đọc, 48% khi ngắt nghỉ), hòa âm theo chuẩn -14 LUFS của TikTok.
-- **Giọng nữ:** Đã được lọc qua chuỗi Studio EQ (`asetrate=24000*1.12`, `equalizer=3200Hz/180Hz`), loại bỏ hoàn toàn hiện tượng giọng đọc Google Translate đơ cứng.
+## 📚 PHẦN 3: BIẾN SÁCH THÀNH VIDEO HẰNG NGÀY (BOOK RAG)
+
+Biến một cuốn sách dày thành chuỗi video TikTok đều đặn mỗi ngày:
+```bash
+# Bước 1: Nạp sách vào cơ sở dữ liệu (tự tách chương, nhúng vector 0-token):
+./run.sh --ingest NhaGiaKim.epub
+
+# Bước 2: Xem toàn bộ danh sách chương và trạng thái hoàn thành:
+./run.sh --list-book nha_gia_kim
+
+# Bước 3: Chế độ ĐĂNG HẰNG NGÀY — tự lấy chương tiếp theo, render video & lưu DONE:
+./run.sh --book nha_gia_kim --daily
+
+# Bước 4: Khai thác 4 góc nhìn sắc bén từ 1 chương bất kỳ:
+./run.sh --mine nha_gia_kim --chunk 14
+```
+
+---
+
+## 🎵 BẢN NHẠC NỀN & CHẤT LƯỢNG ÂM THANH
+- **Nhạc nền:** Tích hợp các bản beat điện ảnh huyền bí bản quyền sạch, hòa âm chuẩn studio.
+- **Âm lượng:** Auto-Ducking tự động hạ âm lượng BGM khi có giọng đọc và ngân lên khi hết câu, chuẩn hóa `-14 LUFS` của TikTok.
+- **Giọng nữ & nam Edge-TTS:** Đã được lọc qua chuỗi Studio EQ (`asetrate=24000*1.12`, `equalizer=3200Hz/180Hz`), loại bỏ hoàn toàn hiện tượng giọng đọc Google Translate đơ cứng.
