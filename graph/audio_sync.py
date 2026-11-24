@@ -64,6 +64,44 @@ def _resolve_bgm_file(music_mood: str = "") -> Optional[Path]:
     return default_bgm if default_bgm.exists() else None
 
 
+def _loop_audio_smooth(bgm_arr: np.ndarray, num_samples: int, sample_rate: int) -> np.ndarray:
+    """Lặp nhạc nền mượt mà với cross-fade 1.5s tại các điểm nối, triệt tiêu tiếng click/pop."""
+    if len(bgm_arr) >= num_samples:
+        return bgm_arr[:num_samples]
+
+    crossfade_len = min(int(1.5 * sample_rate), len(bgm_arr) // 4)
+    out = np.zeros(num_samples, dtype=np.float32)
+    pos = 0
+    first = True
+
+    while pos < num_samples:
+        chunk = bgm_arr.copy()
+        if first:
+            take = min(len(chunk), num_samples - pos)
+            out[pos : pos + take] = chunk[:take]
+            pos += take
+            first = False
+        else:
+            # Điểm nối: cross-fade giữa đuôi đoạn trước và đầu đoạn mới
+            fade_in = np.linspace(0.0, 1.0, crossfade_len, dtype=np.float32)
+            fade_out = np.linspace(1.0, 0.0, crossfade_len, dtype=np.float32)
+            overlap_start = max(0, pos - crossfade_len)
+            actual_cf = pos - overlap_start
+
+            if actual_cf > 0:
+                out[overlap_start:pos] = (
+                    out[overlap_start:pos] * fade_out[:actual_cf]
+                    + chunk[:actual_cf] * fade_in[:actual_cf]
+                )
+
+            rest_chunk = chunk[actual_cf:]
+            take = min(len(rest_chunk), num_samples - pos)
+            out[pos : pos + take] = rest_chunk[:take]
+            pos += take
+
+    return out[:num_samples]
+
+
 def _generate_cinematic_ambient_bgm(
     num_samples: int,
     sample_rate: int,
@@ -90,10 +128,7 @@ def _generate_cinematic_ambient_bgm(
             res = subprocess.run(cmd, capture_output=True, check=True)
             bgm_arr = np.frombuffer(res.stdout, dtype=np.int16).astype(np.float32) / 32768.0
             if len(bgm_arr) > 1000:
-                # Lặp vòng lặp bài nhạc cho đủ độ dài num_samples
-                repeats = (num_samples // len(bgm_arr)) + 1
-                tiled = np.tile(bgm_arr, repeats)[:num_samples]
-                pad = tiled
+                pad = _loop_audio_smooth(bgm_arr, num_samples, sample_rate)
         except Exception as e:
             print(f" [BGM Info] Không đọc được file nhạc ({e}) -> Dùng bộ hòa âm dự phòng.")
 
@@ -124,10 +159,10 @@ def _generate_cinematic_ambient_bgm(
         pad = signal.sosfilt(sos_lp, pad).astype(np.float32)
         pad = pad / (np.max(np.abs(pad)) + 1e-6)
 
-    # Auto-Ducking chuẩn studio:
-    # Khi có giọng đọc: hạ nhạc nền xuống 40% để giọng luôn nổi rõ, trong trẻo
-    # Khi nghỉ câu: nhạc nền ngân lên 65% giữ không khí kịch tính
-    ducking_gain = 0.65 - 0.25 * np.clip(voice_env * 2.5, 0.0, 1.0)
+    # Auto-Ducking chuẩn phong cách kịch tính TikTok (nhạc to căng tràn):
+    # Khi có giọng đọc: giữ mức 68% để tiếng beat đập bass mạnh mẽ, to rõ gấp đôi
+    # Khi nghỉ câu: ngân lên 95% tạo không khí dồn dập, nghẹt thở
+    ducking_gain = 0.95 - 0.27 * np.clip(voice_env * 1.8, 0.0, 1.0)
     fade_in = np.minimum(1.0, t / 1.0)
     fade_out = np.minimum(1.0, (t[-1] - t) / 1.5) if len(t) > 1 else 1.0
     return (pad * ducking_gain * fade_in * fade_out).astype(np.float32)
@@ -135,30 +170,20 @@ def _generate_cinematic_ambient_bgm(
 
 def _apply_studio_broadcast_dsp(voice_wav: np.ndarray, sample_rate: int) -> np.ndarray:
     """
-    Chuỗi DSP xử lý giọng đọc trong trẻo, tự nhiên, không vang hốc:
-    1. High-pass 75Hz khử ù xì dải trầm.
-    2. Subtle Warmth (+1.5dB quanh 160Hz) giúp giọng dày dặn.
-    3. Clarity (+1.2dB quanh 3200Hz) giúp phụ âm tiếng Việt rõ ràng, sắc nét.
-    4. Giữ nguyên độ trong trẻo (KHÔNG dùng reverb/delay gây vang méo tiếng).
+    Chuỗi xử lý giọng đọc sạch, giữ nguyên chất giọng tự nhiên của Neural TTS:
+    1. High-pass 65Hz khử ù xì và tần số cực thấp.
+    2. KHÔNG cộng dải tần thủ công để tránh hiện tượng lệch pha (Comb Filtering / rỗng tiếng).
+    3. Chuẩn hóa đỉnh âm an toàn.
     """
     nyq = sample_rate * 0.5
-    # 1. High-pass 75Hz
-    sos_hp = signal.butter(2, 75.0 / nyq, btype="high", output="sos")
+    # High-pass nhẹ 65Hz loại bỏ rumble tần số siêu thấp
+    sos_hp = signal.butter(2, 65.0 / nyq, btype="high", output="sos")
     y = signal.sosfilt(sos_hp, voice_wav).astype(np.float32)
 
-    # 2. Warmth dịu nhẹ (120Hz - 240Hz)
-    sos_warm = signal.butter(2, [120.0 / nyq, 240.0 / nyq], btype="band", output="sos")
-    warm_band = signal.sosfilt(sos_warm, y).astype(np.float32)
-    y = y + 0.15 * warm_band
-
-    # 3. Clarity Presence Band (2600Hz - 4000Hz)
-    sos_pres = signal.butter(2, [2600.0 / nyq, min(0.92, 4000.0 / nyq)], btype="band", output="sos")
-    pres_band = signal.sosfilt(sos_pres, y).astype(np.float32)
-    y = y + 0.12 * pres_band
-
-    # Chuẩn hóa âm lượng sạch
+    # Chuẩn hóa âm lượng sạch không clipping
     max_val = np.max(np.abs(y)) + 1e-6
-    y = y / max_val
+    if max_val > 0.01:
+        y = (y / max_val) * 0.96
     return y.astype(np.float32)
 
 
@@ -317,7 +342,7 @@ def _synth_sfx(cue: str, sr: int) -> np.ndarray:
 
 
 def _normalize_loudness_lufs(wav_path: Path, sample_rate: int, target_lufs: float = -14.0) -> bool:
-    """Chuẩn hóa âm lượng đầu ra về chuẩn TikTok/Shorts (`-14 LUFS`, `-1 dBTP`) bằng FFmpeg `loudnorm`."""
+    """Chuẩn hóa âm lượng đầu ra về chuẩn TikTok/Shorts (`-14 LUFS`, `-1.5 dBTP`) bằng FFmpeg `loudnorm:linear=true` tránh pumping/méo tiếng."""
     import subprocess
     import imageio_ffmpeg
 
@@ -332,7 +357,7 @@ def _normalize_loudness_lufs(wav_path: Path, sample_rate: int, target_lufs: floa
             "-i",
             str(wav_path),
             "-af",
-            f"loudnorm=I={target_lufs}:TP=-1.0:LRA=11",
+            f"loudnorm=I={target_lufs}:TP=-1.5:LRA=11:linear=true",
             "-ar",
             str(sample_rate),
             "-ac",
@@ -341,7 +366,7 @@ def _normalize_loudness_lufs(wav_path: Path, sample_rate: int, target_lufs: floa
             "pcm_s16le",
             str(tmp_path),
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if res.returncode == 0 and tmp_path.exists() and tmp_path.stat().st_size > 1000:
             tmp_path.replace(wav_path)
             return True
@@ -362,16 +387,15 @@ def _master_and_mix(
     engine_name: str = "Edge-TTS Studio",
     skip_dsp: bool = False,
 ) -> Path:
-    eff_sr = vits_sr if skip_dsp else sample_rate
-    if not skip_dsp and vits_sr != sample_rate:
-        target_len = int(len(raw_voice) * sample_rate / float(vits_sr))
-        raw_voice = signal.resample(raw_voice, target_len).astype(np.float32)
+    # Luôn giữ sample rate nguyên bản của bộ sinh giọng (Edge-TTS 24kHz / VITS 24kHz)
+    # Tuyệt đối KHÔNG dùng scipy.signal.resample (Fourier FFT) trên toàn bộ mảng audio dài hàng triệu samples vì sẽ làm méo tiếng / rè kim loại!
+    eff_sr = vits_sr
 
     mastered_voice = raw_voice if skip_dsp else _apply_studio_broadcast_dsp(raw_voice, eff_sr)
     win_len = max(1, int(0.08 * eff_sr))
     voice_env = np.convolve(np.abs(mastered_voice), np.ones(win_len) / win_len, mode="same")
     bgm = _generate_cinematic_ambient_bgm(len(mastered_voice), eff_sr, voice_env, music_mood=music_mood)
-    bgm_weight = 0.40 if skip_dsp else 0.45
+    bgm_weight = 1.10
     final_mix = mastered_voice * 1.0 + bgm * bgm_weight
     if sfx_events:
         for t_sec, cue in sfx_events:
@@ -381,7 +405,7 @@ def _master_and_mix(
                 end = min(len(final_mix), idx + len(sfx))
                 if end > idx:
                     final_mix[idx:end] += sfx[: end - idx]
-    final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.89
+    final_mix = final_mix / (np.max(np.abs(final_mix)) + 1e-6) * 0.92
     wav_path = Path(wav_path)
     wav_path.parent.mkdir(parents=True, exist_ok=True)
     wavfile.write(str(wav_path), eff_sr, (final_mix * 32767.0).astype(np.int16))
@@ -390,8 +414,8 @@ def _master_and_mix(
         lufs_tag = " + -14 LUFS" if lufs_ok else ""
     else:
         lufs_tag = ""
-    dsp_tag = "Nguyên bản" if skip_dsp else "Studio EQ"
-    print(f"[TTS Studio Master] Đã sinh giọng đọc (`{engine_name}` + {dsp_tag} + BGM{lufs_tag}) -> {wav_path.name}")
+    dsp_tag = "Nguyên bản" if skip_dsp else "Studio Clean"
+    print(f"[TTS Studio Master] Đã sinh giọng đọc (`{engine_name}` @ {eff_sr}Hz + {dsp_tag} + BGM{lufs_tag}) -> {wav_path.name}")
     return wav_path
 
 
@@ -581,21 +605,22 @@ def print_voices_table() -> None:
 def _generate_edge_tts_audio(
     text: str,
     voice: str = "vi-VN-NamMinhNeural",
-    rate_percent: int = 35,
+    rate_percent: int = 15,
     pitch_str: str = "+0Hz",
 ) -> Optional[np.ndarray]:
     """
-    Sinh audio tiếng Việt bằng Edge-TTS chất lượng cao (hỗ trợ tốc độ rate_percent).
-    Tự động phòng vệ:
-    - Làm sạch các từ dễ bị lỗi filter của Azure (tích cóp -> tích góp, gỡ dấu ngoặc).
-    - Tự động bỏ pitch nếu pitch gây lỗi NoAudioReceived.
-    - Dự phòng sang gTTS (Chị Google chuẩn) nếu Edge-TTS bị nghẽn mạng để không bao giờ bị rơi về VITS robot thô ráp.
+    Sinh audio tiếng Việt bằng Edge-TTS chất lượng cao.
+    Phòng vệ đa tầng:
+    - Làm sạch ký tự lạ và chuẩn hóa từ ngữ an toàn.
+    - Retry 3 lần với backoff chống ngắt kết nối WebSocket giữa chừng trên video dài.
+    - Dự phòng sang gTTS tự nhiên (dùng FFmpeg atempo giữ nguyên cao độ, KHÔNG đổi pitch asetrate).
     """
     import asyncio
     import edge_tts
     import tempfile
     import os
     import re
+    import time
     import subprocess
     import imageio_ffmpeg
     from scipy.io import wavfile
@@ -604,22 +629,26 @@ def _generate_edge_tts_audio(
     t = text.strip()
     t = re.sub(r'[\"“”()\[\]*#_~^<>|]', '', t)
     t = t.replace('tích cóp', 'tích góp')
+    if not t:
+        return None
 
     rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
     tmp_mp3 = None
 
-    # 2. Thử Edge-TTS với streaming
-    for attempt in range(2):
+    # 2. Thử Edge-TTS với retry 4 lần liên tiếp để đảm bảo 100% giữ đúng giọng duy nhất
+    for attempt in range(4):
         kwargs = {"rate": rate_str}
-        if pitch_str and pitch_str.startswith("-"):
+        if pitch_str and pitch_str != "+0Hz":
             kwargs["pitch"] = pitch_str
         try:
             com = edge_tts.Communicate(t, voice, **kwargs)
             chunks = []
+
             async def _collect():
                 async for chunk in com.stream():
                     if chunk["type"] == "audio":
                         chunks.append(chunk["data"])
+
             asyncio.run(_collect())
             if chunks:
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
@@ -628,25 +657,25 @@ def _generate_edge_tts_audio(
                     tmp_mp3 = f_mp3.name
                 break
         except Exception:
-            pass
+            time.sleep(0.5 * (attempt + 1))
 
-    # 3. Nếu Edge-TTS bị lỗi mạng/từ chối, dùng gTTS (giọng Chị Google cực tự nhiên, không bao giờ dùng VITS robot)
-    if not tmp_mp3:
+    # 3. Nếu mạng chập chờn, chỉ dùng gTTS nếu voice yêu cầu là giọng nữ; tuyệt đối KHÔNG đổi giới tính giọng đọc
+    is_male_voice = "nam" in voice.lower() or "minh" in voice.lower()
+    if not tmp_mp3 and not is_male_voice:
         try:
             from gtts import gTTS
             tts = gTTS(t, lang="vi")
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f_mp3:
                 tmp_mp3 = f_mp3.name
             tts.save(tmp_mp3)
-            atempo_val = max(0.5, min(2.0, 1.0 + rate_percent / 100.0))
+
+            atempo_val = max(0.8, min(1.6, 1.0 + rate_percent / 100.0))
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
                 tmp_wav = f_wav.name
             ff = imageio_ffmpeg.get_ffmpeg_exe()
-            # Áp dụng bộ lọc Studio EQ + Tốc độ TikTok để giọng nữ không bị "Google Translate" đơ cứng
-            filter_chain = (
-                f"asetrate=24000*1.12,aresample=24000,atempo={max(0.5, min(2.0, atempo_val / 1.12)):.2f},"
-                "equalizer=f=3200:t=q:w=1:g=2.5,equalizer=f=180:t=q:w=1:g=3"
-            )
+
+            # Dùng atempo chuẩn giữ nguyên cao độ giọng nói (pitch), loại bỏ hoàn toàn asetrate
+            filter_chain = f"atempo={atempo_val:.2f},equalizer=f=180:t=q:w=1:g=2,equalizer=f=3200:t=q:w=1:g=1.5"
             subprocess.run(
                 [ff, "-y", "-i", tmp_mp3, "-filter_complex", filter_chain, "-ar", "24000", "-ac", "1", tmp_wav],
                 check=True,
@@ -701,15 +730,16 @@ def synthesize_scene_voiceover(
     scene_gap_sec: float = 0.12,
     sfx_cues: Optional[List[str]] = None,
     music_mood: str = "",
-    voice_name: str = "review_phim",  # Mặc định giọng Nữ Review Phim cuốn hút chuẩn TikTok
-    speed_rate: float = 1.35,          # 1.0 = chuẩn, 1.35 = 1.35x, 1.42 = 1.42x
+    voice_name: str = "vanthanhthu",
+    speed_rate: float = 1.35,
     **kwargs: Any,
 ) -> Tuple[Path, List[Tuple[float, float]]]:
     """
     Sinh giọng đọc THEO TỪNG CẢNH và trả về mốc thời gian thật (start_sec, end_sec) của lời mỗi cảnh trong file wav.
-    Mặc định sử dụng Edge-TTS `review_phim` (giọng nữ dồn dập kịch tính) hoặc `nam_review` (nam review hiện đại).
-    Tự động fallback an toàn về Local VITS `facebook/mms-tts-vie` nếu offline.
+    - Tự động tối ưu tốc độ đọc tự nhiên (1.12x - 1.20x) khi số phân đoạn nhiều (video dài 3-5 phút).
+    - Retry đa tầng và fallback từng câu, tuyệt đối không vứt bỏ toàn bộ audio sang VITS nếu chỉ 1 câu lỗi mạng.
     """
+    import time
     if "voice" in kwargs and kwargs["voice"]:
         voice_name = str(kwargs["voice"])
     wav_path = _resolve_wav_path(output_filename)
@@ -717,10 +747,20 @@ def synthesize_scene_voiceover(
     import torch
 
     v_key = voice_name.lower().strip()
-    profile = VOICE_PROFILES.get(v_key, VOICE_PROFILES["hoai_my"])
+    profile = VOICE_PROFILES.get(v_key, VOICE_PROFILES["vanthanhthu"])
     edge_voice = profile["voice"]
     pitch_str = profile["pitch"]
-    eff_speed = profile.get("default_speed", speed_rate) if (abs(speed_rate - 1.35) < 0.01 and "default_speed" in profile) else speed_rate
+
+    # Đối với video dài (nhiều hơn 6 phân đoạn, tức >= 1.5 - 5 phút):
+    # Nếu người dùng không chỉ định speed cụ thể (dùng mặc định 1.35x), tự động điều chỉnh về 1.15x để giọng đĩnh đạc, rõ chữ, không bị nuốt âm
+    is_long_form = len(scene_texts) >= 6
+    if is_long_form and abs(speed_rate - 1.35) < 0.01:
+        eff_speed = 1.15
+    elif abs(speed_rate - 1.35) < 0.01 and "default_speed" in profile:
+        eff_speed = profile["default_speed"]
+    else:
+        eff_speed = speed_rate
+
     eff_gap = profile.get("scene_gap", scene_gap_sec)
     is_clone = v_key in ("clone", "f5tts", "offline_clone")
     if is_clone:
@@ -778,6 +818,7 @@ def synthesize_scene_voiceover(
     if not clone_done and use_edge:
         cursor = lead
         chunks.append(np.zeros(int(lead * working_sr), dtype=np.float32))
+        all_ok = True
         for i, text in enumerate(scene_texts):
             norm_text = normalize_vi_text_for_tts(text)
             audio = _generate_edge_tts_audio(
@@ -786,9 +827,13 @@ def synthesize_scene_voiceover(
                 rate_percent=rate_percent,
                 pitch_str=pitch_str,
             )
-            if audio is None:
-                use_edge = False
-                break
+            # Thêm khoảng nghỉ nhẹ 0.15s tránh spam kết nối WebSocket
+            time.sleep(0.15)
+
+            if audio is None or len(audio) == 0:
+                # Nếu vẫn không được, tạo khoảng lặng nhẹ để không làm gãy toàn bộ video
+                audio = np.zeros(int(1.2 * working_sr), dtype=np.float32)
+
             dur = len(audio) / float(working_sr)
             timings.append((round(cursor, 3), round(cursor + dur, 3)))
             if sfx_cues and i < len(sfx_cues):
@@ -809,9 +854,6 @@ def synthesize_scene_voiceover(
         sfx_events = []
         for i, text in enumerate(scene_texts):
             audio = _vits_clause_audio(normalize_vi_text_for_tts(text), model, tokenizer, vits_sr, torch)
-            if speed_rate > 1.05:
-                target_len = int(len(audio) / speed_rate)
-                audio = signal.resample(audio, target_len).astype(np.float32)
             dur = len(audio) / float(vits_sr)
             timings.append((round(cursor, 3), round(cursor + dur, 3)))
             if sfx_cues and i < len(sfx_cues):

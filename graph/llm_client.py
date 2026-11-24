@@ -328,7 +328,7 @@ def call_gemini_thinking_structured(
                 content = msg.get("content") or ""
                 reasoning = msg.get("reasoning") or ""
                 parsed = _extract_json_object(content) or _extract_json_object(reasoning)
-                if parsed and (parsed.get("scenes") or parsed.get("angles")):
+                if parsed and (parsed.get("scenes") or parsed.get("angles") or parsed.get("sections")):
                     if reasoning and not parsed.get("thinking_process"):
                         parsed["thinking_process"] = reasoning[:350]
                     print(f"[LLM Thinking ({model_name})] Đã suy luận & thiết kế kịch bản thành công!")

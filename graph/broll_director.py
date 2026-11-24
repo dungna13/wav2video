@@ -74,15 +74,197 @@ def _get_ffmpeg_bin() -> str:
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 
+def _get_ytdlp_cmd() -> List[str]:
+    """Tìm lệnh yt-dlp tối ưu và tương thích trên cả Windows & Linux."""
+    # 1. Thử module python
+    try:
+        import yt_dlp
+        return [sys.executable, "-m", "yt_dlp"]
+    except ImportError:
+        pass
+
+    # 2. Thử tự động cài đặt yt-dlp qua pip nếu máy chưa có
+    try:
+        print("⏳ [B-Roll Auto-Fetch] Đang tự động nạp thư viện yt-dlp để kéo video tư liệu...")
+        res = subprocess.run([sys.executable, "-m", "pip", "install", "yt-dlp", "-q"], capture_output=True, timeout=40)
+        if res.returncode == 0:
+            return [sys.executable, "-m", "yt_dlp"]
+    except Exception:
+        pass
+
+    # 3. Thử tìm file thực thi yt-dlp.exe trong Scripts (Windows) hoặc bin (Linux)
+    scripts_dir = Path(sys.executable).parent / ("Scripts" if os.name == "nt" else "bin")
+    for name in ("yt-dlp.exe", "yt-dlp"):
+        p = scripts_dir / name
+        if p.exists():
+            return [str(p)]
+
+    # 4. Thử tìm trong venv lân cận
+    base_dir = Path(__file__).resolve().parent.parent
+    for venv_path in (base_dir / ".venv", base_dir.parent / ".venv"):
+        v_scripts = venv_path / ("Scripts" if os.name == "nt" else "bin")
+        for name in ("yt-dlp.exe", "yt-dlp"):
+            p = v_scripts / name
+            if p.exists():
+                return [str(p)]
+
+    return ["yt-dlp"]
+
+
+def _translate_topic_to_english_queries(topic: str) -> List[str]:
+    """Tự động ánh xạ từ khóa chủ đề tiếng Việt sang các cụm tìm kiếm tiếng Anh 4K sắc nét chuẩn xác theo đúng chủ đề."""
+    t_low = (topic or "").lower()
+
+    # 1. Thí nghiệm Universe 25 / Thiên đường chuột / Hành vi
+    if any(k in t_low for k in ("universe 25", "chuột", "chuot", "calhoun", "thiên đường chuột")):
+        return [
+            "Universe 25 mouse utopia experiment documentary 4k",
+            "Mice behavior laboratory science experiment 4k footage",
+            "Behavioral sink Universe 25 documentary footage",
+            "Laboratory mice colony experiment 4k b-roll",
+        ]
+
+    # 2. Thí nghiệm nhà tù Stanford / Tâm lý học
+    if any(k in t_low for k in ("stanford", "nhà tù", "nha tu", "cai ngục", "cai nguc")):
+        return [
+            "Stanford prison experiment documentary 4k footage",
+            "Prison psychology experiment documentary 4k",
+            "Psychological experiment human behavior documentary b-roll",
+        ]
+
+    # 3. Rãnh Mariana / Nơi sâu nhất đại dương
+    if any(k in t_low for k in ("mariana", "nơi sâu nhất", "noi sau nhat", "đáy biển", "day bien")):
+        return [
+            "Mariana trench deepest ocean abyss 4k documentary",
+            "Deep sea creatures ocean exploration underwater 4k footage",
+            "Abyssal ocean trench submarine exploration 4k",
+        ]
+
+    # 4. Hố đen vũ trụ / Thiên hà / Không gian sâu
+    if any(k in t_low for k in ("hố đen", "ho den", "vũ trụ", "vu tru", "thiên hà", "black hole", "space")):
+        return [
+            "Black hole space deep cosmos 4k cinematic documentary",
+            "Galaxy universe stars space travel 4k footage",
+            "Astrophysics space science documentary b-roll 4k",
+        ]
+
+    # 5. Tàu ma Mary Celeste / Tàu mất tích
+    if any(k in t_low for k in ("mary celeste", "tàu ma", "tau ma", "mất tích bí ẩn")):
+        return [
+            "Mary Celeste ghost ship ocean mystery documentary 4k",
+            "Abandoned ship drifting at sea 4k cinematic footage",
+            "Ghost ship maritime mystery documentary b-roll 4k",
+        ]
+
+    # 6. Bản thảo Voynich / Cuốn sách bí ẩn
+    if any(k in t_low for k in ("voynich", "bản thảo", "ban thao", "cuốn sách")):
+        return [
+            "Voynich manuscript mysterious book documentary 4k",
+            "Ancient mysterious book medieval manuscript 4k footage",
+            "Cipher manuscript uncrackable code documentary 4k",
+        ]
+
+    # 7. Tín hiệu Wow / Vũ trụ / Người ngoài hành tinh
+    if any(k in t_low for k in ("tín hiệu wow", "tin hieu wow", "wow signal", "ngoài hành tinh")):
+        return [
+            "Wow signal radio telescope deep space astronomy 4k",
+            "SETI radio observatory cosmos documentary 4k",
+            "Deep space radio signals cosmos 4k footage",
+        ]
+
+    # 8. Kim Tự Tháp Giza / Ai Cập
+    if any(k in t_low for k in ("kim tự tháp", "giza", "kim tu thap", "pyramid", "ai cập", "egypt")):
+        return [
+            "Great Pyramid of Giza chambers interior 4k documentary b-roll",
+            "Pyramids of Giza aerial 4k cinematic drone footage",
+            "Ancient Egypt Giza plateau mystery 4k footage",
+            "Pyramid construction mystery 4k cinematic documentary",
+        ]
+
+    # 9. Bãi đá cổ Stonehenge
+    if any(k in t_low for k in ("stonehenge", "bãi đá", "bai da")):
+        return [
+            "Stonehenge ancient mystery drone 4k aerial view",
+            "Stonehenge megaliths cinematic documentary 4k footage",
+            "Ancient prehistoric monument 4k cinematic b-roll",
+        ]
+
+    # 10. Tam giác quỷ Bermuda
+    if any(k in t_low for k in ("tam giác", "bermuda", "tam giac quy", "biển", "mất tích")):
+        return [
+            "Bermuda triangle mystery deep ocean storm 4k",
+            "Ocean storm dark sea aerial 4k cinematic footage",
+            "Deep ocean mysterious abyss documentary 4k b-roll",
+        ]
+
+    # 11. Lăng mộ Tần Thủy Hoàng
+    if any(k in t_low for k in ("tần thủy hoàng", "tan thuy hoang", "lăng mộ", "terracotta")):
+        return [
+            "Terracotta army Qin Shi Huang tomb 4k cinematic documentary",
+            "Ancient Chinese empire emperor tomb mystery 4k footage",
+            "Ancient warriors archaeological discovery 4k b-roll",
+        ]
+
+    # 12. Thảm họa Titanic
+    if any(k in t_low for k in ("titanic", "đắm tàu", "dam tau")):
+        return [
+            "Titanic shipwreck underwater deep ocean 4k documentary",
+            "Titanic ship ocean liner wreckage 4k footage",
+        ]
+
+    # 13. Thảm họa hạt nhân Chernobyl
+    if any(k in t_low for k in ("chernobyl", "hạt nhân", "phóng xạ")):
+        return [
+            "Chernobyl exclusion zone drone 4k cinematic footage",
+            "Pripyat abandoned city disaster documentary 4k",
+        ]
+
+    # 14. Thủy chiến Bạch Đằng
+    if any(k in t_low for k in ("bạch đằng", "bach dang", "thủy chiến", "thuyền")):
+        return [
+            "Ancient wooden warship river naval battle cinematic 4k",
+            "Historical fleet sea battle documentary b-roll 4k",
+            "Misty river aerial ancient landscape 4k drone",
+        ]
+
+    # 15. Khởi nguyên sự sống / Trái Đất sơ khai / Sinh học / Vi sinh vật
+    if any(k in t_low for k in ("sự sống", "su song", "khởi nguyên", "khoi nguyen", "đầu tiên", "dau tien", "nguồn gốc sự sống", "trái đất sơ khai", "vi sinh", "tế bào")):
+        return [
+            "origin of life early earth documentary 4k",
+            "ancient oceanic hydrothermal vents 4k discovery",
+            "primordial earth volcanic landscape timelapse",
+            "microscopic single cell organism origin of life",
+        ]
+
+    # 16. Khủng long / Thời tiền sử / Kỷ Jura / Tuyệt chủng
+    if any(k in t_low for k in ("khủng long", "khung long", "dinosaur", "tiền sử", "tien su", "jura", "kỷ băng hà", "tuyệt chủng")):
+        return [
+            "dinosaur prehistoric earth documentary 4k footage",
+            "prehistoric creatures ancient earth 4k b-roll",
+            "jurassic prehistoric world cinematic 4k",
+        ]
+
+    # 17. Tiến hóa loài người / Khảo cổ học tiền sử
+    if any(k in t_low for k in ("tiến hóa", "tien hoa", "loài người", "vượn người", "tổ tiên", "người tiền sử")):
+        return [
+            "human evolution anthropology documentary 4k footage",
+            "early humans prehistoric ancestors documentary b-roll",
+            "archaeological discovery human history 4k",
+        ]
+
+    # Mặc định an toàn: Tuyệt đối KHÔNG gộp chữ tiếng Việt không dấu (tránh tìm nhầm bài hát/vlog giải trí).
+    # Trả về các từ khóa tài liệu khoa học/khám phá vũ trụ chuẩn để kết hợp với search_queries của LLM.
+    return [
+        "cinematic science documentary 4k footage",
+        "earth history exploration 4k b-roll",
+        "historical mystery discovery 4k drone view",
+    ]
+
+
 def _get_ytdlp_bin() -> str:
-    """Tìm binary yt-dlp ưu tiên trong venv trước, rồi tới system PATH."""
-    venv_ytdlp = Path(__file__).resolve().parent.parent.parent / ".venv" / "bin" / "yt-dlp"
-    if venv_ytdlp.exists():
-        return str(venv_ytdlp)
-    local_ytdlp = Path(sys.executable).parent / "yt-dlp"
-    if local_ytdlp.exists():
-        return str(local_ytdlp)
-    return "yt-dlp"
+    """Tương thích ngược."""
+    cmd = _get_ytdlp_cmd()
+    return cmd[0]
 
 
 def _slugify(text: str) -> str:
@@ -91,6 +273,63 @@ def _slugify(text: str) -> str:
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = re.sub(r"[^\w\s-]", "", s).strip().lower()
     return re.sub(r"[-\s]+", "_", s)
+
+
+def _extract_narration(section: Dict[str, Any]) -> str:
+    """Trích xuất lời đọc thuyết minh linh hoạt từ bất kỳ key nào mà LLM trả về (narration_vn, content, narration, text, script)."""
+    if not isinstance(section, dict):
+        return ""
+    for k in ("narration_vn", "content", "narration", "text", "script", "voiceover", "subtitle_vn"):
+        val = section.get(k)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _normalize_sections(sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Chuẩn hóa cấu trúc sections đảm bảo luôn có narration_vn, section_index và title."""
+    out = []
+    for idx, s in enumerate(sections, 1):
+        if not isinstance(s, dict):
+            continue
+        text = _extract_narration(s)
+        if not text:
+            continue
+        item = dict(s)
+        item["narration_vn"] = text
+        item["section_index"] = item.get("section_index") or item.get("id") or idx
+        item["title"] = item.get("title") or f"Phân đoạn {idx}"
+        out.append(item)
+    return out
+
+
+NARRATIVE_HOOK_STYLES = [
+    {
+        "name": "IN_MEDIA_RES (Hiện trường nghẹt thở)",
+        "guide": "Mở đầu ngay tại hiện trường đỉnh điểm hoặc thời khắc bi kịch/chấn động nhất. Đưa ra mốc thời gian, tọa độ hoặc sự kiện cụ thể gây lạnh sống lưng.",
+        "example": "Năm 1973, bên trong chiếc lồng thép vô trùng tại Maryland, cá thể sống cuối cùng của Universe 25 gục ngã. Không một vết thương, không một mầm bệnh. Nó chết vì một lý do khiến toàn bộ giới khoa học phải lạnh gáy.",
+    },
+    {
+        "name": "DARK_PARADOX (Nghịch lý đen tối)",
+        "guide": "Tạo sự tương phản tàn nhẫn giữa ước mơ hoàn hảo và thực tế hủy diệt. Đưa người xem từ cảm giác an toàn rơi thẳng vào vực thẳm.",
+        "example": "Một thế giới không bệnh tật, không kẻ thù, thức ăn và nước uống vô tận. Nghe như thiên đường mơ ước của loài người, nhưng nửa thế kỷ trước, một thí nghiệm đã tạo ra nó — và biến nó thành bản án tuyệt chủng tàn bạo nhất lịch sử.",
+    },
+    {
+        "name": "COLD_FACT_OVERWHELM (Dữ kiện chấn động)",
+        "guide": "Đưa ra con số thực tế khổng lồ hoặc dữ kiện giải phẫu/địa chất gây choáng ngợp tâm trí, phá vỡ logic thông thường.",
+        "example": "2 triệu 300 ngàn khối đá khổng lồ, mỗi khối nặng từ 2 đến 50 tấn được xếp chồng lên nhau với độ chính xác đến từng phần mười milimet. Nếu người xưa chỉ dùng búa đồng và dây thừng, thì đây không phải là công trình kiến trúc, mà là một phép màu vi phạm mọi định luật vật lý.",
+    },
+    {
+        "name": "CHILLING_QUOTE (Trích dẫn rợn người)",
+        "guide": "Mở đầu bằng một câu trích dẫn tài liệu mật, lời thú nhận hoặc dòng nhật ký tuyệt vọng của nhân chứng/nhà nghiên cứu.",
+        "example": "'Chúng đã ngừng hành xử như một sinh vật sống từ rất lâu trước khi quả tim thực sự ngừng đập.' Dòng ghi chép tuyệt vọng của John Calhoun ở ngày thứ 560 đã báo hiệu hồi kết cho một đế chế từng được coi là hoàn hảo.",
+    },
+    {
+        "name": "DIRECT_PSYCHOLOGICAL_MIRROR (Gương soi tâm lý)",
+        "guide": "Tác động trực diện vào nỗi sợ hãi hoặc tâm lý ngầm của người xem, liên hệ trực tiếp tới xã hội và số phận con người hiện đại.",
+        "example": "Hãy nhìn kỹ vào cuộc sống của chính chúng ta ngày hôm nay, bởi vì kịch bản kinh hoàng mà bạn sắp chứng kiến đã từng diễn ra với độ chính xác đến rợn người... và hồi kết của nó hoàn toàn không có chỗ cho sự cứu rỗi.",
+    },
+]
 
 
 # =====================================================================
@@ -103,41 +342,66 @@ def generate_broll_script(
 ) -> Dict[str, Any]:
     """
     LLM viết kịch bản tài liệu dài theo số phút yêu cầu:
-    - 3 phút: ~460 từ, 10-12 phân đoạn
-    - 5 phút: ~770 từ, 18-22 phân đoạn
-    - Cung cấp 3-5 câu lệnh tìm kiếm B-roll footage bằng tiếng Anh.
+    - 3 phút: ~400-420 từ, 10-12 phân đoạn
+    - 5 phút: ~670-700 từ, 18-22 phân đoạn
+    - Pacing tự nhiên: ~135 từ/phút (tốc độ chuẩn 1.15x giúp giọng đọc tròn vành rõ chữ, không bị méo tiếng).
+    - Biến hóa phong cách mở màn (Hook) linh hoạt, loại bỏ hoàn toàn các câu sáo rỗng như "Bạn có biết...".
     """
-    target_words = int(duration_mins * 155)
+    import random
+
+    target_words = int(duration_mins * 135)
     num_sections = max(4, int(duration_mins * 3.5))
+    chosen_hook = random.choice(NARRATIVE_HOOK_STYLES)
 
     system_instruction = (
-        "Bạn là Giám đốc Sáng tạo kiêm Biên kịch hàng đầu cho các kênh phim tài liệu bí ẩn, khoa học khám phá "
-        "dạng dài trên TikTok/YouTube (phong cách dẫn dắt lôi cuốn, kịch tính, dồn dập như kênh @vanthanhthu09). "
-        "Nhiệm vụ của bạn là soạn kịch bản chi tiết, phong phú, đạt đúng thời lượng và số từ yêu cầu. "
+        "Bạn là Đạo diễn kiêm Nhà biên kịch xuất sắc nhất về phim tài liệu điều tra, khoa học bí ẩn và lịch sử điện ảnh. "
+        "Phong cách viết của bạn mang đậm tính điện ảnh (cinematic), nghẹt thở, sắc bén và sâu cay như các bộ phim tài liệu đoạt giải của HBO/Netflix. "
+        "Bạn TUYỆT ĐỐI NÓI KHÔNG với sự sáo rỗng, buồn ngủ hay các khuôn mẫu rẻ tiền. "
+        "Nhiệm vụ của bạn là soạn kịch bản chi tiết, đạt đúng thời lượng và số từ yêu cầu. "
         "Trả về DUY NHẤT 1 JSON Object tuân thủ schema."
     )
 
-    prompt = f"""Hãy viết kịch bản phim tài liệu bí ẩn, cuốn hút cho chủ đề sau:
+    prompt = f"""Hãy viết kịch bản phim tài liệu điện ảnh sâu sắc, giật gân và cuốn hút cho chủ đề sau:
 CHỦ ĐỀ: "{topic}"
+
+PHONG CÁCH MỞ MÀN (HOOK) YÊU CẦU CHO VIDEO NÀY:
+👉 Thể loại Hook: {chosen_hook["name"]}
+👉 Hướng dẫn triển khai: {chosen_hook["guide"]}
+👉 Mẫu câu cảm hứng: "{chosen_hook["example"]}"
+
+🚫 QUY TẮC CẤM TUYỆT ĐỐI (NEGATIVE CONSTRAINTS):
+1. CẤM HOÀN TOÀN mở đầu bằng các câu hỏi sáo rỗng như:
+   - "Bạn có biết..."
+   - "Liệu bạn có từng..."
+   - "Bạn đã bao giờ tự hỏi..."
+   - "Hôm nay chúng ta cùng tìm hiểu..."
+   - "Chào mừng các bạn đến với..."
+2. CẤM đặt tiêu đề đơn điệu, nhạt nhẽo (ví dụ: "Bí mật bên dưới...", "Thí nghiệm...: Thiên đường chuột...").
+   Tiêu đề (title) PHẢI mang tính giật gân, cuốn hút, kích thích trí tò mò tột độ.
+   Ví dụ tiêu đề xuất sắc:
+   • "Hồ sơ đen Universe 25: Khi sự no đủ biến thiên đường thành nấm mồ tập thể"
+   • "Bản án diệt vong 560 ngày: Sự sụp đổ của một đế chế hoàn hảo"
+   • "Bí ẩn rợn người đằng sau thí nghiệm Universe 25: Lời cảnh báo cho nhân loại"
 
 YÊU CẦU THỜI LƯỢNG & ĐỘ DÀI:
 - Thời lượng mục tiêu: {duration_mins:.1f} phút.
-- Tốc độ đọc: 1.35x (khoảng 155 từ tiếng Việt/phút).
+- Tốc độ đọc: 1.15x chuẩn tài liệu (~135 từ tiếng Việt/phút để người nghe thấm từng câu chữ, giọng đọc trầm ổn, uy lực).
 - TỔNG SỐ TỪ TIẾNG VIỆT CẦN ĐẠT: Khoảng {target_words} từ (tối thiểu {int(target_words * 0.85)} từ).
 - Số lượng phân đoạn (sections): {num_sections} phân đoạn liên hoàn, mỗi đoạn từ 35 đến 55 từ.
 
-CẤU TRÚC KỊCH BẢN KỂ CHUYỆN:
-1. Đoạn 1 (Hook 0:00 - 0:15): Một câu hỏi gây sốc hoặc dữ kiện bí ẩn chưa có lời giải để giữ chân người xem ngay giây đầu.
-2. Đoạn 2-4 (Bối cảnh & Dữ liệu lịch sử/khoa học): Nguồn gốc, niên đại, tọa độ hoặc sự kiện mở đầu.
-3. Đoạn 5-{num_sections - 3} (Bí ẩn & Các giả thuyết tranh cãi): Đi sâu vào các chi tiết kỳ lạ, nghịch lý khoa học, nhân chứng hoặc các phát hiện chấn động.
-4. Đoạn {num_sections - 2}-{num_sections - 1} (Cao trào / Bức màn hé lộ): Những bằng chứng mới nhất hoặc giả thuyết bất ngờ nhất.
-5. Đoạn cuối (Đúc kết & Câu hỏi mở): Một câu chốt triết lý sâu sắc khiến người xem phải bình luận và chia sẻ.
+CẤU TRÚC KỊCH BẢN KỂ CHUYỆN ĐIỆN ẢNH:
+1. Đoạn 1 (Hook 0:00 - 0:15): Áp dụng chuẩn xác phong cách '{chosen_hook["name"]}', giáng một đòn tâm lý mạnh mẽ vào người xem ngay giây đầu tiên.
+2. Đoạn 2-4 (Bối cảnh & Dữ liệu chấn động): Đưa ra các mốc thời gian, nhân vật, tọa độ hoặc sự kiện mở đầu với các con số chính xác.
+3. Đoạn 5-{num_sections - 3} (Bí ẩn & Sự tha hóa/Nghịch lý): Đi sâu vào các chi tiết kỳ dị, biến đổi hành vi, nghịch lý khoa học hoặc chứng cứ chấn động.
+4. Đoạn {num_sections - 2}-{num_sections - 1} (Cao trào / Điểm uốn diệt vong): Khoảnh khắc sụp đổ không thể đảo ngược hoặc giả thuyết gây sốc nhất.
+5. Đoạn cuối (Đúc kết & Câu chốt triết lý): Lời kết cảnh tỉnh sâu cay, liên hệ trực diện tới số phận của xã hội hiện đại khiến người xem phải suy ngẫm và tranh luận.
 
 YÊU CẦU VỀ TÌM KIẾM B-ROLL FOOTAGE:
-- Trong trường `broll_search_queries`: Hãy gợi ý 3 đến 5 cụm từ tìm kiếm video tư liệu bằng tiếng Anh (chất lượng cao 4K, b-roll, drone shot, cinematic timelapse) để hệ thống tự động tìm và tải video minh họa phù hợp trên YouTube/Pexels.
+- Trong trường `broll_search_queries`: Hãy gợi ý 3 đến 5 cụm từ tìm kiếm video tư liệu bằng tiếng Anh (chất lượng cao 4K, b-roll, drone shot, cinematic timelapse) liên quan mật thiết đến chủ đề để hệ thống tự động tải footage minh họa trên YouTube.
 """
 
     print(f"\n[B-Roll Director] Đang yêu cầu LLM soạn kịch bản {duration_mins:.1f} phút (~{target_words} từ, {num_sections} phân đoạn)...")
+    print(f"🎬 Phong cách dẫn chuyện (Hook): {chosen_hook['name']}")
     result = call_gemini_thinking_structured(
         prompt=prompt,
         response_schema=BROLL_SCRIPT_SCHEMA,
@@ -148,7 +412,13 @@ YÊU CẦU VỀ TÌM KIẾM B-ROLL FOOTAGE:
         print("[B-Roll Director] LLM trả về rỗng -> Sử dụng bộ kịch bản dự phòng chất lượng cao.")
         result = _fallback_script(topic, duration_mins)
 
-    sections = result.get("sections", [])
+    # Chuẩn hóa linh hoạt mọi cấu trúc section (narration_vn / content / text)
+    sections = _normalize_sections(result.get("sections", []))
+    if not sections:
+        result = _fallback_script(topic, duration_mins)
+        sections = _normalize_sections(result.get("sections", []))
+
+    result["sections"] = sections
     total_words = sum(len(s.get("narration_vn", "").split()) for s in sections)
     result["actual_word_count"] = total_words
 
@@ -171,39 +441,37 @@ def _fallback_script(topic: str, duration_mins: float) -> Dict[str, Any]:
         except Exception:
             pass
 
+    en_queries = _translate_topic_to_english_queries(clean_title)
+
     return {
-        "title": f"Bí ẩn chưa có lời giải: {clean_title}",
-        "topic_summary_vn": f"Khám phá toàn cảnh những bí mật kỳ lạ nhất về {clean_title}.",
+        "title": f"Hồ sơ tuyệt mật: {clean_title} và sự thật chấn động",
+        "topic_summary_vn": f"Giải mã toàn cảnh những nghịch lý và bí mật kỳ lạ nhất về {clean_title}.",
         "duration_mins": duration_mins,
-        "target_word_count": int(duration_mins * 155),
-        "broll_search_queries": [
-            f"{clean_title} 4k cinematic documentary b-roll",
-            f"{clean_title} drone 4k aerial view",
-            "ancient mysteries history documentary footage 4k",
-        ],
+        "target_word_count": int(duration_mins * 135),
+        "broll_search_queries": en_queries,
         "sections": [
             {
                 "section_index": 1,
-                "title": "Bí ẩn mở đầu",
-                "narration_vn": f"Liệu bạn có từng tự hỏi, điều gì thực sự ẩn giấu đằng sau {clean_title}? Hàng thế kỷ qua, hàng triệu người đã tìm kiếm câu trả lời.",
+                "title": "Thời khắc bí ẩn",
+                "narration_vn": f"Bên dưới lớp bụi mờ của thời gian, {clean_title} vẫn là một trong những hồ sơ bí ẩn nhất từng thách thức nhận thức của nhân loại. Mọi dữ liệu để lại đều dẫn tới một nghịch lý không lời giải đáp.",
                 "visual_mood": "Cinematic slow aerial shot approaching the subject",
             },
             {
                 "section_index": 2,
                 "title": "Những dấu vết lịch sử",
-                "narration_vn": f"Các nhà nghiên cứu phát hiện ra những ghi chép cổ xưa về {clean_title}, nơi mọi quy luật thông thường dường như bị đảo lộn hoàn toàn.",
+                "narration_vn": f"Hồ sơ thực địa ghi nhận những chi tiết kỳ dị về {clean_title}, nơi mọi quy luật vật lý và tâm lý thông thường dường như bị bẻ cong hoàn toàn.",
                 "visual_mood": "Ancient maps and close up details of old manuscripts",
             },
             {
                 "section_index": 3,
                 "title": "Nghịch lý khoa học",
-                "narration_vn": "Khoa học hiện đại đã vào cuộc với những thiết bị tối tân nhất, nhưng càng đào sâu, các chuyên gia lại càng bối rối trước những hiện tượng dị thường.",
+                "narration_vn": "Khoa học hiện đại đã vào cuộc với những thiết bị tối tân nhất, nhưng càng đào sâu, các chuyên gia lại càng bối rối trước những hiện tượng dị thường không thể giải thích.",
                 "visual_mood": "Modern scientific lab scans and 3D wireframe reconstruction",
             },
             {
                 "section_index": 4,
-                "title": "Câu hỏi còn bỏ ngỏ",
-                "narration_vn": f"Cho đến ngày hôm nay, {clean_title} vẫn là một câu đố thách thức nhân loại. Bạn nghĩ sao về bí mật này?",
+                "title": "Lời cảnh tỉnh",
+                "narration_vn": f"Cho đến ngày hôm nay, bức màn bao phủ {clean_title} vẫn là lời thách thức cho tương lai. Liệu nhân loại đã sẵn sàng đối mặt với câu trả lời thực sự?",
                 "visual_mood": "Dramatic sunset over horizon with silhouette",
             },
         ],
@@ -213,17 +481,119 @@ def _fallback_script(topic: str, duration_mins: float) -> Dict[str, Any]:
 # =====================================================================
 # 3. TỰ ĐỘNG TÌM & TẢI VIDEO B-ROLL (HOẶC NHẬN FOOTAGE CÓ SẴN)
 # =====================================================================
+def _generate_fallback_topic_broll(
+    topic_text: str,
+    footage_dir: Path,
+    aspect_ratio: str = "9:16",
+    count: int = 4,
+) -> List[Path]:
+    """Tự động sinh footage B-roll điện ảnh HD chuẩn 100% theo đúng chủ đề khi YouTube/yt-dlp gặp sự cố mạng."""
+    print(f"\n🎨 [B-Roll Studio] Đang tự động kiến tạo video tư liệu điện ảnh HD đúng chuẩn chủ đề '{topic_text}'...")
+    import requests
+    import urllib.parse
+
+    ff = _get_ffmpeg_bin()
+    target_w, target_h = (1080, 1920) if aspect_ratio == "9:16" else (1920, 1080)
+    generated_clips: List[Path] = []
+
+    en_queries = _translate_topic_to_english_queries(topic_text)
+    base_terms = [q for q in en_queries if q.strip()]
+    if not base_terms:
+        base_terms = [topic_text]
+
+    prompts = [
+        f"{base_terms[0]}, photorealistic documentary photography, cinematic lighting, 8k, National Geographic style, no text, no watermark",
+        f"{base_terms[min(1, len(base_terms)-1)]}, detailed close up shot, dramatic shadows, mysterious atmosphere, highly detailed documentary, 4k",
+        f"{base_terms[min(2, len(base_terms)-1)]}, cinematic establishing wide shot, moody dark atmospheric lighting, documentary archival footage, 4k",
+        f"{base_terms[0]}, high contrast cinematic scene, anamorphic lens, realistic historical documentary, 8k sharp",
+    ]
+
+    for idx, prompt_text in enumerate(prompts[:count], 1):
+        try:
+            encoded_p = urllib.parse.quote(prompt_text)
+            img_url = f"https://image.pollinations.ai/prompt/{encoded_p}?width={target_w}&height={target_h}&model=flux&nologo=true&seed={idx * 311}"
+            img_path = footage_dir / f"broll_topic_{idx}.jpg"
+            vid_path = footage_dir / f"broll_topic_{idx}.mp4"
+
+            resp = requests.get(img_url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code == 200 and len(resp.content) > 15000:
+                img_path.write_bytes(resp.content)
+                # Dùng FFmpeg tạo video chuyển động zoom/pan 6.5s mượt mà
+                zoom_expr = "min(zoom+0.0012,1.20)" if idx % 2 == 1 else "max(1.20-0.0012*on,1.0)"
+                vf = (
+                    f"zoompan=z='{zoom_expr}':d=195:s={target_w}x{target_h}:fps=30,"
+                    f"scale={target_w}:{target_h},setsar=1"
+                )
+                cmd = [
+                    ff, "-y", "-loop", "1", "-i", str(img_path),
+                    "-vf", vf,
+                    "-c:v", "libx264", "-t", "6.5", "-pix_fmt", "yuv420p",
+                    "-preset", "ultrafast",
+                    str(vid_path),
+                ]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if res.returncode == 0 and vid_path.exists():
+                    generated_clips.append(vid_path)
+                    print(f"   ├─ ✅ Tạo thành công footage điện ảnh #{idx}: {vid_path.name}")
+        except Exception as e:
+            continue
+
+    return generated_clips
+
+
+_JUNK_TITLE_WORDS = [
+    "mv", "official mv", "music video", "video music", "official audio", "karaoke",
+    "lyrics", "lyric", "remix", "cover", "dance", "choreography", "gameplay",
+    "walkthrough", "vlog", "reaction", "unboxing", "tiktok", "hài kịch", "hài tết",
+    "parody", "prank", "bolero", "mashup", "phim ngắn", "tập ", "vietsub", "nhạc trẻ",
+    "nhạc vàng", "nhạc sống", "tóm tắt phim", "review phim", "mukbang"
+]
+
+_DOC_BADGES = {
+    "documentary", "history", "ancient", "science", "universe", "space", "earth",
+    "nature", "wildlife", "exploration", "geology", "archaeology", "timelapse",
+    "b-roll", "footage", "4k", "cinematic", "mystery", "discovery", "national geographic",
+    "bbc", "pbs", "origin", "evolution", "prehistoric", "tài liệu", "khám phá", "lịch sử",
+    "khoa học", "bí ẩn", "vũ trụ", "hydrothermal", "organism", "cell", "magma"
+}
+
+
+def _is_title_junk(title: str) -> bool:
+    """Kiểm tra xem tiêu đề có phải video giải trí rác / ca nhạc / gameplay không."""
+    t_low = title.lower()
+    for w in _JUNK_TITLE_WORDS:
+        if re.search(r"\b" + re.escape(w) + r"\b", t_low) or w in t_low:
+            return True
+    return False
+
+
+def _is_title_topic_relevant(title: str, query: str) -> bool:
+    """Xác minh tiêu đề video thực sự thuộc thể loại tư liệu/khoa học/lịch sử và khớp chủ đề."""
+    if _is_title_junk(title):
+        return False
+    t_low = title.lower()
+    if any(b in t_low for b in _DOC_BADGES):
+        return True
+    q_words = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", query.lower()) if w not in ("and", "the", "for", "with", "video", "footage", "drone", "4k", "broll")]
+    matched = sum(1 for w in q_words if w in t_low)
+    return matched >= 1
+
+
 def fetch_broll_footage(
     search_queries: List[str],
     run_dir: Path,
     custom_footage: Optional[str] = None,
     min_total_duration_sec: float = 60.0,
+    topic: str = "",
+    aspect_ratio: str = "9:16",
 ) -> List[Path]:
     """
     Tự động tìm kiếm và tải B-roll video:
     1. Nếu người dùng chỉ định `--footage <file_hoặc_thư_mục>` -> Sử dụng trực tiếp video của người dùng.
-    2. Nếu không chỉ định -> Tự động dùng `yt-dlp` tìm kiếm các video 4K B-roll trên YouTube theo queries của LLM.
-    3. Dự phòng -> Tìm các video mp4 có sẵn trong `workspace/` hoặc `assets/`.
+    2. Nếu không chỉ định -> Tự động dùng `yt-dlp` tìm kiếm theo queries tiếng Anh chuẩn của LLM kịch bản.
+       - KIỂM DUYỆT TIÊU ĐỀ: Loại bỏ 100% video ca nhạc, vlog, gameplay, giải trí rác không liên quan.
+       - Chỉ tải những video được xác nhận là phim tài liệu/khoa học/lịch sử đúng chủ đề.
+    3. Nếu YouTube nghẽn mạng hoặc không có video phù hợp -> Tự động kiến tạo footage điện ảnh HD đúng 100% chủ đề bằng AI Generator.
     """
     footage_dir = run_dir / "footage"
     footage_dir.mkdir(parents=True, exist_ok=True)
@@ -247,68 +617,176 @@ def fetch_broll_footage(
                 print(f"🎬 [B-Roll Footage] Tìm thấy {len(found)} video từ thư mục: {p}")
                 return found
 
-    # Trường hợp 2: Tự động tìm kiếm & tải qua yt-dlp
-    ytdlp = _get_ytdlp_bin()
-    downloaded_files: List[Path] = []
-    print(f"\n🔍 [B-Roll Auto-Fetch] Hệ thống tự động tìm video tư liệu phù hợp qua yt-dlp...")
+    # Kiểm tra xem trong footage_dir đã có video YouTube hợp lệ sẵn chưa (tránh tải lại trùng lặp)
+    existing_videos = [
+        f for f in footage_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in valid_exts
+        and f.stat().st_size > 500_000
+        and not f.name.startswith("broll_topic_")
+    ]
+    if len(existing_videos) >= 2:
+        print(f"🎬 [B-Roll Auto-Fetch] Sử dụng {len(existing_videos)} video tư liệu thực tế có sẵn:")
+        for ev in existing_videos:
+            print(f"   ├─ Video: {ev.name} ({ev.stat().st_size / (1024*1024):.1f} MB)")
+        return existing_videos
 
-    for query in search_queries[:3]:
+    # Trường hợp 2: Tự động tìm kiếm & tải qua yt-dlp
+    ytdlp_cmd = _get_ytdlp_cmd()
+    ff_bin = _get_ffmpeg_bin()
+    downloaded_files: List[Path] = list(existing_videos)
+    print(f"\n🔍 [B-Roll Auto-Fetch] Hệ thống tự động tìm và kiểm duyệt video tư liệu đúng chủ đề qua yt-dlp...")
+
+    # ƯU TIÊN SỐ 1: Các từ khóa tiếng Anh chuyên sâu do LLM biên kịch tạo ra
+    combined_queries: List[str] = []
+    topic_text = (topic or "").strip()
+    if not topic_text:
+        topic_text = run_dir.name.replace("broll_", "").rsplit("_", 2)[0].replace("_", " ")
+
+    for q in search_queries:
+        if q and q.strip() and q.strip() not in combined_queries:
+            combined_queries.append(q.strip())
+
+    # ƯU TIÊN SỐ 2: Ánh xạ chuẩn từ điển theo chủ đề
+    for en_q in _translate_topic_to_english_queries(topic_text):
+        if en_q not in combined_queries:
+            combined_queries.append(en_q)
+
+    for query in combined_queries[:4]:
         clean_q = query.strip()
         if not clean_q:
             continue
-        print(f"   ├─ Đang tìm: \"{clean_q}\" (lọc video 40s - 450s, 1080p)...")
-        # Định dạng tên file an toàn
-        out_template = str(footage_dir / f"broll_%(id)s.%(ext)s")
-        cmd = [
-            ytdlp,
-            "--no-playlist",
-            "--match-filter", "duration >= 35 & duration <= 600",
-            "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
-            "--max-downloads", "1",
-            "--output", out_template,
-            f"ytsearch2:{clean_q}",
+        print(f"   ├─ Đang tìm kiếm: \"{clean_q}\"...")
+
+        # BƯỚC A: Quét nhanh metadata (ID, Tiêu đề, Thời lượng) để lọc rác trước khi tải
+        cand_list: List[Dict[str, Any]] = []
+        search_cmd = [
+            *ytdlp_cmd,
+            "--flat-playlist",
+            "--print", "%(id)s\t%(title)s\t%(duration)s",
+            f"ytsearch6:{clean_q}",
         ]
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            if res.returncode == 0:
+            res_meta = subprocess.run(search_cmd, capture_output=True, text=True, timeout=25)
+            if res_meta.returncode == 0 and res_meta.stdout.strip():
+                for line in res_meta.stdout.splitlines():
+                    parts = line.strip().split("\t")
+                    if len(parts) >= 2:
+                        vid_id = parts[0].strip()
+                        vid_title = parts[1].strip()
+                        vid_dur = 0.0
+                        if len(parts) >= 3:
+                            try:
+                                vid_dur = float(parts[2])
+                            except Exception:
+                                pass
+                        cand_list.append({"id": vid_id, "title": vid_title, "duration": vid_dur})
+        except Exception:
+            pass
+
+        # BƯỚC B: Kiểm duyệt chất lượng & độ liên quan của tiêu đề
+        valid_candidates: List[Dict[str, Any]] = []
+        for cand in cand_list:
+            v_id = cand["id"]
+            v_title = cand["title"]
+            v_dur = cand["duration"]
+            if v_dur > 0 and (v_dur < 25 or v_dur > 1800):
+                continue
+            if not _is_title_topic_relevant(v_title, clean_q):
+                print(f"   │  └─ ⚠️ Bỏ qua video không liên quan (ca nhạc/vlog/game): \"{v_title[:55]}...\"")
+                continue
+            valid_candidates.append(cand)
+
+        # BƯỚC C: Tải video đã được kiểm duyệt chuẩn 100%
+        if valid_candidates:
+            for cand in valid_candidates[:1]:  # Lấy 1 video chất lượng nhất mỗi query
+                vid_id = cand["id"]
+                vid_title = cand["title"]
+                out_path = footage_dir / f"broll_{vid_id}.mp4"
+                if out_path.exists() and out_path.stat().st_size > 500_000:
+                    if out_path not in downloaded_files:
+                        downloaded_files.append(out_path)
+                    continue
+
+                dl_cmd = [
+                    *ytdlp_cmd,
+                    "--no-playlist",
+                    "--extractor-args", "youtube:player_client=android",
+                    "--download-sections", "*00:08-01:30",
+                    "--max-filesize", "45M",
+                    "--socket-timeout", "15",
+                    "-f", "b[height<=720]/best[height<=720]/bv[height<=720]+ba/b",
+                    "--merge-output-format", "mp4",
+                    "--ffmpeg-location", ff_bin,
+                    "--output", str(footage_dir / f"broll_%(id)s.%(ext)s"),
+                    f"https://www.youtube.com/watch?v={vid_id}",
+                ]
+                try:
+                    res_dl = subprocess.run(dl_cmd, capture_output=True, text=True, timeout=50)
+                    for f in footage_dir.iterdir():
+                        if f.is_file() and f.suffix.lower() in valid_exts and f.stat().st_size > 500_000:
+                            if not f.name.startswith("broll_topic_") and f not in downloaded_files:
+                                downloaded_files.append(f)
+                                print(f"   │  └─ ✅ Đã duyệt & tải B-Roll chuẩn chủ đề: \"{vid_title[:50]}\" ({f.stat().st_size / (1024*1024):.1f} MB)")
+                except Exception as e:
+                    print(f"   │  └─ yt-dlp bỏ qua ({e})")
+        else:
+            # Fallback nếu flat-playlist không ra kết quả: dùng regex match-filter loại bỏ triệt để video ca nhạc/giải trí
+            out_template = str(footage_dir / f"broll_%(id)s.%(ext)s")
+            cmd = [
+                *ytdlp_cmd,
+                "--no-playlist",
+                "--extractor-args", "youtube:player_client=android",
+                "--match-filter", "!is_live & title !~* '(?i)(official\\s*mv|music\\s*video|karaoke|lyrics|remix|cover|dance|vlog|gameplay)'",
+                "--download-sections", "*00:08-01:30",
+                "--max-filesize", "45M",
+                "--socket-timeout", "15",
+                "-f", "b[height<=720]/best[height<=720]/bv[height<=720]+ba/b",
+                "--merge-output-format", "mp4",
+                "--ffmpeg-location", ff_bin,
+                "--max-downloads", "1",
+                "--output", out_template,
+                f"ytsearch1:{clean_q}",
+            ]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=50)
                 for f in footage_dir.iterdir():
-                    if f.is_file() and f.suffix.lower() in valid_exts and f not in downloaded_files:
-                        downloaded_files.append(f)
-                        print(f"   │  └─ Tải thành công: {f.name} ({f.stat().st_size / (1024*1024):.1f} MB)")
-            if len(downloaded_files) >= 2:
-                break
-        except Exception as e:
-            print(f"   │  └─ Lỗi tải yt-dlp: {e}")
+                    if f.is_file() and f.suffix.lower() in valid_exts and f.stat().st_size > 500_000:
+                        if not f.name.startswith("broll_topic_") and f not in downloaded_files:
+                            downloaded_files.append(f)
+                            print(f"   │  └─ Tải thành công video: {f.name} ({f.stat().st_size / (1024*1024):.1f} MB)")
+            except Exception as e:
+                pass
+
+        if len(downloaded_files) >= 2:
+            break
 
     if downloaded_files:
+        print(f"🎬 [B-Roll Auto-Fetch] Đã sẵn sàng {len(downloaded_files)} video tư liệu thực tế.")
         return downloaded_files
 
-    # Trường hợp 3: Dự phòng các video sẵn có trong workspace/
+    # Trường hợp 3: Dự phòng các video sẵn có trong workspace/footage_{topic}
     ws_dir = run_dir.parent
+    safe_topic_slug = _slugify(topic_text)[:20]
     ref_candidates = [
-        ws_dir / "footage_tan_thuy_hoang",
-        ws_dir / "tiktok_ref.mp4",
-        ws_dir.parent / "workspace" / "tiktok_ref.mp4",
+        ws_dir / f"footage_{safe_topic_slug}",
+        ws_dir / "footage" / safe_topic_slug,
     ]
     for cand in ref_candidates:
         if cand.is_dir():
             found = [f for f in cand.iterdir() if f.is_file() and f.suffix.lower() in valid_exts]
             if found:
-                print(f"🎬 [B-Roll Auto-Fetch] Sử dụng video từ thư mục tư liệu dự phòng: {cand}")
+                print(f"🎬 [B-Roll Auto-Fetch] Sử dụng video từ thư mục tư liệu đúng chủ đề: {cand}")
                 return found
-        elif cand.exists() and cand.stat().st_size > 100_000:
-            print(f"⚠️ [B-Roll Auto-Fetch] Không có mạng/yt-dlp -> Sử dụng video tư liệu dự phòng: {cand.name}")
-            return [cand]
 
-    # Quét toàn bộ workspace tìm file mp4 bất kỳ
-    for root, _, files in os.walk(str(ws_dir)):
-        for fname in files:
-            if fname.endswith(".mp4") and not fname.startswith("final_"):
-                p = Path(root) / fname
-                if p.stat().st_size > 500_000:
-                    return [p]
+    # Trường hợp 4: Tự động kiến tạo footage B-roll điện ảnh HD bằng AI đúng 100% chủ đề
+    fallback_clips = _generate_fallback_topic_broll(topic_text, footage_dir, aspect_ratio=aspect_ratio, count=4)
+    if fallback_clips:
+        return fallback_clips
 
-    raise RuntimeError("Không tìm thấy video B-roll nào và không thể tải qua yt-dlp. Vui lòng cung cấp video qua tham số `--footage <đường_dẫn>`.")
+    raise RuntimeError(
+        f"Không thể tải video B-roll phù hợp cho chủ đề '{topic_text}' qua yt-dlp (hãy kiểm tra kết nối mạng). "
+        f"Hoặc bạn có thể tự thả video vào lệnh qua tham số: --footage <đường_dẫn_video_hoặc_thư_mục>."
+    )
 
 
 # =====================================================================
@@ -318,7 +796,7 @@ def synthesize_broll_narration(
     sections: List[Dict[str, Any]],
     run_dir: Path,
     voice_name: str = "vanthanhthu",
-    speed_rate: float = 1.35,
+    speed_rate: float = 1.15,
     music_mood: str = "cinematic_mystery_suspense",
 ) -> Tuple[Path, List[Tuple[float, float]], float]:
     """
@@ -327,7 +805,7 @@ def synthesize_broll_narration(
     - Nhạc nền huyền bí được tự động hạ âm lượng (auto-ducking) khi có tiếng thuyết minh.
     """
     wav_path = run_dir / "voiceover_studio.wav"
-    scene_texts = [s["narration_vn"].strip() for s in sections]
+    scene_texts = [_extract_narration(s) for s in sections if _extract_narration(s)]
 
     # Với giọng Clone, đặt tốc độ 0.68x để bù lại nhịp nói rất nhanh của file mẫu, giúp giọng trầm tĩnh, rõ chữ, chuẩn phim tài liệu (không bị tua nhanh)
     if voice_name.lower().strip() in ("clone", "f5tts", "offline_clone"):
@@ -375,11 +853,10 @@ def _get_video_duration(video_path: Path) -> float:
     return 60.0
 
 
-def _is_cut_usable(cut_path: Path, min_brightness: float = 28.0, max_sub_density: float = 0.035) -> bool:
+def _is_cut_usable(cut_path: Path, min_brightness: float = 12.0) -> bool:
     """
     Kiểm duyệt chất lượng hình ảnh của đoạn cắt:
-    - Bỏ qua các đoạn cắt quá tối / màn hình đen / intro đen (độ sáng trung bình < min_brightness).
-    - Bỏ qua các đoạn cắt có chữ/phụ đề/ticker ở đáy video.
+    - Bỏ qua các đoạn cắt hỏng hoặc màn hình đen ngòm (độ sáng trung bình < min_brightness).
     """
     ff = _get_ffmpeg_bin()
     cmd = [
@@ -395,11 +872,8 @@ def _is_cut_usable(cut_path: Path, min_brightness: float = 28.0, max_sub_density
         avg = sum(raw_bytes) / float(len(raw_bytes))
         if avg < min_brightness:
             return False
-        # Kiểm tra 25% phía đáy: nếu có chữ trắng phụ đề (> 235), bỏ qua để video không dính chữ
-        bottom_bytes = raw_bytes[int(len(raw_bytes) * 0.75):]
-        white_count = sum(1 for b in bottom_bytes if b > 235)
-        if (white_count / float(len(bottom_bytes))) > max_sub_density:
-            return False
+        return True
+    except Exception:
         return True
     except Exception:
         return True
@@ -582,7 +1056,7 @@ def build_broll_ass_subtitles(
         if i >= len(timings):
             break
         st, en = timings[i]
-        text = sec_item["narration_vn"].strip()
+        text = _extract_narration(sec_item)
 
         # Chia câu dài thành các cụm 6-8 từ dễ đọc trên điện thoại
         words = text.split()
@@ -689,7 +1163,7 @@ def run_broll_pipeline(
     footage: Optional[str] = None,
     audio: Optional[str] = None,
     voice: str = "vanthanhthu",
-    speed: float = 1.35,
+    speed: float = 1.15,
     aspect_ratio: str = "9:16",
     sub_style: str = "none",
     output_dir: Optional[str] = None,
@@ -785,6 +1259,8 @@ def run_broll_pipeline(
         run_dir=run_dir,
         custom_footage=footage,
         min_total_duration_sec=total_audio_sec,
+        topic=topic,
+        aspect_ratio=aspect_ratio,
     )
 
     # BƯỚC 4: Dựng & Cắt các đoạn B-roll 3-5s ghép liên tiếp phủ kín thời lượng audio

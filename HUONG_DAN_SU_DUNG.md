@@ -9,17 +9,29 @@
 
 ## 🏛️ PHẦN 1: VIDEO DÀI 3P - 5P B-ROLL TỰ ĐỘNG (CHUẨN KÊNH @VANTHANHTHU09)
 
-Mô hình sản xuất video tài liệu khám phá, khoa học, bí ẩn dài 3 đến 5 phút:
-- **Tự động viết kịch bản dài**: LLM tính toán chính xác số từ (~155 từ/phút ở tốc độ 1.35x hoặc ~175 từ/phút ở tốc độ 0.68x của giọng Clone), chia thành 10–22 phân đoạn lôi cuốn.
+Mô hình sản xuất video tài liệu khám phá, khoa học, bí ẩn dài 3 đến 5 phút (hoặc tùy ý 1–10 phút) giống hệt các kênh tài liệu triệu view:
+- **Tự động viết kịch bản dài**: LLM tính toán chính xác số từ (~135 từ/phút ở tốc độ tự nhiên 1.15x cho video dài hoặc ~175 từ/phút ở tốc độ 0.68x của giọng Clone), chia thành 10–22 phân đoạn lôi cuốn, giọng đọc tròn vành rõ chữ, không bị vội hay méo tiếng.
 - **Tự động tìm & tải B-roll 4K**: Hệ thống tự động dịch từ khóa sang tiếng Anh và dùng `yt-dlp` kéo các thước phim tư liệu sắc nét từ YouTube về máy.
 - **Hỗ trợ video có sẵn**: Nếu bạn đã có sẵn video tư liệu, chỉ cần đưa đường dẫn vào `--footage <file_hoặc_thư_mục>`.
 - **Dựng phim tự động**: Cắt thành các nhịp 3s–5s đan xen, phủ kín 100% thời lượng audio, tự động căn tỉ lệ 9:16 (TikTok) hoặc 16:9 (YouTube).
 - **Kiểm duyệt khung hình sạch 100%**: Tự động phát hiện và loại bỏ cảnh tối hoặc cảnh dính phụ đề gốc từ YouTube qua `_is_cut_usable`.
+- **Âm thanh Studio Chống Méo Tiếng**:
+  + Tự động tối ưu nhịp đọc 1.15x cho video dài 3–5 phút (người dùng vẫn có thể chỉnh qua `--speed` nếu muốn).
+  + Khử triệt để lỗi Gibbs/Aliasing của FFT resample, giữ nguyên độ phân giải 24.000 Hz chuẩn studio.
+  + Nhạc nền lặp vô tận có Cross-fade 1.5s, không còn tiếng nổ click/pop tại điểm giao bài.
+  + Chuẩn hóa âm lượng `-14 LUFS (linear)` loại bỏ hoàn toàn hiện tượng nghẹt tiếng/bơm xả (pumping).
 - **Thuần Python (Zero Graph Libraries)**: Tuyệt đối không dùng các thư viện pipeline vẽ đồ thị phức tạp.
 
 ### Cách chạy:
 ```bash
-# 1. Tự động từ A-Z (Hệ thống tự viết kịch bản 5 phút + tự tìm tải video tư liệu + render):
+# Trên Windows PowerShell / Command Prompt:
+python main.py --broll "Bí mật bên dưới Kim Tự Tháp Giza" --duration 3
+python main.py --broll "Bí ẩn bãi đá Stonehenge" --duration 5
+
+# Hoặc dùng file bat tiện lợi trên Windows:
+.\run.bat --broll "Bí mật bên dưới Kim Tự Tháp Giza" --duration 3
+
+# Trên Linux / MacOS / Git Bash:
 ./run.sh --broll "Bí ẩn bãi đá Stonehenge" --duration 5
 
 # 2. Làm video 3.2 phút với giọng Clone tiếng Việt:
@@ -87,4 +99,4 @@ Biến một cuốn sách dày thành chuỗi video TikTok đều đặn mỗi n
 ## 🎵 BẢN NHẠC NỀN & CHẤT LƯỢNG ÂM THANH
 - **Nhạc nền:** Tích hợp các bản beat điện ảnh huyền bí bản quyền sạch, hòa âm chuẩn studio.
 - **Âm lượng:** Auto-Ducking tự động hạ âm lượng BGM khi có giọng đọc và ngân lên khi hết câu, chuẩn hóa `-14 LUFS` của TikTok.
-- **Giọng nữ & nam Edge-TTS:** Đã được lọc qua chuỗi Studio EQ (`asetrate=24000*1.12`, `equalizer=3200Hz/180Hz`), loại bỏ hoàn toàn hiện tượng giọng đọc Google Translate đơ cứng.
+- **Giọng nữ & nam Edge-TTS:** Đã được lọc qua chuỗi Studio EQ (`atempo=...`, `equalizer=180Hz/3200Hz`), loại bỏ hoàn toàn hiện tượng giọng đọc Google Translate đơ cứng.

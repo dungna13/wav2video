@@ -4,9 +4,11 @@
 .env.*.local
 !.env.example
 
-# Thư mục đầu ra Video, Audio (giữ lại các file .sqlite trong workspace/)
+# Thư mục đầu ra Video, Audio (giữ lại các file .sqlite và cấu hình trong workspace/)
 workspace/*
 !workspace/*.sqlite
+!workspace/*.json
+!workspace/voice-preview.mp3
 workspace/logs/
 *.log
 output_audio/

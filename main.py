@@ -169,10 +169,13 @@ def _parse_args(argv) -> Dict[str, Any]:
             except ValueError:
                 opts["speed"] = 1.35
         elif a in ("--voice", "-v"):
-            opts["voice"] = next(it, "hoai_my").strip().lower()
+            opts["voice"] = next(it, "vanthanhthu").strip().lower()
         else:
             words.append(a)
     opts["topic"] = " ".join(words).strip()
+    # Nếu là chế độ B-Roll hoặc duration >= 2 phút và người dùng không set --speed riêng, tự động dùng 1.15x cho giọng tự nhiên, tròn vành rõ chữ
+    if (opts["broll"] or opts["duration"] >= 2.0) and "--speed" not in argv and "--rate" not in argv:
+        opts["speed"] = 1.15
     return opts
 
 
@@ -332,7 +335,10 @@ def main():
             from graph.broll_director import generate_broll_script
             from config.settings import WORKSPACE_DIR
             script_data = generate_broll_script(topic=topic_input, duration_mins=opts["duration"])
-            full_text = "\n\n".join(s["narration_vn"] for s in script_data.get("sections", []))
+            full_text = "\n\n".join(
+                (s.get("narration_vn") or s.get("content") or s.get("narration") or s.get("text") or "").strip()
+                for s in script_data.get("sections", [])
+            )
             out_file = Path(WORKSPACE_DIR) / "script_to_read.txt"
             out_file.write_text(full_text, encoding="utf-8")
             print("\n" + "=" * 96)

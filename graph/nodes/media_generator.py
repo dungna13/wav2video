@@ -178,7 +178,7 @@ def media_generator_node(state: ChristianVideoState) -> Dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Giọng đọc theo cảnh + mốc thời gian thật (+ sfx_cue, music_mood, -14 LUFS)
-    selected_voice = str(state.get("tts_voice", "") or "review_phim")
+    selected_voice = str(state.get("tts_voice", "") or "vanthanhthu")
     wav_path, timings = synthesize_scene_voiceover(
         [s["narration_vn"] for s in scenes],
         output_filename=run_dir / "audio_16k_mono.wav",

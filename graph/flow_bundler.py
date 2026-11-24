@@ -384,7 +384,7 @@ def prepare_flow_workspace(
     max_blocks: int = 4,
     base_dir: Optional[Path] = None,
     speed_rate: float = 1.35,
-    voice_name: str = "hoai_my",
+    voice_name: str = "vanthanhthu",
 ) -> Dict[str, Any]:
     """Chuẩn bị audio VITS (`-14 LUFS`), tính timeline từng cảnh, chia Block và xuất `flow_prompts.txt`."""
     topic_title = state.get("topic_title") or state.get("user_request", "Topic")[:40]
