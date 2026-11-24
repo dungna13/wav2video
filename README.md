@@ -76,10 +76,6 @@ Sau mỗi lượt render, hệ thống xuất ra các tệp tin độc lập ph�
 | 📄 **`subtitles.ass`** | ASS / Karaoke | Phụ đề đồng bộ từng từ, căn Safe-Zone tránh UI TikTok |
 | 📋 **`scene_timeline.json`** | JSON Timeline | Toàn bộ mốc thời gian, lời thoại từng phân đoạn và từ khóa footage |
 
-> 📺 **Xem video demo sản phẩm thực tế:**  
-> 👉 [**▶️ Xem Video Demo trên YouTube Shorts**](https://youtube.com/shorts/LUAgRhPBONg)  
-> *(Ghé thăm kho video mẫu được tạo tự động bởi `wav2video` tại kênh tác giả)*
-
 ---
 
 ## ✨ Điểm Khác Biệt Cốt Lõi
