@@ -47,7 +47,6 @@
   - [5. Bảng Tra Cứu Giọng Đọc TikTok Trendy](#5-bảng-tra-cứu-giọng-đọc-tiktok-trendy)
 - [Cấu Trúc Thư Mục Dự Án (Project Structure)](#-cấu-trúc-thư-mục-dự-án-project-structure)
 - [Xử Lý Sự Cố Thường Gặp (Troubleshooting & FAQ)](#-xử-lý-sự-cố-thường-gặp-troubleshooting--faq)
-- [Lộ Trình Phát Triển (Roadmap)](#-lộ-trình-phát-triển-roadmap)
 - [Star History](#-star-history)
 - [Đóng Góp & Giấy Phép (Contributing & License)](#-đóng-góp--giấy-phép-contributing--license)
 
@@ -65,9 +64,46 @@ Thay vì tạo ra những video *"ghép slide ảnh vô hồn, giọng đọc Go
 
 ---
 
-## 🎥 Video Demo & Kết Quả Mẫu (Showcase)
+## 🎥 Video Demo Thực Tế (Showcase)
 
-Sau mỗi lượt render, hệ thống xuất ra các tệp tin độc lập phục vụ nhu cầu đăng ngay hoặc hậu kỳ thêm:
+Dưới đây là 2 video phim tài liệu B-Roll mẫu được pipeline `wav2video` tự động biên kịch đa phân đoạn, tải footage 4K sạch và hòa âm Studio hoàn chỉnh (tỉ lệ 9:16 chuẩn TikTok / Shorts):
+
+<table>
+<tr>
+<td align="center" width="50%" valign="top">
+
+### 🐭 Demo 1: Thí Nghiệm Universe 25
+**"Thiên Đường Chuột & Sự Sụp Đổ"**  
+<sub>⏱️ 1.92 phút · 10 phân đoạn · Nhịp B-roll 3–5s · Giọng Nam trầm <code>vanthanhthu</code> (1.15x)</sub>
+
+<br/>
+
+<img src="assets/demo/demo_universe_25.gif" width="280" alt="Demo Universe 25" />
+
+<br/>
+
+*Tài liệu khoa học giật gân, phân tích sự suy vong của một đế chế hoàn hảo khi sống trong sự thừa mứa.*
+
+</td>
+<td align="center" width="50%" valign="top">
+
+### 🌍 Demo 2: Khởi Nguyên Của Sự Sống
+**"Khi Hạt Nguyên Đầu Tiên Đập Tan Thế Giới"**  
+<sub>⏱️ 1.86 phút · 18 phân đoạn · B-Roll 4K sắc nét · Chuẩn âm thanh <code>-14 LUFS</code></sub>
+
+<br/>
+
+<img src="assets/demo/demo_khoi_nguyen.gif" width="280" alt="Demo Khởi Nguyên Sự Sống" />
+
+<br/>
+
+*Khám phá thời khắc mầm sống đầu tiên nảy mầm trên Trái Đất nguyên thủy cách đây hàng tỷ năm.*
+
+</td>
+</tr>
+</table>
+
+#### 📦 Tệp tin xuất bản độc lập sau mỗi lượt chạy:
 
 | Tệp tin | Định dạng | Công dụng chính |
 | :--- | :---: | :--- |
@@ -414,16 +450,6 @@ wav2video/
 ### Q3: Làm sao để tắt hẳn phụ đề chữ chạy trên video?
 > Mặc định hệ thống đã đặt chế độ phụ đề là `none`. Video xuất ra sẽ hoàn toàn sạch sẽ, thuận tiện để bạn tự thêm caption bằng CapCut hoặc TikTok Editor.
 
----
-
-## 🗺️ Lộ Trình Phát Triển (Roadmap)
-
-- [x] **Phase 1: Pure-Python B-Roll Engine** — Dựng phim 3–5 phút tự động, cắt nhịp 3s–5s, auto-ducking BGM.
-- [x] **Phase 2: Local Vietnamese F5-TTS** — Tích hợp nhân bản giọng tiếng Việt với nhịp đọc tài liệu `0.68x`.
-- [x] **Phase 3: Clean B-Roll Guard** — Lọc tự động cảnh tối và cảnh dính phụ đề gốc.
-- [x] **Phase 4: Book RAG Daily Pipeline** — Tự động hóa sản xuất video từ sách với Hybrid Search BM25 + Vector.
-- [x] **Phase 5: Declarative Script Config** — Hỗ trợ file cấu hình kịch bản JSON (`script_sample.json`) không cần Web UI.
-- [ ] **Phase 6: Multi-voice Dialogue** — Hỗ trợ 2 nhân vật đối thoại luân phiên trong cùng 1 video.
 
 ---
 
