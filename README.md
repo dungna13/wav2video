@@ -117,7 +117,7 @@ Hai tác phẩm phim tài liệu hoàn chỉnh được xuất xưởng tự đ�
   • Zero Graph Library   • 0đ phí API, 100% CPU                          • Angle Miner 4 góc    • Prompt 2 tầng
 ```
 
-### 1. Phim B-Roll Tài Liệu Dài 3–5 Phút (Chuẩn kênh @vanthanhthu09)
+### 1. Phim B-Roll Tài Liệu Dài 3–5 Phút
 * **Đối tượng**: Khám phá khoa học, vũ trụ, khảo cổ, kỳ án, bí ẩn lịch sử.
 * **Cơ chế**: LLM viết kịch bản 10–22 phân đoạn, tính toán chính xác ~135 từ/phút (nhịp 1.15x tự nhiên không nuốt chữ). Tự động tìm từ khóa tiếng Anh, kéo footage 4K từ YouTube và cắt dựng liên hoàn.
 
