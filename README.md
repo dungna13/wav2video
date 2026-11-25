@@ -12,7 +12,6 @@ Tự động biên kịch đa phân đoạn · Tuyển chọn B-Roll 4K sạch �
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Video Engine](https://img.shields.io/badge/Video%20Engine-FFmpeg%209%3A16-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 [![Voice Clone](https://img.shields.io/badge/Voice%20Clone-F5--TTS%20Vietnamese-FF6F00?style=for-the-badge)](https://github.com/SWivid/F5-TTS)
-[![Audio Mastering](https://img.shields.io/badge/Audio-Studio%20-14%20LUFS-9333EA?style=for-the-badge)](https://ffmpeg.org/)
 [![Local RAG](https://img.shields.io/badge/Local%20RAG-multilingual--e5--small%20%2B%20FTS5-0F766E?style=for-the-badge)](https://huggingface.co/intfloat/multilingual-e5-small)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
