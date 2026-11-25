@@ -36,6 +36,8 @@ import imageio_ffmpeg
 from config.settings import WORKSPACE_DIR, VIDEO_FPS
 from graph.audio_sync import synthesize_scene_voiceover
 from graph.llm_client import call_gemini_thinking_structured
+from prompts.narrative_models import classify_topic_and_expert
+from prompts.architect_prompt import ANTI_ABRUPT_ENDING_RULES, select_visual_ui_model
 
 
 # =====================================================================
@@ -378,16 +380,28 @@ def generate_broll_script(
     num_sections = max(4, int(duration_mins * 3.5))
     chosen_hook = random.choice(NARRATIVE_HOOK_STYLES)
 
+    # Định tuyến thông minh: 13 Mô hình Tự sự + 14 Chuyên gia + 7 Trường phái Thị giác
+    routing = classify_topic_and_expert(topic)
+    ui_model = select_visual_ui_model(
+        topic,
+        narrative_model=routing["narrative_model"],
+        expert_id=routing["expert_id"],
+    )
+
     system_instruction = (
-        "Bạn là Đạo diễn kiêm Nhà biên kịch xuất sắc nhất về phim tài liệu điều tra, khoa học bí ẩn và lịch sử điện ảnh. "
-        "Phong cách viết của bạn mang đậm tính điện ảnh (cinematic), nghẹt thở, sắc bén và sâu cay như các bộ phim tài liệu đoạt giải của HBO/Netflix. "
+        f"Bạn là {routing['expert_role']} kiêm Đạo diễn Phim Tài liệu Điện ảnh ({routing['expert_archetype']}). "
+        f"Lăng kính phân tích chuyên sâu: {routing['expert_lens']} "
+        "Phong cách viết sắc bén, có chiều sâu học thuật và kịch tính như phim tài liệu HBO/Netflix. "
         "Bạn TUYỆT ĐỐI NÓI KHÔNG với sự sáo rỗng, buồn ngủ hay các khuôn mẫu rẻ tiền. "
-        "Nhiệm vụ của bạn là soạn kịch bản chi tiết, đạt đúng thời lượng và số từ yêu cầu. "
         "Trả về DUY NHẤT 1 JSON Object tuân thủ schema."
     )
 
     prompt = f"""Hãy viết kịch bản phim tài liệu điện ảnh sâu sắc, giật gân và cuốn hút cho chủ đề sau:
 CHỦ ĐỀ: "{topic}"
+
+ĐỊNH TUYẾN ĐẠO DIỄN (BẮT BUỘC TUÂN THỦ):
+- Mô hình tự sự: {routing['narrative_model_name']} ({routing['narrative_model']}) — {routing['narrative_model_rationale']}
+- Trường phái thị giác: {ui_model['name']} — {ui_model['style_rule']}
 
 PHONG CÁCH MỞ MÀN (HOOK) YÊU CẦU CHO VIDEO NÀY:
 👉 Thể loại Hook: {chosen_hook["name"]}
@@ -403,10 +417,6 @@ PHONG CÁCH MỞ MÀN (HOOK) YÊU CẦU CHO VIDEO NÀY:
    - "Chào mừng các bạn đến với..."
 2. CẤM đặt tiêu đề đơn điệu, nhạt nhẽo (ví dụ: "Bí mật bên dưới...", "Thí nghiệm...: Thiên đường chuột...").
    Tiêu đề (title) PHẢI mang tính giật gân, cuốn hút, kích thích trí tò mò tột độ.
-   Ví dụ tiêu đề xuất sắc:
-   • "Hồ sơ đen Universe 25: Khi sự no đủ biến thiên đường thành nấm mồ tập thể"
-   • "Bản án diệt vong 560 ngày: Sự sụp đổ của một đế chế hoàn hảo"
-   • "Bí ẩn rợn người đằng sau thí nghiệm Universe 25: Lời cảnh báo cho nhân loại"
 
 YÊU CẦU THỜI LƯỢNG & ĐỘ DÀI:
 - Thời lượng mục tiêu: {duration_mins:.1f} phút.
@@ -414,18 +424,20 @@ YÊU CẦU THỜI LƯỢNG & ĐỘ DÀI:
 - TỔNG SỐ TỪ TIẾNG VIỆT CẦN ĐẠT: Khoảng {target_words} từ (tối thiểu {int(target_words * 0.85)} từ).
 - Số lượng phân đoạn (sections): {num_sections} phân đoạn liên hoàn, mỗi đoạn từ 35 đến 55 từ.
 
-CẤU TRÚC KỊCH BẢN KỂ CHUYỆN ĐIỆN ẢNH:
-1. Đoạn 1 (Hook 0:00 - 0:15): Áp dụng chuẩn xác phong cách '{chosen_hook["name"]}', giáng một đòn tâm lý mạnh mẽ vào người xem ngay giây đầu tiên.
-2. Đoạn 2-4 (Bối cảnh & Dữ liệu chấn động): Đưa ra các mốc thời gian, nhân vật, tọa độ hoặc sự kiện mở đầu với các con số chính xác.
-3. Đoạn 5-{num_sections - 3} (Bí ẩn & Sự tha hóa/Nghịch lý): Đi sâu vào các chi tiết kỳ dị, biến đổi hành vi, nghịch lý khoa học hoặc chứng cứ chấn động.
-4. Đoạn {num_sections - 2}-{num_sections - 1} (Cao trào / Điểm uốn diệt vong): Khoảnh khắc sụp đổ không thể đảo ngược hoặc giả thuyết gây sốc nhất.
-5. Đoạn cuối (Đúc kết & Câu chốt triết lý): Lời kết cảnh tỉnh sâu cay, liên hệ trực diện tới số phận của xã hội hiện đại khiến người xem phải suy ngẫm và tranh luận.
+CẤU TRÚC KỊCH BẢN & CHỐNG KẾT "CỤT":
+1. Đoạn 1 (Hook 0:00 - 0:15): Áp dụng chuẩn xác phong cách '{chosen_hook["name"]}', mở ra một câu hỏi/nghịch lý mạnh mẽ ngay giây đầu tiên.
+2. Đoạn 2-4 (Bối cảnh & Dữ liệu chấn động): Đưa ra các mốc thời gian, nhân vật, tọa độ hoặc sự kiện mở đầu với các con số chính xác theo lăng kính {routing['expert_role']}.
+3. Đoạn 5-{num_sections - 3} (Bí ẩn & Nghịch lý): Triển khai chặt chẽ theo mô hình tự sự `{routing['narrative_model']}`.
+4. Đoạn {num_sections - 2}-{num_sections - 1} (Cao trào / Điểm uốn): Khoảnh khắc bước ngoặt hoặc bằng chứng gây sốc nhất.
+5. Đoạn cuối (Đúc kết CHỐNG KẾT CỤT): BẮT BUỘC tuân thủ 4 nguyên tắc sau:
+{ANTI_ABRUPT_ENDING_RULES}
 
 YÊU CẦU VỀ TÌM KIẾM B-ROLL FOOTAGE:
-- Trong trường `broll_search_queries`: Hãy gợi ý 3 đến 5 cụm từ tìm kiếm video tư liệu bằng tiếng Anh (chất lượng cao 4K, b-roll, drone shot, cinematic timelapse) liên quan mật thiết đến chủ đề để hệ thống tự động tải footage minh họa trên YouTube.
+- Trong trường `broll_search_queries`: Hãy gợi ý 3 đến 5 cụm từ tìm kiếm video tư liệu bằng tiếng Anh (chất lượng cao 4K, b-roll, animation) ĐÚNG CHỦ ĐỀ "{topic}" VÀ ĐÚNG PHONG CÁCH THỊ GIÁC "{ui_model['name']}" (gợi ý hướng từ khóa: `{ui_model['broll_hint']}`).
 """
 
     print(f"\n[B-Roll Director] Đang yêu cầu LLM soạn kịch bản {duration_mins:.1f} phút (~{target_words} từ, {num_sections} phân đoạn)...")
+    print(f"🎭 Định tuyến: {routing['narrative_model']} | Chuyên gia: {routing['expert_role']} | Thị giác: {ui_model['name']}")
     print(f"🎬 Phong cách dẫn chuyện (Hook): {chosen_hook['name']}")
     result = call_gemini_thinking_structured(
         prompt=prompt,
