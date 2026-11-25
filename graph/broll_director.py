@@ -432,8 +432,11 @@ CẤU TRÚC KỊCH BẢN & CHỐNG KẾT "CỤT":
 5. Đoạn cuối (Đúc kết CHỐNG KẾT CỤT): BẮT BUỘC tuân thủ 4 nguyên tắc sau:
 {ANTI_ABRUPT_ENDING_RULES}
 
-YÊU CẦU VỀ TÌM KIẾM B-ROLL FOOTAGE:
-- Trong trường `broll_search_queries`: Hãy gợi ý 3 đến 5 cụm từ tìm kiếm video tư liệu bằng tiếng Anh (chất lượng cao 4K, b-roll, animation) ĐÚNG CHỦ ĐỀ "{topic}" VÀ ĐÚNG PHONG CÁCH THỊ GIÁC "{ui_model['name']}" (gợi ý hướng từ khóa: `{ui_model['broll_hint']}`).
+YÊU CẦU VỀ TÌM KIẾM B-ROLL FOOTAGE (CỰC KỲ QUAN TRỌNG):
+- Trong trường `broll_search_queries`: Hãy gợi ý 3 đến 5 cụm từ tìm kiếm video tư liệu bằng tiếng Anh trên YouTube.
+- BẮT BUỘC MỖI CỤM TỪ PHẢI CHỨA TÊN CHỦ ĐỀ CHÍNH BẰNG TIẾNG ANH của "{topic}" (ví dụ với Số Pi phải có chữ `pi` hoặc `number pi`; với Tần Thủy Hoàng phải có `terracotta army` hoặc `qin shi huang`).
+- TUYỆT ĐỐI KHÔNG sinh các từ khóa chung chung không có tên chủ đề (cấm kiểu `"abstract dark grid"`, `"coordinate system"`, `"glowing lines"` đứng một mình gây tải nhầm video lạc đề).
+- Phong cách thị giác tham khảo: "{ui_model['name']}" (`{ui_model['broll_hint']}`).
 """
 
     print(f"\n[B-Roll Director] Đang yêu cầu LLM soạn kịch bản {duration_mins:.1f} phút (~{target_words} từ, {num_sections} phân đoạn)...")
@@ -602,7 +605,31 @@ _GENERIC_QUERY_WORDS = {
     "animation", "visualization", "visuals", "clip", "clips", "explanation",
     "mystery", "mysteries", "discovery", "exploration", "view", "scenes",
     "national", "geographic", "bbc", "pbs", "youtube", "official",
+    "abstract", "dark", "grid", "system", "systems", "coordinate", "coordinates",
+    "lines", "line", "effect", "void", "mode", "glowing", "floating", "complex",
+    "digital", "sequence", "infinite", "style", "background", "chalkboard",
 }
+
+
+def _extract_core_topic_keywords(topic_text: str) -> List[str]:
+    """Trích xuất tập từ khóa chủ đề cốt lõi bằng tiếng Anh để bắt buộc tiêu đề YouTube phải khớp."""
+    if not topic_text or not topic_text.strip():
+        return []
+    core: List[str] = []
+    # Lấy từ bộ dịch chuẩn chủ đề
+    for q in _translate_topic_to_english_queries(topic_text):
+        for w in re.findall(r"\b[a-zA-Z0-9]{2,}\b", q.lower()):
+            if w not in _GENERIC_QUERY_WORDS and w not in core:
+                core.append(w)
+    # Lấy thêm token ASCII từ topic gốc (ví dụ 'pi', 'dna', 'ai', 'titanic', 'universe'...)
+    import unicodedata
+    ascii_t = unicodedata.normalize("NFKD", topic_text)
+    ascii_t = "".join(c for c in ascii_t if not unicodedata.combining(c)).lower()
+    vi_stop = {"la", "gi", "cua", "va", "nhung", "cac", "mot", "trong", "ve", "bi", "mat", "an", "su", "that", "tai", "sao", "nhu", "the", "nao", "so", "cho", "nguoi", "khong", "co", "duoc", "den", "tu", "nay", "kia"}
+    for w in re.findall(r"\b[a-z0-9]{2,}\b", ascii_t):
+        if w not in _GENERIC_QUERY_WORDS and w not in vi_stop and w not in core:
+            core.append(w)
+    return core
 
 
 def _is_title_junk(title: str) -> bool:
@@ -615,26 +642,28 @@ def _is_title_junk(title: str) -> bool:
 
 
 def _is_title_topic_relevant(title: str, query: str, topic_text: str = "") -> bool:
-    """Xác minh tiêu đề video thực sự khớp với từ khóa chủ đề cốt lõi (không nhận bừa video chỉ vì có chữ 4K/documentary)."""
+    """Xác minh tiêu đề video thực sự khớp với từ khóa chủ đề cốt lõi (không nhận bừa video lạc đề)."""
     if _is_title_junk(title):
         return False
     t_low = title.lower()
 
-    # Tách các từ khóa chủ đề thực sự (từ >= 2 ký tự như 'pi', 'ai', '3d', 'dna'...)
+    # 1. Bắt buộc khớp ít nhất 1 từ khóa CỐT LÕI của chính topic gốc (nếu xác định được)
+    core_kws = _extract_core_topic_keywords(topic_text)
+    if core_kws:
+        core_matched = sum(1 for w in core_kws if re.search(r"\b" + re.escape(w) + r"\b", t_low))
+        if core_matched == 0:
+            return False
+
+    # 2. Khớp thêm với từ khóa trong query đang tìm
     q_words = [
         w for w in re.findall(r"\b[a-zA-Z0-9]{2,}\b", query.lower())
         if w not in _GENERIC_QUERY_WORDS
     ]
     if not q_words:
-        # Nếu query toàn từ chung chung, lấy thêm từ khóa từ topic gốc
-        q_words = [
-            w for w in re.findall(r"\b[a-zA-Z0-9]{2,}\b", (topic_text or "").lower())
-            if w not in _GENERIC_QUERY_WORDS
-        ]
+        q_words = core_kws
     if not q_words:
         return False
 
-    # Khớp theo ranh giới từ (\b...\b) để 'pi' không khớp nhầm 'pig', 'piano', 'pangolin'
     matched = sum(1 for w in q_words if re.search(r"\b" + re.escape(w) + r"\b", t_low))
     return matched >= 1
 

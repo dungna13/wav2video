@@ -28,7 +28,7 @@ from .narrative_models import select_domain_expert, select_optimal_narrative_mod
 VISUAL_UI_MODELS: dict[str, dict[str, str]] = {
     "manim_dark_mode": {
         "name": "Manim Dark-Mode (Visual Math Essay)",
-        "broll_hint": "mathematics geometry animation 4k, abstract dark grid visualization, equations",
+        "broll_hint": "3blue1brown style animation 4k, equations visualization",
         "style_rule": "Nền đen mờ, lưới tọa độ mảnh, đồ họa hình học tối giản, điểm nhấn vàng hổ phách.",
     },
     "frameless_glassmorphism": {
