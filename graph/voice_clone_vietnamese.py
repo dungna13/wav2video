@@ -4,6 +4,7 @@ Tự động nhân bản chất giọng từ file âm thanh mẫu (ví dụ: wor
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional, Tuple
 import soundfile as sf
@@ -20,14 +21,15 @@ _VOCODER = None
 _REF_AUDIO = None
 _REF_TEXT = None
 
-DEFAULT_REF_AUDIO = Path("/home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3")
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_REF_AUDIO = BASE_DIR / "workspace" / "voice-preview.mp3"
 DEFAULT_REF_TEXT = (
     "Alo, mình đây. Bạn đang ở nhà phải không? Mình gọi vì chiều nay thợ sửa máy lạnh hẹn qua trong khoảng "
     "3 giờ đến 5 giờ, mà 5 giờ rưỡi mình mới tan làm."
 )
 
-MODEL_PATH = Path("/home/blue/Downloads/Projects/wav2video/models/f5tts_vi/model_latest.safetensors")
-VOCAB_PATH = Path("/home/blue/Downloads/Projects/wav2video/models/f5tts_vi/vocab.txt")
+MODEL_PATH = BASE_DIR / "models" / "f5tts_vi" / "model_latest.safetensors"
+VOCAB_PATH = BASE_DIR / "models" / "f5tts_vi" / "vocab.txt"
 
 
 def get_or_load_vietnamese_clone_model():
@@ -36,10 +38,16 @@ def get_or_load_vietnamese_clone_model():
     if _MODEL is not None and _VOCODER is not None:
         return _MODEL, _VOCODER
 
-    # Đảm bảo PATH có môi trường venv
-    venv_bin = "/home/blue/Downloads/Projects/.venv/bin"
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Không tìm thấy model F5-TTS tại {MODEL_PATH}. "
+            "Vui lòng tải file model_latest.safetensors đặt vào thư mục models/f5tts_vi/."
+        )
+
+    # Đảm bảo PATH có thư mục chứa Python interpreter hiện tại (tương thích Windows & Linux)
+    venv_bin = str(Path(sys.executable).resolve().parent)
     if venv_bin not in os.environ.get("PATH", ""):
-        os.environ["PATH"] = f"{venv_bin}:{os.environ.get('PATH', '')}"
+        os.environ["PATH"] = f"{venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
 
     from f5_tts.infer.utils_infer import load_model, load_vocoder
     from f5_tts.model import DiT

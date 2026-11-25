@@ -162,6 +162,24 @@ flowchart LR
 
 ---
 
+## 🖥️ Giao Diện Desktop App (Dành Cho Người Không Biết Code)
+
+Không cần mở Terminal hay chỉnh sửa code — chỉ cần tải về, mở app, dán **Gemini API Key** và nhập **Chủ đề (Prompt)** rồi bấm **TẠO VIDEO NGAY**:
+
+<div align="center">
+  <img src="assets/demo/app_ui_demo.png" alt="wav2video Desktop App UI" width="760"/>
+</div>
+
+<br/>
+
+1. **Mở ứng dụng**:
+   - **Windows**: Nhấp đúp chuột vào file **`run_app.bat`** *(lần đầu chạy `pip install -r requirements.txt`)*.
+   - **Linux / macOS**: Chạy `./run_app.sh` *(trên Ubuntu cài thêm `sudo apt install python3-tk` nếu chưa có)*.
+2. **Nhập API Key & Prompt**: Dán `Gemini API Key` (app tự lưu vào `.env`), nhập chủ đề video, chọn thời lượng (`1–5 phút`), giọng đọc và khổ `9:16` hoặc `16:9`.
+3. **Xuất Video**: Bấm **`TẠO VIDEO NGAY`**, theo dõi nhật ký trực tiếp và bấm **`Mở thư mục Video`** khi hoàn tất.
+
+---
+
 ## 🚀 Khởi Chiếu Nhanh (Quick Start)
 
 <table>

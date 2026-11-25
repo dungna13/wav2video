@@ -52,7 +52,7 @@ python main.py --broll "Bí ẩn bãi đá Stonehenge" --duration 5
 ## 🎙️ PHẦN 2: HƯỚNG DẪN GIỌNG ĐỌC & VOICE CLONE TIẾNG VIỆT
 
 ### 1. Giọng Clone F5-TTS Cục Bộ (Miễn phí 100% - Khuyên dùng):
-Chạy hoàn toàn trên máy local từ file mẫu [workspace/voice-preview.mp3](file:///home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3):
+Chạy hoàn toàn trên máy local từ file mẫu `workspace/voice-preview.mp3`:
 ```bash
 ./run.sh --broll "Bí ẩn lăng mộ Tần Thủy Hoàng" --duration 3 --voice clone
 ```

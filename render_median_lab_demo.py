@@ -461,5 +461,5 @@ def render_median_lab_style_video(output_mp4_path: Path):
 
 
 if __name__ == "__main__":
-    demo_out = Path("/home/blue/Downloads/Projects/wav2video/workspace/median_lab_demo/the_coin_was_never_random.mp4")
+    demo_out = Path(__file__).resolve().parent / "workspace" / "median_lab_demo" / "the_coin_was_never_random.mp4"
     render_median_lab_style_video(demo_out)

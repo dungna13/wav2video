@@ -95,7 +95,8 @@ def _parse_args(argv) -> Dict[str, Any]:
         elif a in ("--audio", "--voice-from", "--ref-audio", "--voice-file"):
             val = next(it, "").strip()
             if not val or val in ("default", "preview", "voice-preview", "auto"):
-                val = "/home/blue/Downloads/Projects/wav2video/workspace/voice-preview.mp3"
+                from config.settings import WORKSPACE_DIR
+                val = str(WORKSPACE_DIR / "voice-preview.mp3")
             opts["audio"] = val
             opts["broll"] = True
         elif a in ("--script-file", "--custom-script"):
@@ -325,11 +326,18 @@ def main():
     if opts["broll"] or opts["footage"] or opts["audio"]:
         from graph.broll_director import run_broll_pipeline
         topic_input = opts["topic"]
-        if not topic_input and not opts["audio"]:
+        if not topic_input and not opts["audio"] and not opts.get("script_file"):
             print("❌ Vui lòng nhập chủ đề cho video B-roll. Ví dụ:")
             print("   ./run.sh --broll \"Bí ẩn bãi đá Stonehenge\" --duration 5")
             print("   ./run.sh --broll --audio workspace/voice-preview.mp3")
             return
+        if not topic_input and opts.get("script_file"):
+            try:
+                import json as _json
+                _sd = _json.loads(Path(opts["script_file"]).read_text(encoding="utf-8"))
+                topic_input = str(_sd.get("topic") or _sd.get("title") or Path(opts["script_file"]).stem).strip()
+            except Exception:
+                topic_input = Path(opts["script_file"]).stem
 
         if opts.get("script_only"):
             from graph.broll_director import generate_broll_script
