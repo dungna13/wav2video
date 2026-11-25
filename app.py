@@ -142,6 +142,29 @@ def build_cli_command(cfg: Dict[str, object]) -> List[str]:
     return cmd
 
 
+def estimate_progress_from_log(line: str) -> Optional[tuple]:
+    """Ước lượng % tiến trình từ dòng log thực tế của backend."""
+    if "MASTER VIDEO ĐÃ HOÀN TẤT" in line or "HOÀN TẤT THÀNH CÔNG" in line:
+        return (100.0, 100.0, "Hoàn tất 100%!")
+    if "[B-Roll Render]" in line:
+        return (88.0, 97.0, "Đang xuất video hoàn chỉnh (1080p)...")
+    if "Đang kết nối các phân đoạn" in line:
+        return (80.0, 87.0, "Đang ghép nối các phân đoạn B-Roll...")
+    if "[B-Roll Video Assembler]" in line:
+        return (68.0, 79.0, "Đang cắt dựng B-Roll nhịp 3-5s...")
+    if "[B-Roll Auto-Fetch]" in line or "[B-Roll Footage]" in line or "[B-Roll Studio]" in line:
+        return (48.0, 67.0, "Đang tìm & kiểm duyệt video tư liệu đúng chủ đề...")
+    if "[TTS Studio Master]" in line or "Thu âm hoàn tất" in line:
+        return (44.0, 47.0, "Đã hoàn tất thu âm & hòa âm studio")
+    if "[B-Roll Audio]" in line or "[Voice Clone Vi]" in line:
+        return (28.0, 43.0, "Đang lồng tiếng & hòa âm nhạc nền...")
+    if "Kịch bản đã sẵn sàng" in line:
+        return (24.0, 27.0, "Đã soạn xong kịch bản")
+    if "[B-Roll Director]" in line:
+        return (10.0, 23.0, "Đang soạn kịch bản bằng AI...")
+    return None
+
+
 def open_folder(path: Path) -> None:
     """Mở file hoặc thư mục kết quả bằng trình quản lý tệp / trình phát mặc định."""
     if not path.suffix and not path.exists():
@@ -294,6 +317,7 @@ def run_gui_app() -> None:
     proc_ref: Dict[str, Optional[subprocess.Popen]] = {"proc": None}
     last_video_ref: Dict[str, Optional[Path]] = {"path": None}
     log_queue: "queue.Queue[str]" = queue.Queue()
+    progress_state: Dict[str, object] = {"pct": 0.0, "cap": 0.0, "running": False, "label": "Sẵn sàng (0%)"}
 
     def collect_config() -> Dict[str, object]:
         v_code = next((k for k, lbl in VOICE_OPTIONS if lbl == voice_var.get()), "vanthanhthu")
@@ -330,8 +354,24 @@ def run_gui_app() -> None:
 
     def poll_logs() -> None:
         while not log_queue.empty():
-            append_log(log_queue.get_nowait())
-        root.after(120, poll_logs)
+            line = log_queue.get_nowait()
+            append_log(line)
+            est = estimate_progress_from_log(line)
+            if est is not None:
+                min_p, cap_p, lbl = est
+                progress_state["pct"] = max(float(progress_state["pct"]), min_p)
+                progress_state["cap"] = max(float(progress_state["cap"]), cap_p)
+                progress_state["label"] = lbl
+
+        if progress_state["running"]:
+            cur = float(progress_state["pct"])
+            cap = float(progress_state["cap"])
+            if cur < cap:
+                progress_state["pct"] = min(cap, cur + 0.35)
+        cur_pct = float(progress_state["pct"])
+        progress_bar["value"] = cur_pct
+        progress_lbl_var.set(f"{progress_state['label']} — {int(round(cur_pct))}%")
+        root.after(200, poll_logs)
 
     def start_render() -> None:
         if proc_ref["proc"] is not None:
@@ -355,6 +395,7 @@ def run_gui_app() -> None:
         stop_btn.configure(state=tk.NORMAL)
         play_btn.configure(state=tk.DISABLED)
         last_video_ref["path"] = None
+        progress_state.update({"pct": 4.0, "cap": 9.0, "running": True, "label": "Đang khởi tạo..."})
 
         def worker() -> None:
             env = os.environ.copy()
@@ -386,10 +427,13 @@ def run_gui_app() -> None:
                             last_video_ref["path"] = cand
                 code = proc.wait()
                 if code == 0:
+                    progress_state.update({"pct": 100.0, "cap": 100.0, "running": False, "label": "Hoàn tất"})
                     log_queue.put("\n✅ HOÀN TẤT! Bạn có thể bấm '▶ Mở Video Vừa Tạo' hoặc '📂 Mở thư mục Video'.\n")
                 else:
+                    progress_state.update({"running": False, "label": f"Đã dừng (mã {code})"})
                     log_queue.put(f"\n⚠️ Tiến trình dừng với mã lỗi: {code}\n")
             except Exception as exc:
+                progress_state.update({"running": False, "label": "Lỗi khởi chạy"})
                 log_queue.put(f"\n❌ Lỗi khởi chạy: {exc}\n")
             finally:
                 proc_ref["proc"] = None
@@ -429,14 +473,21 @@ def run_gui_app() -> None:
     play_btn.pack(side=tk.RIGHT, padx=(8, 0))
     ttk.Button(btn_frame, text="📂 Mở thư mục Video", command=lambda: open_folder(WORKSPACE_DIR)).pack(side=tk.RIGHT)
 
-    # 5. Log Output Frame
-    log_frame = ttk.LabelFrame(main_frame, text="4. Nhật ký tiến trình trực tiếp", padding=8)
+    # 5. Progress Bar & Log Output Frame
+    log_frame = ttk.LabelFrame(main_frame, text="4. Tiến trình & Nhật ký trực tiếp", padding=8)
     log_frame.pack(fill=tk.BOTH, expand=True)
 
-    log_box = scrolledtext.ScrolledText(log_frame, height=12, state=tk.DISABLED, font=("Consolas", 9))
+    prog_row = ttk.Frame(log_frame)
+    prog_row.pack(fill=tk.X, pady=(0, 6))
+    progress_lbl_var = tk.StringVar(value="Sẵn sàng — 0%")
+    ttk.Label(prog_row, textvariable=progress_lbl_var, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+    progress_bar = ttk.Progressbar(prog_row, orient=tk.HORIZONTAL, mode="determinate", maximum=100)
+    progress_bar.pack(fill=tk.X, pady=(3, 0))
+
+    log_box = scrolledtext.ScrolledText(log_frame, height=11, state=tk.DISABLED, font=("Consolas", 9))
     log_box.pack(fill=tk.BOTH, expand=True)
 
-    root.after(120, poll_logs)
+    root.after(200, poll_logs)
     root.mainloop()
 
 

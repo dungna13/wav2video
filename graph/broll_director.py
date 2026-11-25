@@ -252,12 +252,37 @@ def _translate_topic_to_english_queries(topic: str) -> List[str]:
             "archaeological discovery human history 4k",
         ]
 
-    # Mặc định an toàn: Tuyệt đối KHÔNG gộp chữ tiếng Việt không dấu (tránh tìm nhầm bài hát/vlog giải trí).
-    # Trả về các từ khóa tài liệu khoa học/khám phá vũ trụ chuẩn để kết hợp với search_queries của LLM.
+    # 18. Toán học / Số Pi / Fibonacci / Hình học
+    if any(k in t_low for k in ("số pi", "so pi", "toán học", "toan hoc", "fibonacci", "tỷ lệ vàng", "hình học")) or re.search(r"\bpi\b", t_low):
+        return [
+            "number pi mathematics geometry animation 4k",
+            "mathematics numbers equations chalkboard 4k footage",
+            "sacred geometry golden ratio fractal animation 4k",
+        ]
+
+    # 19. Vật lý lượng tử / Nguyên tử / Trí tuệ nhân tạo
+    if any(k in t_low for k in ("lượng tử", "luong tu", "quantum", "nguyên tử", "trí tuệ nhân tạo", "ai ")):
+        return [
+            "quantum physics particles simulation 4k animation",
+            "artificial intelligence neural network visualization 4k",
+        ]
+
+    # Mặc định thông minh: Giữ lại các từ khóa quốc tế / thuật ngữ khoa học có trong topic (ví dụ: pi, dna, bitcoin...)
+    import unicodedata
+    ascii_topic = unicodedata.normalize("NFKD", topic)
+    ascii_topic = "".join(c for c in ascii_topic if not unicodedata.combining(c)).lower()
+    raw_tokens = re.findall(r"\b[a-z0-9]{2,}\b", ascii_topic)
+    vi_stop = {"la", "gi", "cua", "va", "nhung", "cac", "mot", "trong", "ve", "bi", "mat", "an", "su", "that", "tai", "sao", "nhu", "the", "nao", "so", "cho", "nguoi", "khong", "co", "duoc", "den", "tu", "nay", "kia"}
+    meaningful = [w for w in raw_tokens if w not in vi_stop]
+    if meaningful:
+        core = " ".join(meaningful[:3])
+        return [
+            f"{core} documentary explanation 4k",
+            f"{core} science visualization animation 4k",
+        ]
+
     return [
-        "cinematic science documentary 4k footage",
-        "earth history exploration 4k b-roll",
-        "historical mystery discovery 4k drone view",
+        f"{topic.strip()} documentary 4k",
     ]
 
 
@@ -558,6 +583,16 @@ _DOC_BADGES = {
 }
 
 
+_GENERIC_QUERY_WORDS = {
+    "and", "the", "for", "with", "from", "into", "about", "that", "this",
+    "video", "videos", "footage", "broll", "b-roll", "drone", "shot", "shots",
+    "4k", "8k", "hd", "uhd", "cinematic", "documentary", "timelapse", "aerial",
+    "animation", "visualization", "visuals", "clip", "clips", "explanation",
+    "mystery", "mysteries", "discovery", "exploration", "view", "scenes",
+    "national", "geographic", "bbc", "pbs", "youtube", "official",
+}
+
+
 def _is_title_junk(title: str) -> bool:
     """Kiểm tra xem tiêu đề có phải video giải trí rác / ca nhạc / gameplay không."""
     t_low = title.lower()
@@ -567,15 +602,28 @@ def _is_title_junk(title: str) -> bool:
     return False
 
 
-def _is_title_topic_relevant(title: str, query: str) -> bool:
-    """Xác minh tiêu đề video thực sự thuộc thể loại tư liệu/khoa học/lịch sử và khớp chủ đề."""
+def _is_title_topic_relevant(title: str, query: str, topic_text: str = "") -> bool:
+    """Xác minh tiêu đề video thực sự khớp với từ khóa chủ đề cốt lõi (không nhận bừa video chỉ vì có chữ 4K/documentary)."""
     if _is_title_junk(title):
         return False
     t_low = title.lower()
-    if any(b in t_low for b in _DOC_BADGES):
-        return True
-    q_words = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", query.lower()) if w not in ("and", "the", "for", "with", "video", "footage", "drone", "4k", "broll")]
-    matched = sum(1 for w in q_words if w in t_low)
+
+    # Tách các từ khóa chủ đề thực sự (từ >= 2 ký tự như 'pi', 'ai', '3d', 'dna'...)
+    q_words = [
+        w for w in re.findall(r"\b[a-zA-Z0-9]{2,}\b", query.lower())
+        if w not in _GENERIC_QUERY_WORDS
+    ]
+    if not q_words:
+        # Nếu query toàn từ chung chung, lấy thêm từ khóa từ topic gốc
+        q_words = [
+            w for w in re.findall(r"\b[a-zA-Z0-9]{2,}\b", (topic_text or "").lower())
+            if w not in _GENERIC_QUERY_WORDS
+        ]
+    if not q_words:
+        return False
+
+    # Khớp theo ranh giới từ (\b...\b) để 'pi' không khớp nhầm 'pig', 'piano', 'pangolin'
+    matched = sum(1 for w in q_words if re.search(r"\b" + re.escape(w) + r"\b", t_low))
     return matched >= 1
 
 
@@ -646,10 +694,11 @@ def fetch_broll_footage(
         if q and q.strip() and q.strip() not in combined_queries:
             combined_queries.append(q.strip())
 
-    # ƯU TIÊN SỐ 2: Ánh xạ chuẩn từ điển theo chủ đề
-    for en_q in _translate_topic_to_english_queries(topic_text):
-        if en_q not in combined_queries:
-            combined_queries.append(en_q)
+    # Chỉ bổ sung từ điển dự phòng nếu LLM trả về ít hơn 2 từ khóa
+    if len(combined_queries) < 2:
+        for en_q in _translate_topic_to_english_queries(topic_text):
+            if en_q not in combined_queries:
+                combined_queries.append(en_q)
 
     for query in combined_queries[:4]:
         clean_q = query.strip()
@@ -691,8 +740,8 @@ def fetch_broll_footage(
             v_dur = cand["duration"]
             if v_dur > 0 and (v_dur < 25 or v_dur > 1800):
                 continue
-            if not _is_title_topic_relevant(v_title, clean_q):
-                print(f"   │  └─ ⚠️ Bỏ qua video không liên quan (ca nhạc/vlog/game): \"{v_title[:55]}...\"")
+            if not _is_title_topic_relevant(v_title, clean_q, topic_text):
+                print(f"   │  └─ ⚠️ Bỏ qua video không khớp chủ đề: \"{v_title[:55]}...\"")
                 continue
             valid_candidates.append(cand)
 
@@ -730,32 +779,7 @@ def fetch_broll_footage(
                 except Exception as e:
                     print(f"   │  └─ yt-dlp bỏ qua ({e})")
         else:
-            # Fallback nếu flat-playlist không ra kết quả: dùng regex match-filter loại bỏ triệt để video ca nhạc/giải trí
-            out_template = str(footage_dir / f"broll_%(id)s.%(ext)s")
-            cmd = [
-                *ytdlp_cmd,
-                "--no-playlist",
-                "--extractor-args", "youtube:player_client=android",
-                "--match-filter", "!is_live & title !~* '(?i)(official\\s*mv|music\\s*video|karaoke|lyrics|remix|cover|dance|vlog|gameplay)'",
-                "--download-sections", "*00:08-01:30",
-                "--max-filesize", "45M",
-                "--socket-timeout", "15",
-                "-f", "b[height<=720]/best[height<=720]/bv[height<=720]+ba/b",
-                "--merge-output-format", "mp4",
-                "--ffmpeg-location", ff_bin,
-                "--max-downloads", "1",
-                "--output", out_template,
-                f"ytsearch1:{clean_q}",
-            ]
-            try:
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=50)
-                for f in footage_dir.iterdir():
-                    if f.is_file() and f.suffix.lower() in valid_exts and f.stat().st_size > 500_000:
-                        if not f.name.startswith("broll_topic_") and f not in downloaded_files:
-                            downloaded_files.append(f)
-                            print(f"   │  └─ Tải thành công video: {f.name} ({f.stat().st_size / (1024*1024):.1f} MB)")
-            except Exception as e:
-                pass
+            print(f"   │  └─ ⚠️ Không tìm thấy video YouTube nào khớp sát chủ đề cho truy vấn \"{clean_q}\".")
 
         if len(downloaded_files) >= 2:
             break
